@@ -1,0 +1,14 @@
+name = "kompact-io/subbit"
+version = "0.0.0"
+license = "Apache-2.0"
+description = "Aiken contracts for project 'kompact-io/subbit'"
+
+[repository]
+user = "kompact-io"
+project = "subbit"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "main"
+source = "github"

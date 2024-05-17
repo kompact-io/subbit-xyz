@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="generator" content="pandoc" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+        <meta name="author" content="waalge, Kompact.io" />
+                    <title>Subbit :: Spec</title>
+    <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    </style>
+            <style>
+            @charset "UTF-8";
+
+            /* Import ET Book styles
+               adapted from https://github.com/edwardtufte/et-book/blob/gh-pages/et-book.css */
+
+            @font-face {
+                font-family: "et-book";
+                src: url("et-book/et-book-roman-line-figures/et-book-roman-line-figures.eot");
+                src: url("et-book/et-book-roman-line-figures/et-book-roman-line-figures.eot?#iefix") format("embedded-opentype"), url("et-book/et-book-roman-line-figures/et-book-roman-line-figures.woff") format("woff"), url("et-book/et-book-roman-line-figures/et-book-roman-line-figures.ttf") format("truetype"), url("et-book/et-book-roman-line-figures/et-book-roman-line-figures.svg#etbookromanosf") format("svg");
+                font-weight: normal;
+                font-style: normal;
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: "et-book";
+                src: url("et-book/et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.eot");
+                src: url("et-book/et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.eot?#iefix") format("embedded-opentype"), url("et-book/et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.woff") format("woff"), url("et-book/et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.ttf") format("truetype"), url("et-book/et-book-display-italic-old-style-figures/et-book-display-italic-old-style-figures.svg#etbookromanosf") format("svg");
+                font-weight: normal;
+                font-style: italic;
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: "et-book";
+                src: url("et-book/et-book-bold-line-figures/et-book-bold-line-figures.eot");
+                src: url("et-book/et-book-bold-line-figures/et-book-bold-line-figures.eot?#iefix") format("embedded-opentype"), url("et-book/et-book-bold-line-figures/et-book-bold-line-figures.woff") format("woff"), url("et-book/et-book-bold-line-figures/et-book-bold-line-figures.ttf") format("truetype"), url("et-book/et-book-bold-line-figures/et-book-bold-line-figures.svg#etbookromanosf") format("svg");
+                font-weight: bold;
+                font-style: normal;
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: "et-book-roman-old-style";
+                src: url("et-book/et-book-roman-old-style-figures/et-book-roman-old-style-figures.eot");
+                src: url("et-book/et-book-roman-old-style-figures/et-book-roman-old-style-figures.eot?#iefix") format("embedded-opentype"), url("et-book/et-book-roman-old-style-figures/et-book-roman-old-style-figures.woff") format("woff"), url("et-book/et-book-roman-old-style-figures/et-book-roman-old-style-figures.ttf") format("truetype"), url("et-book/et-book-roman-old-style-figures/et-book-roman-old-style-figures.svg#etbookromanosf") format("svg");
+                font-weight: normal;
+                font-style: normal;
+                font-display: swap;
+            }
+
+            /* Tufte CSS styles */
+            body {
+                min-width: 100vw;
+                min-height: 100vh;
+                font-size: 15px;
+                font-family: et-book, Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif;
+                background-color: #fffff8;
+                color: #111;
+                margin: 0;
+                padding: 1rem 0;
+            }
+
+            main {
+                padding-top: 5rem;
+                margin: 0 auto;
+                max-width: 1260px;
+                counter-reset: sidenote-counter;
+            }
+
+            /* Adds dark mode */
+            @media (prefers-color-scheme: dark) {
+                body {
+                    background-color: #151515;
+                    color: #ddd;
+                }
+            }
+
+            h1 {
+                font-weight: 400;
+                margin-top: 1rem;
+                margin-bottom: 1.5rem;
+                font-size: 3.2rem;
+                line-height: 1;
+            }
+
+            h2 {
+                font-style: italic;
+                font-weight: 400;
+                margin-top: 2.1rem;
+                margin-bottom: 1.4rem;
+                font-size: 2.2rem;
+                line-height: 1;
+            }
+
+            h3 {
+                font-style: italic;
+                font-weight: 400;
+                font-size: 1.7rem;
+                margin-top: 2rem;
+                margin-bottom: 1.4rem;
+                line-height: 1;
+            }
+
+            hr {
+                display: block;
+                height: 1px;
+                width: 55%;
+                border: 0;
+                border-top: 1px solid #ccc;
+                margin: 1em 0;
+                padding: 0;
+            }
+
+            p.subtitle {
+                font-style: italic;
+                margin-top: 1rem;
+                margin-bottom: 1rem;
+                font-size: 1.8rem;
+                display: block;
+                line-height: 1;
+            }
+
+            .numeral {
+                font-family: et-book-roman-old-style;
+            }
+
+            .danger {
+                color: red;
+            }
+
+            article {
+                padding: 5rem 0rem;
+            }
+
+            section {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+            }
+
+            p,
+            dl,
+            ol,
+            ul {
+                font-size: 1.4rem;
+                line-height: 2rem;
+            }
+
+            p {
+                margin-top: 1.4rem;
+                margin-bottom: 1.4rem;
+                padding-right: 0;
+                vertical-align: baseline;
+            }
+
+            /* Chapter Epigraphs */
+            div.epigraph {
+                margin: 5em 0;
+            }
+
+            div.epigraph > blockquote {
+                margin-top: 3em;
+                margin-bottom: 3em;
+            }
+
+            div.epigraph > blockquote,
+            div.epigraph > blockquote > p {
+                font-style: italic;
+            }
+
+            div.epigraph > blockquote > footer {
+                font-style: normal;
+            }
+
+            div.epigraph > blockquote > footer > cite {
+                font-style: italic;
+            }
+            /* end chapter epigraphs styles */
+
+            blockquote {
+                font-size: 1.4rem;
+            }
+
+            blockquote p {
+                width: 55%;
+                margin-right: 40px;
+            }
+
+            blockquote footer {
+                width: 55%;
+                font-size: 1.1rem;
+                text-align: right;
+            }
+
+            section > p,
+            section > footer,
+            section > table {
+                width: 55%;
+            }
+
+            /* 50 + 5 == 55, to be the same width as paragraph */
+            section > dl,
+            section > ol,
+            section > ul {
+                width: 50%;
+                -webkit-padding-start: 5%;
+            }
+
+            dt:not(:first-child),
+            li:not(:first-child) {
+                margin-top: 0.25rem;
+            }
+
+            figure {
+                padding: 0;
+                border: 0;
+                font-size: 100%;
+                font: inherit;
+                vertical-align: baseline;
+                max-width: 55%;
+                -webkit-margin-start: 0;
+                -webkit-margin-end: 0;
+                margin: 0 0 3em 0;
+            }
+
+            figcaption {
+                float: right;
+                clear: right;
+                margin-top: 0;
+                margin-bottom: 0;
+                font-size: 1.1rem;
+                line-height: 1.6;
+                vertical-align: baseline;
+                position: relative;
+                max-width: 40%;
+            }
+
+            figure.fullwidth figcaption {
+                margin-right: 24%;
+            }
+
+            /* Links: replicate underline that clears descenders */
+            a:link,
+            a:visited {
+                color: inherit;
+            }
+
+            .no-tufte-underline:link {
+                background: unset;
+                text-shadow: unset;
+            }
+
+            a:link, .tufte-underline, .hover-tufte-underline:hover {
+                text-decoration: none;
+                background: -webkit-linear-gradient(#fffff8, #fffff8), -webkit-linear-gradient(#fffff8, #fffff8), -webkit-linear-gradient(currentColor, currentColor);
+                background: linear-gradient(#fffff8, #fffff8), linear-gradient(#fffff8, #fffff8), linear-gradient(currentColor, currentColor);
+                -webkit-background-size: 0.05em 1px, 0.05em 1px, 1px 1px;
+                -moz-background-size: 0.05em 1px, 0.05em 1px, 1px 1px;
+                background-size: 0.05em 1px, 0.05em 1px, 1px 1px;
+                background-repeat: no-repeat, no-repeat, repeat-x;
+                text-shadow: 0.03em 0 #fffff8, -0.03em 0 #fffff8, 0 0.03em #fffff8, 0 -0.03em #fffff8, 0.06em 0 #fffff8, -0.06em 0 #fffff8, 0.09em 0 #fffff8, -0.09em 0 #fffff8, 0.12em 0 #fffff8, -0.12em 0 #fffff8, 0.15em 0 #fffff8, -0.15em 0 #fffff8;
+                background-position: 0% 93%, 100% 93%, 0% 93%;
+            }
+
+            @media screen and (-webkit-min-device-pixel-ratio: 0) {
+                a:link, .tufte-underline, .hover-tufte-underline:hover {
+                    background-position-y: 87%, 87%, 87%;
+                }
+            }
+
+            /* Adds dark mode */
+            @media (prefers-color-scheme: dark) {
+                a:link, .tufte-underline, .hover-tufte-underline:hover {
+                    text-shadow: 0.03em 0 #151515, -0.03em 0 #151515, 0 0.03em #151515, 0 -0.03em #151515, 0.06em 0 #151515, -0.06em 0 #151515, 0.09em 0 #151515, -0.09em 0 #151515, 0.12em 0 #151515, -0.12em 0 #151515, 0.15em 0 #151515, -0.15em 0 #151515;
+                }
+            }
+
+            a:link::selection,
+            a:link::-moz-selection {
+                text-shadow: 0.03em 0 #b4d5fe, -0.03em 0 #b4d5fe, 0 0.03em #b4d5fe, 0 -0.03em #b4d5fe, 0.06em 0 #b4d5fe, -0.06em 0 #b4d5fe, 0.09em 0 #b4d5fe, -0.09em 0 #b4d5fe, 0.12em 0 #b4d5fe, -0.12em 0 #b4d5fe, 0.15em 0 #b4d5fe, -0.15em 0 #b4d5fe;
+                background: #b4d5fe;
+            }
+
+            /* Sidenotes, margin notes, figures, captions */
+            img {
+                max-width: 100%;
+            }
+
+            .sidenote,
+            .marginnote {
+                float: right;
+                clear: right;
+                margin-right: -60%;
+                width: 50%;
+                margin-top: 0.3rem;
+                margin-bottom: 0;
+                font-size: 1.1rem;
+                line-height: 1.3;
+                vertical-align: baseline;
+                position: relative;
+            }
+
+            .sidenote-number {
+                counter-increment: sidenote-counter;
+            }
+
+            .sidenote-number:after,
+            .sidenote:before {
+                font-family: et-book-roman-old-style;
+                position: relative;
+                vertical-align: baseline;
+            }
+
+            .sidenote-number:after {
+                content: counter(sidenote-counter);
+                font-size: 1rem;
+                top: -0.5rem;
+                left: 0.1rem;
+            }
+
+            .sidenote:before {
+                content: counter(sidenote-counter) " ";
+                font-size: 1rem;
+                top: -0.5rem;
+            }
+
+            blockquote .sidenote,
+            blockquote .marginnote {
+                margin-right: -82%;
+                min-width: 59%;
+                text-align: left;
+            }
+
+            div.fullwidth,
+            table.fullwidth {
+                width: 100%;
+            }
+
+            div.table-wrapper {
+                overflow-x: auto;
+                font-family: "Trebuchet MS", "Gill Sans", "Gill Sans MT", sans-serif;
+            }
+
+            .sans {
+                font-family: "Gill Sans", "Gill Sans MT", Calibri, sans-serif;
+                letter-spacing: .03em;
+            }
+
+            code, pre > code {
+                font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
+                font-size: 1.0rem;
+                line-height: 1.42;
+                -webkit-text-size-adjust: 100%; /* Prevent adjustments of font size after orientation changes in iOS. See https://github.com/edwardtufte/tufte-css/issues/81#issuecomment-261953409 */
+            }
+
+            .sans > code {
+                font-size: 1.2rem;
+            }
+
+            h1 > code,
+            h2 > code,
+            h3 > code {
+                font-size: 0.80em;
+            }
+
+            .marginnote > code,
+            .sidenote > code {
+                font-size: 1rem;
+            }
+
+            pre > code {
+                font-size: 0.9rem;
+                width: 52.5%;
+                margin-left: 2.5%;
+                overflow-x: auto;
+                display: block;
+            }
+
+            pre.fullwidth > code {
+                width: 90%;
+            }
+
+            .fullwidth {
+                max-width: 90%;
+                clear:both;
+            }
+
+            span.newthought {
+                font-variant: small-caps;
+                font-size: 1.2em;
+            }
+
+            input.margin-toggle {
+                display: none;
+            }
+
+            label.sidenote-number {
+                display: inline-block;
+                max-height: 2rem; /* should be less than or equal to paragraph line-height */
+            }
+
+            label.margin-toggle:not(.sidenote-number) {
+                display: none;
+            }
+
+            .iframe-wrapper {
+                position: relative;
+                padding-bottom: 56.25%; /* 16:9 */
+                padding-top: 25px;
+                height: 0;
+            }
+
+            .iframe-wrapper iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+
+            @media (max-width: 760px) {
+                main {
+                    width: 80%;
+                    padding-left: 4%;
+                    padding-right: 4%;
+                }
+
+                hr,
+                section > p,
+                section > footer,
+                section > table {
+                    width: 100%;
+                }
+
+                pre > code {
+                    width: 97%;
+                }
+
+                section > dl,
+                section > ol,
+                section > ul {
+                    width: 90%;
+                }
+
+                figure {
+                    max-width: 90%;
+                }
+
+                figcaption,
+                figure.fullwidth figcaption {
+                    margin-right: 0%;
+                    max-width: none;
+                }
+
+                blockquote {
+                    margin-left: 1.5em;
+                    margin-right: 0em;
+                }
+
+                blockquote p,
+                blockquote footer {
+                    width: 100%;
+                }
+
+                label.margin-toggle:not(.sidenote-number) {
+                    display: inline;
+                }
+
+                .sidenote,
+                .marginnote {
+                    display: none;
+                }
+
+                .margin-toggle:checked + .sidenote,
+                .margin-toggle:checked + .marginnote {
+                    display: block;
+                    float: left;
+                    left: 1rem;
+                    clear: both;
+                    width: 95%;
+                    margin: 1rem 2.5%;
+                    vertical-align: baseline;
+                    position: relative;
+                }
+
+                label {
+                    cursor: pointer;
+                }
+
+                div.table-wrapper,
+                table {
+                    width: 85%;
+                }
+
+                img {
+                    width: 100%;
+                }
+            }
+
+            </style>
+        <style>
+        .mermaid {
+          text-align:center;
+        }
+        </style>
+          <script type="module">
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+            mermaid.initialize({ startOnLoad: true , theme: "light",
+            themeVariables: {
+              primaryColor: '#BB2528',
+              primaryTextColor: '#fff',
+              primaryBorderColor: '#7C0000',
+              lineColor: '#eee',
+              secondaryColor: '#006100',
+              tertiaryColor: '#fff'
+            }
+            });
+          </script>
+        <style>
+
+        .fa {
+          display: inline-block;
+          width: 1.2rem;
+          height: 1.2rem;
+          background-color: #eee;
+          radius: .2rem;
+          padding: .1rem;
+          background-size:fit;
+          background-repeat: no-repeat;
+        }
+
+        .fa-address-book {
+        background-image:url(
+        "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48IS0tISBGb250IEF3ZXNvbWUgRnJlZSA2LjQuMiBieSBAZm9udGF3ZXNvbWUgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbSBMaWNlbnNlIC0gaHR0cHM6Ly9mb250YXdlc29tZS5jb20vbGljZW5zZS9mcmVlIChJY29uczogQ0MgQlkgNC4wLCBGb250czogU0lMIE9GTCAxLjEsIENvZGU6IE1JVCBMaWNlbnNlKSBDb3B5cmlnaHQgMjAyMyBGb250aWNvbnMsIEluYy4gLS0+PHBhdGggZD0iTTk2IDBDNjAuNyAwIDMyIDI4LjcgMzIgNjRWNDQ4YzAgMzUuMyAyOC43IDY0IDY0IDY0SDM4NGMzNS4zIDAgNjQtMjguNyA2NC02NFY2NGMwLTM1LjMtMjguNy02NC02NC02NEg5NnpNMjA4IDI4OGg2NGM0NC4yIDAgODAgMzUuOCA4MCA4MGMwIDguOC03LjIgMTYtMTYgMTZIMTQ0Yy04LjggMC0xNi03LjItMTYtMTZjMC00NC4yIDM1LjgtODAgODAtODB6bS0zMi05NmE2NCA2NCAwIDEgMSAxMjggMCA2NCA2NCAwIDEgMSAtMTI4IDB6TTUxMiA4MGMwLTguOC03LjItMTYtMTYtMTZzLTE2IDcuMi0xNiAxNnY2NGMwIDguOCA3LjIgMTYgMTYgMTZzMTYtNy4yIDE2LTE2Vjgwek00OTYgMTkyYy04LjggMC0xNiA3LjItMTYgMTZ2NjRjMCA4LjggNy4yIDE2IDE2IDE2czE2LTcuMiAxNi0xNlYyMDhjMC04LjgtNy4yLTE2LTE2LTE2em0xNiAxNDRjMC04LjgtNy4yLTE2LTE2LTE2cy0xNiA3LjItMTYgMTZ2NjRjMCA4LjggNy4yIDE2IDE2IDE2czE2LTcuMiAxNi0xNlYzMzZ6Ii8+PC9zdmc+"
+        );
+        }
+
+        .fa-circle  {
+        background-image:url(
+        "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48IS0tISBGb250IEF3ZXNvbWUgRnJlZSA2LjQuMiBieSBAZm9udGF3ZXNvbWUgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbSBMaWNlbnNlIC0gaHR0cHM6Ly9mb250YXdlc29tZS5jb20vbGljZW5zZS9mcmVlIChJY29uczogQ0MgQlkgNC4wLCBGb250czogU0lMIE9GTCAxLjEsIENvZGU6IE1JVCBMaWNlbnNlKSBDb3B5cmlnaHQgMjAyMyBGb250aWNvbnMsIEluYy4gLS0+PHBhdGggZD0iTTI1NiA1MTJBMjU2IDI1NiAwIDEgMCAyNTYgMGEyNTYgMjU2IDAgMSAwIDAgNTEyeiIvPjwvc3ZnPg=="
+        );
+        }
+
+        .fa-database {
+        background-image:url(
+        "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NDggNTEyIj48IS0tISBGb250IEF3ZXNvbWUgRnJlZSA2LjQuMiBieSBAZm9udGF3ZXNvbWUgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbSBMaWNlbnNlIC0gaHR0cHM6Ly9mb250YXdlc29tZS5jb20vbGljZW5zZS9mcmVlIChJY29uczogQ0MgQlkgNC4wLCBGb250czogU0lMIE9GTCAxLjEsIENvZGU6IE1JVCBMaWNlbnNlKSBDb3B5cmlnaHQgMjAyMyBGb250aWNvbnMsIEluYy4gLS0+PHBhdGggZD0iTTQ0OCA4MHY0OGMwIDQ0LjItMTAwLjMgODAtMjI0IDgwUzAgMTcyLjIgMCAxMjhWODBDMCAzNS44IDEwMC4zIDAgMjI0IDBTNDQ4IDM1LjggNDQ4IDgwek0zOTMuMiAyMTQuN2MyMC44LTcuNCAzOS45LTE2LjkgNTQuOC0yOC42VjI4OGMwIDQ0LjItMTAwLjMgODAtMjI0IDgwUzAgMzMyLjIgMCAyODhWMTg2LjFjMTQuOSAxMS44IDM0IDIxLjIgNTQuOCAyOC42Qzk5LjcgMjMwLjcgMTU5LjUgMjQwIDIyNCAyNDBzMTI0LjMtOS4zIDE2OS4yLTI1LjN6TTAgMzQ2LjFjMTQuOSAxMS44IDM0IDIxLjIgNTQuOCAyOC42Qzk5LjcgMzkwLjcgMTU5LjUgNDAwIDIyNCA0MDBzMTI0LjMtOS4zIDE2OS4yLTI1LjNjMjAuOC03LjQgMzkuOS0xNi45IDU0LjgtMjguNlY0MzJjMCA0NC4yLTEwMC4zIDgwLTIyNCA4MFMwIDQ3Ni4yIDAgNDMyVjM0Ni4xeiIvPjwvc3ZnPg=="
+        );
+        }
+
+        .fa-download {
+        background-image:url(
+        "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMTYiIHdpZHRoPSIxNiIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjwhLS0hRm9udCBBd2Vzb21lIEZyZWUgNi41LjEgYnkgQGZvbnRhd2Vzb21lIC0gaHR0cHM6Ly9mb250YXdlc29tZS5jb20gTGljZW5zZSAtIGh0dHBzOi8vZm9udGF3ZXNvbWUuY29tL2xpY2Vuc2UvZnJlZSBDb3B5cmlnaHQgMjAyMyBGb250aWNvbnMsIEluYy4tLT48cGF0aCBkPSJNMjE2IDBoODBjMTMuMyAwIDI0IDEwLjcgMjQgMjR2MTY4aDg3LjdjMTcuOCAwIDI2LjcgMjEuNSAxNC4xIDM0LjFMMjY5LjcgMzc4LjNjLTcuNSA3LjUtMTkuOCA3LjUtMjcuMyAwTDkwLjEgMjI2LjFjLTEyLjYtMTIuNi0zLjctMzQuMSAxNC4xLTM0LjFIMTkyVjI0YzAtMTMuMyAxMC43LTI0IDI0LTI0em0yOTYgMzc2djExMmMwIDEzLjMtMTAuNyAyNC0yNCAyNEgyNGMtMTMuMyAwLTI0LTEwLjctMjQtMjRWMzc2YzAtMTMuMyAxMC43LTI0IDI0LTI0aDE0Ni43bDQ5IDQ5YzIwLjEgMjAuMSA1Mi41IDIwLjEgNzIuNiAwbDQ5LTQ5SDQ4OGMxMy4zIDAgMjQgMTAuNyAyNCAyNHptLTEyNCA4OGMwLTExLTktMjAtMjAtMjBzLTIwIDktMjAgMjAgOSAyMCAyMCAyMCAyMC05IDIwLTIwem02NCAwYzAtMTEtOS0yMC0yMC0yMHMtMjAgOS0yMCAyMCA5IDIwIDIwIDIwIDIwLTkgMjAtMjB6Ii8+PC9zdmc+Cg=="
+        );
+        }
+
+
+        </style> 
+        <style>
+
+        /**
+         * Solarized dark atom theme for `prism.js`
+         * Based on Atom's `atom-dark` theme: https://github.com/atom/atom-dark-syntax
+         * @author Pranay Chauhan (@PranayChauhan2516)
+         */
+
+        code[class*="language-"],
+        pre[class*="language-"] {
+        	color: #839496;
+        	text-shadow: 0 1px rgba(0, 0, 0, 0.3);
+        	font-family: Inconsolata, Monaco, Consolas, 'Courier New', Courier, monospace;
+        	direction: ltr;
+        	text-align: left;
+        	white-space: pre;
+        	word-spacing: normal;
+        	word-break: normal;
+        	line-height: 1.5;
+
+        	-moz-tab-size: 4;
+        	-o-tab-size: 4;
+        	tab-size: 4;
+
+        	-webkit-hyphens: none;
+        	-moz-hyphens: none;
+        	-ms-hyphens: none;
+        	hyphens: none;
+        }
+
+        /* Code blocks */
+        pre[class*="language-"] {
+        	padding: 1em;
+        	margin: .5em 0;
+        	overflow: auto;
+        	border-radius: 0.3em;
+        }
+
+        :not(pre) > code[class*="language-"],
+        pre[class*="language-"] {
+        	background: #002b36;
+        }
+
+        /* Inline code */
+        :not(pre) > code[class*="language-"] {
+        	padding: .1em;
+        	border-radius: .3em;
+        }
+
+        .token.comment,
+        .token.prolog,
+        .token.doctype,
+        .token.cdata {
+        	color: #586e75;
+        }
+
+        .token.punctuation {
+        	color: #93a1a1;
+        }
+
+        .namespace {
+        	opacity: .7;
+        }
+
+        .token.property,
+        .token.keyword,
+        .token.tag {
+        	color: #268bd2;
+        }
+
+        .token.class-name {
+        	color: #FFFFB6;
+        	text-decoration: underline;
+        }
+
+        .token.boolean,
+        .token.constant {
+        	color: #b58900;
+        }
+
+        .token.symbol,
+        .token.deleted {
+        	color: #dc322f;
+        }
+
+        .token.number {
+        	color: #859900;
+        }
+
+        .token.selector,
+        .token.attr-name,
+        .token.string,
+        .token.char,
+        .token.builtin,
+        .token.inserted {
+        	color: #859900;
+        }
+
+        .token.variable {
+        	color: #268bd2;
+        }
+
+        .token.operator {
+        	color: #EDEDED;
+        }
+
+        .token.function {
+        	color: #268bd2;
+        }
+
+        .token.regex {
+        	color: #E9C062;
+        }
+
+        .token.important {
+        	color: #fd971f;
+        }
+
+        .token.entity {
+        	color: #FFFFB6;
+        	cursor: help;
+        }
+
+        .token.url {
+        	color: #96CBFE;
+        }
+
+        .language-css .token.string,
+        .style .token.string {
+        	color: #87C38A;
+        }
+
+        .token.important,
+        .token.bold {
+        	font-weight: bold;
+        }
+
+        .token.italic {
+        	font-style: italic;
+        }
+
+        .token.atrule,
+        .token.attr-value {
+        	color: #F9EE98;
+        }
+        </style>
+        <script>
+        /* PrismJS 1.29.0
+        https://prismjs.com/download.html#themes=prism-dark&languages=markup+css+clike+javascript+mermaid */
+        var _self="undefined"!=typeof window?window:"undefined"!=typeof WorkerGlobalScope&&self instanceof WorkerGlobalScope?self:{},Prism=function(e){var n=/(?:^|\s)lang(?:uage)?-([\w-]+)(?=\s|$)/i,t=0,r={},a={manual:e.Prism&&e.Prism.manual,disableWorkerMessageHandler:e.Prism&&e.Prism.disableWorkerMessageHandler,util:{encode:function e(n){return n instanceof i?new i(n.type,e(n.content),n.alias):Array.isArray(n)?n.map(e):n.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/\u00a0/g," ")},type:function(e){return Object.prototype.toString.call(e).slice(8,-1)},objId:function(e){return e.__id||Object.defineProperty(e,"__id",{value:++t}),e.__id},clone:function e(n,t){var r,i;switch(t=t||{},a.util.type(n)){case"Object":if(i=a.util.objId(n),t[i])return t[i];for(var l in r={},t[i]=r,n)n.hasOwnProperty(l)&&(r[l]=e(n[l],t));return r;case"Array":return i=a.util.objId(n),t[i]?t[i]:(r=[],t[i]=r,n.forEach((function(n,a){r[a]=e(n,t)})),r);default:return n}},getLanguage:function(e){for(;e;){var t=n.exec(e.className);if(t)return t[1].toLowerCase();e=e.parentElement}return"none"},setLanguage:function(e,t){e.className=e.className.replace(RegExp(n,"gi"),""),e.classList.add("language-"+t)},currentScript:function(){if("undefined"==typeof document)return null;if("currentScript"in document)return document.currentScript;try{throw new Error}catch(r){var e=(/at [^(\r\n]*\((.*):[^:]+:[^:]+\)$/i.exec(r.stack)||[])[1];if(e){var n=document.getElementsByTagName("script");for(var t in n)if(n[t].src==e)return n[t]}return null}},isActive:function(e,n,t){for(var r="no-"+n;e;){var a=e.classList;if(a.contains(n))return!0;if(a.contains(r))return!1;e=e.parentElement}return!!t}},languages:{plain:r,plaintext:r,text:r,txt:r,extend:function(e,n){var t=a.util.clone(a.languages[e]);for(var r in n)t[r]=n[r];return t},insertBefore:function(e,n,t,r){var i=(r=r||a.languages)[e],l={};for(var o in i)if(i.hasOwnProperty(o)){if(o==n)for(var s in t)t.hasOwnProperty(s)&&(l[s]=t[s]);t.hasOwnProperty(o)||(l[o]=i[o])}var u=r[e];return r[e]=l,a.languages.DFS(a.languages,(function(n,t){t===u&&n!=e&&(this[n]=l)})),l},DFS:function e(n,t,r,i){i=i||{};var l=a.util.objId;for(var o in n)if(n.hasOwnProperty(o)){t.call(n,o,n[o],r||o);var s=n[o],u=a.util.type(s);"Object"!==u||i[l(s)]?"Array"!==u||i[l(s)]||(i[l(s)]=!0,e(s,t,o,i)):(i[l(s)]=!0,e(s,t,null,i))}}},plugins:{},highlightAll:function(e,n){a.highlightAllUnder(document,e,n)},highlightAllUnder:function(e,n,t){var r={callback:t,container:e,selector:'code[class*="language-"], [class*="language-"] code, code[class*="lang-"], [class*="lang-"] code'};a.hooks.run("before-highlightall",r),r.elements=Array.prototype.slice.apply(r.container.querySelectorAll(r.selector)),a.hooks.run("before-all-elements-highlight",r);for(var i,l=0;i=r.elements[l++];)a.highlightElement(i,!0===n,r.callback)},highlightElement:function(n,t,r){var i=a.util.getLanguage(n),l=a.languages[i];a.util.setLanguage(n,i);var o=n.parentElement;o&&"pre"===o.nodeName.toLowerCase()&&a.util.setLanguage(o,i);var s={element:n,language:i,grammar:l,code:n.textContent};function u(e){s.highlightedCode=e,a.hooks.run("before-insert",s),s.element.innerHTML=s.highlightedCode,a.hooks.run("after-highlight",s),a.hooks.run("complete",s),r&&r.call(s.element)}if(a.hooks.run("before-sanity-check",s),(o=s.element.parentElement)&&"pre"===o.nodeName.toLowerCase()&&!o.hasAttribute("tabindex")&&o.setAttribute("tabindex","0"),!s.code)return a.hooks.run("complete",s),void(r&&r.call(s.element));if(a.hooks.run("before-highlight",s),s.grammar)if(t&&e.Worker){var c=new Worker(a.filename);c.onmessage=function(e){u(e.data)},c.postMessage(JSON.stringify({language:s.language,code:s.code,immediateClose:!0}))}else u(a.highlight(s.code,s.grammar,s.language));else u(a.util.encode(s.code))},highlight:function(e,n,t){var r={code:e,grammar:n,language:t};if(a.hooks.run("before-tokenize",r),!r.grammar)throw new Error('The language "'+r.language+'" has no grammar.');return r.tokens=a.tokenize(r.code,r.grammar),a.hooks.run("after-tokenize",r),i.stringify(a.util.encode(r.tokens),r.language)},tokenize:function(e,n){var t=n.rest;if(t){for(var r in t)n[r]=t[r];delete n.rest}var a=new s;return u(a,a.head,e),o(e,a,n,a.head,0),function(e){for(var n=[],t=e.head.next;t!==e.tail;)n.push(t.value),t=t.next;return n}(a)},hooks:{all:{},add:function(e,n){var t=a.hooks.all;t[e]=t[e]||[],t[e].push(n)},run:function(e,n){var t=a.hooks.all[e];if(t&&t.length)for(var r,i=0;r=t[i++];)r(n)}},Token:i};function i(e,n,t,r){this.type=e,this.content=n,this.alias=t,this.length=0|(r||"").length}function l(e,n,t,r){e.lastIndex=n;var a=e.exec(t);if(a&&r&&a[1]){var i=a[1].length;a.index+=i,a[0]=a[0].slice(i)}return a}function o(e,n,t,r,s,g){for(var f in t)if(t.hasOwnProperty(f)&&t[f]){var h=t[f];h=Array.isArray(h)?h:[h];for(var d=0;d<h.length;++d){if(g&&g.cause==f+","+d)return;var v=h[d],p=v.inside,m=!!v.lookbehind,y=!!v.greedy,k=v.alias;if(y&&!v.pattern.global){var x=v.pattern.toString().match(/[imsuy]*$/)[0];v.pattern=RegExp(v.pattern.source,x+"g")}for(var b=v.pattern||v,w=r.next,A=s;w!==n.tail&&!(g&&A>=g.reach);A+=w.value.length,w=w.next){var E=w.value;if(n.length>e.length)return;if(!(E instanceof i)){var P,L=1;if(y){if(!(P=l(b,A,e,m))||P.index>=e.length)break;var S=P.index,O=P.index+P[0].length,j=A;for(j+=w.value.length;S>=j;)j+=(w=w.next).value.length;if(A=j-=w.value.length,w.value instanceof i)continue;for(var C=w;C!==n.tail&&(j<O||"string"==typeof C.value);C=C.next)L++,j+=C.value.length;L--,E=e.slice(A,j),P.index-=A}else if(!(P=l(b,0,E,m)))continue;S=P.index;var N=P[0],_=E.slice(0,S),M=E.slice(S+N.length),W=A+E.length;g&&W>g.reach&&(g.reach=W);var z=w.prev;if(_&&(z=u(n,z,_),A+=_.length),c(n,z,L),w=u(n,z,new i(f,p?a.tokenize(N,p):N,k,N)),M&&u(n,w,M),L>1){var I={cause:f+","+d,reach:W};o(e,n,t,w.prev,A,I),g&&I.reach>g.reach&&(g.reach=I.reach)}}}}}}function s(){var e={value:null,prev:null,next:null},n={value:null,prev:e,next:null};e.next=n,this.head=e,this.tail=n,this.length=0}function u(e,n,t){var r=n.next,a={value:t,prev:n,next:r};return n.next=a,r.prev=a,e.length++,a}function c(e,n,t){for(var r=n.next,a=0;a<t&&r!==e.tail;a++)r=r.next;n.next=r,r.prev=n,e.length-=a}if(e.Prism=a,i.stringify=function e(n,t){if("string"==typeof n)return n;if(Array.isArray(n)){var r="";return n.forEach((function(n){r+=e(n,t)})),r}var i={type:n.type,content:e(n.content,t),tag:"span",classes:["token",n.type],attributes:{},language:t},l=n.alias;l&&(Array.isArray(l)?Array.prototype.push.apply(i.classes,l):i.classes.push(l)),a.hooks.run("wrap",i);var o="";for(var s in i.attributes)o+=" "+s+'="'+(i.attributes[s]||"").replace(/"/g,"&quot;")+'"';return"<"+i.tag+' class="'+i.classes.join(" ")+'"'+o+">"+i.content+"</"+i.tag+">"},!e.document)return e.addEventListener?(a.disableWorkerMessageHandler||e.addEventListener("message",(function(n){var t=JSON.parse(n.data),r=t.language,i=t.code,l=t.immediateClose;e.postMessage(a.highlight(i,a.languages[r],r)),l&&e.close()}),!1),a):a;var g=a.util.currentScript();function f(){a.manual||a.highlightAll()}if(g&&(a.filename=g.src,g.hasAttribute("data-manual")&&(a.manual=!0)),!a.manual){var h=document.readyState;"loading"===h||"interactive"===h&&g&&g.defer?document.addEventListener("DOMContentLoaded",f):window.requestAnimationFrame?window.requestAnimationFrame(f):window.setTimeout(f,16)}return a}(_self);"undefined"!=typeof module&&module.exports&&(module.exports=Prism),"undefined"!=typeof global&&(global.Prism=Prism);
+        Prism.languages.markup={comment:{pattern:/<!--(?:(?!<!--)[\s\S])*?-->/,greedy:!0},prolog:{pattern:/<\?[\s\S]+?\?>/,greedy:!0},doctype:{pattern:/<!DOCTYPE(?:[^>"'[\]]|"[^"]*"|'[^']*')+(?:\[(?:[^<"'\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\]\s*)?>/i,greedy:!0,inside:{"internal-subset":{pattern:/(^[^\[]*\[)[\s\S]+(?=\]>$)/,lookbehind:!0,greedy:!0,inside:null},string:{pattern:/"[^"]*"|'[^']*'/,greedy:!0},punctuation:/^<!|>$|[[\]]/,"doctype-tag":/^DOCTYPE/i,name:/[^\s<>'"]+/}},cdata:{pattern:/<!\[CDATA\[[\s\S]*?\]\]>/i,greedy:!0},tag:{pattern:/<\/?(?!\d)[^\s>\/=$<%]+(?:\s(?:\s*[^\s>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s'">=]+(?=[\s>]))|(?=[\s/>])))+)?\s*\/?>/,greedy:!0,inside:{tag:{pattern:/^<\/?[^\s>\/]+/,inside:{punctuation:/^<\/?/,namespace:/^[^\s>\/:]+:/}},"special-attr":[],"attr-value":{pattern:/=\s*(?:"[^"]*"|'[^']*'|[^\s'">=]+)/,inside:{punctuation:[{pattern:/^=/,alias:"attr-equals"},{pattern:/^(\s*)["']|["']$/,lookbehind:!0}]}},punctuation:/\/?>/,"attr-name":{pattern:/[^\s>\/]+/,inside:{namespace:/^[^\s>\/:]+:/}}}},entity:[{pattern:/&[\da-z]{1,8};/i,alias:"named-entity"},/&#x?[\da-f]{1,8};/i]},Prism.languages.markup.tag.inside["attr-value"].inside.entity=Prism.languages.markup.entity,Prism.languages.markup.doctype.inside["internal-subset"].inside=Prism.languages.markup,Prism.hooks.add("wrap",(function(a){"entity"===a.type&&(a.attributes.title=a.content.replace(/&amp;/,"&"))})),Object.defineProperty(Prism.languages.markup.tag,"addInlined",{value:function(a,e){var s={};s["language-"+e]={pattern:/(^<!\[CDATA\[)[\s\S]+?(?=\]\]>$)/i,lookbehind:!0,inside:Prism.languages[e]},s.cdata=/^<!\[CDATA\[|\]\]>$/i;var t={"included-cdata":{pattern:/<!\[CDATA\[[\s\S]*?\]\]>/i,inside:s}};t["language-"+e]={pattern:/[\s\S]+/,inside:Prism.languages[e]};var n={};n[a]={pattern:RegExp("(<__[^>]*>)(?:<!\\[CDATA\\[(?:[^\\]]|\\](?!\\]>))*\\]\\]>|(?!<!\\[CDATA\\[)[^])*?(?=</__>)".replace(/__/g,(function(){return a})),"i"),lookbehind:!0,greedy:!0,inside:t},Prism.languages.insertBefore("markup","cdata",n)}}),Object.defineProperty(Prism.languages.markup.tag,"addAttribute",{value:function(a,e){Prism.languages.markup.tag.inside["special-attr"].push({pattern:RegExp("(^|[\"'\\s])(?:"+a+")\\s*=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s'\">=]+(?=[\\s>]))","i"),lookbehind:!0,inside:{"attr-name":/^[^\s=]+/,"attr-value":{pattern:/=[\s\S]+/,inside:{value:{pattern:/(^=\s*(["']|(?!["'])))\S[\s\S]*(?=\2$)/,lookbehind:!0,alias:[e,"language-"+e],inside:Prism.languages[e]},punctuation:[{pattern:/^=/,alias:"attr-equals"},/"|'/]}}}})}}),Prism.languages.html=Prism.languages.markup,Prism.languages.mathml=Prism.languages.markup,Prism.languages.svg=Prism.languages.markup,Prism.languages.xml=Prism.languages.extend("markup",{}),Prism.languages.ssml=Prism.languages.xml,Prism.languages.atom=Prism.languages.xml,Prism.languages.rss=Prism.languages.xml;
+        !function(s){var e=/(?:"(?:\\(?:\r\n|[\s\S])|[^"\\\r\n])*"|'(?:\\(?:\r\n|[\s\S])|[^'\\\r\n])*')/;s.languages.css={comment:/\/\*[\s\S]*?\*\//,atrule:{pattern:RegExp("@[\\w-](?:[^;{\\s\"']|\\s+(?!\\s)|"+e.source+")*?(?:;|(?=\\s*\\{))"),inside:{rule:/^@[\w-]+/,"selector-function-argument":{pattern:/(\bselector\s*\(\s*(?![\s)]))(?:[^()\s]|\s+(?![\s)])|\((?:[^()]|\([^()]*\))*\))+(?=\s*\))/,lookbehind:!0,alias:"selector"},keyword:{pattern:/(^|[^\w-])(?:and|not|only|or)(?![\w-])/,lookbehind:!0}}},url:{pattern:RegExp("\\burl\\((?:"+e.source+"|(?:[^\\\\\r\n()\"']|\\\\[^])*)\\)","i"),greedy:!0,inside:{function:/^url/i,punctuation:/^\(|\)$/,string:{pattern:RegExp("^"+e.source+"$"),alias:"url"}}},selector:{pattern:RegExp("(^|[{}\\s])[^{}\\s](?:[^{};\"'\\s]|\\s+(?![\\s{])|"+e.source+")*(?=\\s*\\{)"),lookbehind:!0},string:{pattern:e,greedy:!0},property:{pattern:/(^|[^-\w\xA0-\uFFFF])(?!\s)[-_a-z\xA0-\uFFFF](?:(?!\s)[-\w\xA0-\uFFFF])*(?=\s*:)/i,lookbehind:!0},important:/!important\b/i,function:{pattern:/(^|[^-a-z0-9])[-a-z0-9]+(?=\()/i,lookbehind:!0},punctuation:/[(){};:,]/},s.languages.css.atrule.inside.rest=s.languages.css;var t=s.languages.markup;t&&(t.tag.addInlined("style","css"),t.tag.addAttribute("style","css"))}(Prism);
+        Prism.languages.clike={comment:[{pattern:/(^|[^\\])\/\*[\s\S]*?(?:\*\/|$)/,lookbehind:!0,greedy:!0},{pattern:/(^|[^\\:])\/\/.*/,lookbehind:!0,greedy:!0}],string:{pattern:/(["'])(?:\\(?:\r\n|[\s\S])|(?!\1)[^\\\r\n])*\1/,greedy:!0},"class-name":{pattern:/(\b(?:class|extends|implements|instanceof|interface|new|trait)\s+|\bcatch\s+\()[\w.\\]+/i,lookbehind:!0,inside:{punctuation:/[.\\]/}},keyword:/\b(?:break|catch|continue|do|else|finally|for|function|if|in|instanceof|new|null|return|throw|try|while)\b/,boolean:/\b(?:false|true)\b/,function:/\b\w+(?=\()/,number:/\b0x[\da-f]+\b|(?:\b\d+(?:\.\d*)?|\B\.\d+)(?:e[+-]?\d+)?/i,operator:/[<>]=?|[!=]=?=?|--?|\+\+?|&&?|\|\|?|[?*/~^%]/,punctuation:/[{}[\];(),.:]/};
+        Prism.languages.javascript=Prism.languages.extend("clike",{"class-name":[Prism.languages.clike["class-name"],{pattern:/(^|[^$\w\xA0-\uFFFF])(?!\s)[_$A-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\.(?:constructor|prototype))/,lookbehind:!0}],keyword:[{pattern:/((?:^|\})\s*)catch\b/,lookbehind:!0},{pattern:/(^|[^.]|\.\.\.\s*)\b(?:as|assert(?=\s*\{)|async(?=\s*(?:function\b|\(|[$\w\xA0-\uFFFF]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\s*(?:\{|$))|for|from(?=\s*(?:['"]|$))|function|(?:get|set)(?=\s*(?:[#\[$\w\xA0-\uFFFF]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\b/,lookbehind:!0}],function:/#?(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*(?:\.\s*(?:apply|bind|call)\s*)?\()/,number:{pattern:RegExp("(^|[^\\w$])(?:NaN|Infinity|0[bB][01]+(?:_[01]+)*n?|0[oO][0-7]+(?:_[0-7]+)*n?|0[xX][\\dA-Fa-f]+(?:_[\\dA-Fa-f]+)*n?|\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*(?:\\.(?:\\d+(?:_\\d+)*)?)?|\\.\\d+(?:_\\d+)*)(?:[Ee][+-]?\\d+(?:_\\d+)*)?)(?![\\w$])"),lookbehind:!0},operator:/--|\+\+|\*\*=?|=>|&&=?|\|\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\.{3}|\?\?=?|\?\.?|[~:]/}),Prism.languages.javascript["class-name"][0].pattern=/(\b(?:class|extends|implements|instanceof|interface|new)\s+)[\w.\\]+/,Prism.languages.insertBefore("javascript","keyword",{regex:{pattern:RegExp("((?:^|[^$\\w\\xA0-\\uFFFF.\"'\\])\\s]|\\b(?:return|yield))\\s*)/(?:(?:\\[(?:[^\\]\\\\\r\n]|\\\\.)*\\]|\\\\.|[^/\\\\\\[\r\n])+/[dgimyus]{0,7}|(?:\\[(?:[^[\\]\\\\\r\n]|\\\\.|\\[(?:[^[\\]\\\\\r\n]|\\\\.|\\[(?:[^[\\]\\\\\r\n]|\\\\.)*\\])*\\])*\\]|\\\\.|[^/\\\\\\[\r\n])+/[dgimyus]{0,7}v[dgimyus]{0,7})(?=(?:\\s|/\\*(?:[^*]|\\*(?!/))*\\*/)*(?:$|[\r\n,.;:})\\]]|//))"),lookbehind:!0,greedy:!0,inside:{"regex-source":{pattern:/^(\/)[\s\S]+(?=\/[a-z]*$)/,lookbehind:!0,alias:"language-regex",inside:Prism.languages.regex},"regex-delimiter":/^\/|\/$/,"regex-flags":/^[a-z]+$/}},"function-variable":{pattern:/#?(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*[=:]\s*(?:async\s*)?(?:\bfunction\b|(?:\((?:[^()]|\([^()]*\))*\)|(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*)\s*=>))/,alias:"function"},parameter:[{pattern:/(function(?:\s+(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*)?\s*\(\s*)(?!\s)(?:[^()\s]|\s+(?![\s)])|\([^()]*\))+(?=\s*\))/,lookbehind:!0,inside:Prism.languages.javascript},{pattern:/(^|[^$\w\xA0-\uFFFF])(?!\s)[_$a-z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*=>)/i,lookbehind:!0,inside:Prism.languages.javascript},{pattern:/(\(\s*)(?!\s)(?:[^()\s]|\s+(?![\s)])|\([^()]*\))+(?=\s*\)\s*=>)/,lookbehind:!0,inside:Prism.languages.javascript},{pattern:/((?:\b|\s|^)(?!(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)(?![$\w\xA0-\uFFFF]))(?:(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*\s*)\(\s*|\]\s*\(\s*)(?!\s)(?:[^()\s]|\s+(?![\s)])|\([^()]*\))+(?=\s*\)\s*\{)/,lookbehind:!0,inside:Prism.languages.javascript}],constant:/\b[A-Z](?:[A-Z_]|\dx?)*\b/}),Prism.languages.insertBefore("javascript","string",{hashbang:{pattern:/^#!.*/,greedy:!0,alias:"comment"},"template-string":{pattern:/`(?:\\[\s\S]|\$\{(?:[^{}]|\{(?:[^{}]|\{[^}]*\})*\})+\}|(?!\$\{)[^\\`])*`/,greedy:!0,inside:{"template-punctuation":{pattern:/^`|`$/,alias:"string"},interpolation:{pattern:/((?:^|[^\\])(?:\\{2})*)\$\{(?:[^{}]|\{(?:[^{}]|\{[^}]*\})*\})+\}/,lookbehind:!0,inside:{"interpolation-punctuation":{pattern:/^\$\{|\}$/,alias:"punctuation"},rest:Prism.languages.javascript}},string:/[\s\S]+/}},"string-property":{pattern:/((?:^|[,{])[ \t]*)(["'])(?:\\(?:\r\n|[\s\S])|(?!\2)[^\\\r\n])*\2(?=\s*:)/m,lookbehind:!0,greedy:!0,alias:"property"}}),Prism.languages.insertBefore("javascript","operator",{"literal-property":{pattern:/((?:^|[,{])[ \t]*)(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*:)/m,lookbehind:!0,alias:"property"}}),Prism.languages.markup&&(Prism.languages.markup.tag.addInlined("script","javascript"),Prism.languages.markup.tag.addAttribute("on(?:abort|blur|change|click|composition(?:end|start|update)|dblclick|error|focus(?:in|out)?|key(?:down|up)|load|mouse(?:down|enter|leave|move|out|over|up)|reset|resize|scroll|select|slotchange|submit|unload|wheel)","javascript")),Prism.languages.js=Prism.languages.javascript;
+        Prism.languages.mermaid={comment:{pattern:/%%.*/,greedy:!0},style:{pattern:/^([ \t]*(?:classDef|linkStyle|style)[ \t]+[\w$-]+[ \t]+)\w.*[^\s;]/m,lookbehind:!0,inside:{property:/\b\w[\w-]*(?=[ \t]*:)/,operator:/:/,punctuation:/,/}},"inter-arrow-label":{pattern:/([^<>ox.=-])(?:-[-.]|==)(?![<>ox.=-])[ \t]*(?:"[^"\r\n]*"|[^\s".=-](?:[^\r\n.=-]*[^\s.=-])?)[ \t]*(?:\.+->?|--+[->]|==+[=>])(?![<>ox.=-])/,lookbehind:!0,greedy:!0,inside:{arrow:{pattern:/(?:\.+->?|--+[->]|==+[=>])$/,alias:"operator"},label:{pattern:/^([\s\S]{2}[ \t]*)\S(?:[\s\S]*\S)?/,lookbehind:!0,alias:"property"},"arrow-head":{pattern:/^\S+/,alias:["arrow","operator"]}}},arrow:[{pattern:/(^|[^{}|o.-])[|}][|o](?:--|\.\.)[|o][|{](?![{}|o.-])/,lookbehind:!0,alias:"operator"},{pattern:/(^|[^<>ox.=-])(?:[<ox](?:==+|--+|-\.*-)[>ox]?|(?:==+|--+|-\.*-)[>ox]|===+|---+|-\.+-)(?![<>ox.=-])/,lookbehind:!0,alias:"operator"},{pattern:/(^|[^<>()x-])(?:--?(?:>>|[x>)])(?![<>()x])|(?:<<|[x<(])--?(?!-))/,lookbehind:!0,alias:"operator"},{pattern:/(^|[^<>|*o.-])(?:[*o]--|--[*o]|<\|?(?:--|\.\.)|(?:--|\.\.)\|?>|--|\.\.)(?![<>|*o.-])/,lookbehind:!0,alias:"operator"}],label:{pattern:/(^|[^|<])\|(?:[^\r\n"|]|"[^"\r\n]*")+\|/,lookbehind:!0,greedy:!0,alias:"property"},text:{pattern:/(?:[(\[{]+|\b>)(?:[^\r\n"()\[\]{}]|"[^"\r\n]*")+(?:[)\]}]+|>)/,alias:"string"},string:{pattern:/"[^"\r\n]*"/,greedy:!0},annotation:{pattern:/<<(?:abstract|choice|enumeration|fork|interface|join|service)>>|\[\[(?:choice|fork|join)\]\]/i,alias:"important"},keyword:[{pattern:/(^[ \t]*)(?:action|callback|class|classDef|classDiagram|click|direction|erDiagram|flowchart|gantt|gitGraph|graph|journey|link|linkStyle|pie|requirementDiagram|sequenceDiagram|stateDiagram|stateDiagram-v2|style|subgraph)(?![\w$-])/m,lookbehind:!0,greedy:!0},{pattern:/(^[ \t]*)(?:activate|alt|and|as|autonumber|deactivate|else|end(?:[ \t]+note)?|loop|opt|par|participant|rect|state|note[ \t]+(?:over|(?:left|right)[ \t]+of))(?![\w$-])/im,lookbehind:!0,greedy:!0}],entity:/#[a-z0-9]+;/,operator:{pattern:/(\w[ \t]*)&(?=[ \t]*\w)|:::|:/,lookbehind:!0},punctuation:/[(){};]/};
+        Prism.languages.aiken = {
+          doc: {
+            pattern: /\/\/\/\/?.*/,
+            greedy: true,
+          },
+          comment: {
+            pattern: /\/\/.*/,
+            greedy: true,
+          },
+          function: /(?<=fn )([a-z_][a-z0-9_]+)(?=\()/,
+          keyword:
+            /\b(use|case|if|external|fn|import|let|assert|try|pub|type|opaque|const|todo|as)\b/,
+          operator: {
+            pattern:
+              /(<<|>>|<-|->|\|>|<>|\.\.|<=\.?|>=\.?|==\.?|!=\.?|<\.?|>\.?|&&|\|\||\+\.?|-\.?|\/\.?|\*\.?|%\.?|=)/,
+            greedy: true,
+          },
+          string: {
+            pattern: /"(?:\\(?:\r\n|[\s\S])|(?!")[^\\\r\n])*"/,
+            greedy: true,
+            inside: {
+              punctuation: /\\./,
+            },
+          },
+          punctuation: /[.\\:,{}()]/,
+          number:
+            /\b(?:0b[0-1]+|0o[0-7]+|[[:digit:]][[:digit:]_]*(\\.[[:digit:]]*)?|0x[[:xdigit:]]+)\b/,
+          boolean: /\b(?:True|False)\b/,
+        };
+        </script>
+
+            <!--[if lt IE 9]>
+<script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+<![endif]-->
+  </head>
+  <body>
+    <main>
+                  <header id="title-block-header">
+        <div style="height: 4rem; display: flex; gap: 1rem; justify-content: space-around;">
+          <div style="width: 4rem;">
+            <img src='data:image/png;base64, 
+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
+              ' />
+          </div>
+          <div style="height: 4rem; width: 5rem;">
+            <svg id="svg5" width="45.932mm" height="27.559mm" version="1.1" viewBox="0 0 45.932 27.559" xmlns="http://www.w3.org/2000/svg">
+            <g id="layer1" transform="translate(56.076 -83.882)">
+              <g id="text119" fill="#c83737" stroke-width=".26458" aria-label="⟨K⟩">
+              <path id="path519" d="m-48.608 111.44-7.4676-12.001v-3.6153l7.4676-11.942h3.0226l-8.2973 13.839 8.4751 13.72z"/>
+              <path id="path521" d="m-39.274 108.03v-21.632h2.667v9.3049h3.2004l4.8006-9.3049h2.9041l-5.3636 10.431 5.66 11.201h-3.0522l-5.0377-9.9864h-3.1115v9.9864z"/>
+              <path id="path523" d="m-20.812 111.44 8.4751-13.72-8.2973-13.839h3.0226l7.4676 11.942v3.6153l-7.4676 12.001z"/>
+              </g>
+            </g>
+            </svg>
+          </div>
+        </div>
+        <h1 class="title">Subbit :: Spec</h1>
+                        <p class="author">waalge, Kompact.io</p>
+                              </header>
+                  <h1 data-number="1" id="intro"><span
+                  class="header-section-number">1</span> Intro</h1>
+                  <p>This document contains:</p>
+                  <ul>
+                  <li>A non-technical description of how the dapp
+                  works</li>
+                  <li>A specification in terms of validators, constants,
+                  tokens, datatypes, and transactions (txs)</li>
+                  <li>A description of terms</li>
+                  <li>Additional comments</li>
+                  </ul>
+                  <h2 data-number="1.1" id="overview"><span
+                  class="header-section-number">1.1</span> Overview</h2>
+                  <p>Subbit is an unidirectional two-party payment
+                  channel. It is probably the simplest useful L2. It
+                  models the most typical type of ongoing financial
+                  engagement: a consumer paying a provider.</p>
+                  <p>A question is when does the consumer pay and to
+                  whom is there risk? At the two extremes: the consumer
+                  pays everything up front, or pays everything at then.
+                  In the former, the consumer burndens all the risk. If
+                  provider goes rogue, the consumer loses out.In the
+                  latter, the converse is true: all the risk is on the
+                  provider. Regular payments reduce risk for both
+                  parties, but increase the administrative cost (ie tx
+                  fees).</p>
+                  <p>In a decentralized world, this risks real and
+                  recourse is hard. A payment channel gives us a way to
+                  minimise risk for both parties, while minimizing tx
+                  costs.</p>
+                  <p>The life cycle of a subbit account looks like
+                  this:</p>
+                  <pre class="mermaid">flowchart LR
+                      n0("o")
+
+                      open["
+                      Open \n
+                      "]
+
+                      closed["
+                      Closed \n
+                      "]
+
+                      done["
+                      Done
+                      "]
+
+                      n1("x")
+
+                      n0 --&gt;|open| open
+                      open --&gt;|sub| open
+                      open ---&gt;|add| open
+                      open --&gt;|close| closed
+                      closed --&gt;|sub| done
+                      done --&gt;|drain| n1
+                      closed --&gt;|drain| n1</pre>
+                  <p>The consumer wishes to receive the services of a
+                  provider. The consumer <code>open</code>s a subbit
+                  account including details from the provider.</p>
+                  <p>While the account is open, the consumer repeatedly
+                  requests service from the provider. This happens
+                  off-chain. Each request, the consumer includes a
+                  redemption code to the provider. The provider can
+                  verify that the code is correct (the account is
+                  sufficiently funded, <em>etc</em>), and can honor the
+                  request.</p>
+                  <p>The provider is protected by the L1 in that at a
+                  time of their choosing they can <code>sub</code> their
+                  dues from the account. The consumer is protected by
+                  the L1 in that the provider can <code>sub</code> only
+                  as much as the last redemption code.</p>
+                  <p>Whenever the account is low, the consumer can
+                  <code>add</code> to their account.</p>
+                  <p>Once the consumer no longer wants the service, they
+                  can <code>close</code> their account. There is then a
+                  pre-agreed time window for the provider to make their
+                  last <code>sub</code>, after which the consumer can
+                  <code>drain</code> the remaining funds.</p>
+                  <h1 data-number="2" id="constants"><span
+                  class="header-section-number">2</span> Constants</h1>
+                  <p>See the tokens section for how this is used.</p>
+                  <pre><code>tag_length = 20</code></pre>
+                  <h1 data-number="3" id="tokens"><span
+                  class="header-section-number">3</span> Tokens</h1>
+                  <p>Each new init creates a new pair of twinned tokens:
+                  one held by the consumer, the other locked in the
+                  account utxo.</p>
+                  <pre><code>auth_pref = #&quot;000643b0&quot;
+vali_pref = #&quot;000de140&quot;
+label = &quot;subbit&quot;
+auth_name (tag) = auth_pref + label + tag 
+vali_name (tag) = vali_pref + label + tag </code></pre>
+                  <p>Each pair of user twin tokens use an input utxo
+                  oref as a seed to create an essentially unique tag
+                  <code>tag</code>. The function
+                  <code>mk_tag : OutputReference -&gt; Tag</code> uses
+                  <code>blake2b_256</code> plutus builtin as hash
+                  function, and truncates the result to a 20 byte (set
+                  by <code>constants.tag_length</code>) (160-bit)
+                  digest. It leaves 12 bytes of space in token names for
+                  human friendly labels.</p>
+                  <h1 data-number="4" id="validator"><span
+                  class="header-section-number">4</span> Validator</h1>
+                  <p>The dapp consists of a single multi-purpose
+                  validator.</p>
+                  <p>A <strong>subbit account</strong> is a well formed
+                  utxo locked at the script address. Each account can be
+                  identified by an NFT, the validity token, that traces
+                  the lifecycle across events. In blockchain speak, each
+                  of these events is a transaction.</p>
+                  <p>Account ownership is governed by an auth token
+                  twinned to the validity token. For example, only with
+                  the token can an account be <code>close</code>d and
+                  <code>drain</code>ed.</p>
+                  <p>Implementation restrictions:</p>
+                  <ul>
+                  <li>Only one subbit account can be <code>init</code>
+                  per tx</li>
+                  <li>An account cannot be <code>drain</code>ed in the
+                  same tx as another is <code>init</code>ted.</li>
+                  </ul>
+                  <h2 data-number="4.1" id="datatypes"><span
+                  class="header-section-number">4.1</span>
+                  Datatypes</h2>
+                  <pre><code>type Count = Int
+type PubKey = ByteArray
+
+type Dat {
+  Open(OpenParams)
+  Closed(ClosedParams)
+  Done
+}
+
+type OpenParams {
+  consumer : PubKey,
+  provider : PubKey, 
+  last : Int,
+  count : Count,
+}
+
+type ClosedParams {
+  consumer : PubKey,
+  provider : PubKey, 
+  deadline: Int,
+  count : Count,
+}
+
+type Red2 {
+  Init(OutputReference)
+  Burn
+}
+
+type ContIdx = Int
+type AuthIdx = Int
+type Proof = ByteArray
+
+type Red3 {
+  Add(ContIdx, AuthIdx)
+  Sub(ContIdx, Count, Proof)
+  Close(ContIdx, AuthIdx)
+  Drain
+}
+
+type SubParams {
+  cont_idx : Int,
+  amt : Int,
+  proof : ByteArray,
+}</code></pre>
+                  <h2 data-number="4.2" id="constraints"><span
+                  class="header-section-number">4.2</span>
+                  Constraints</h2>
+                  <p>Two params: Purpose is
+                  <code>Mint(own_hash)</code></p>
+                  <p>When red is <code>Init(seed)</code>:</p>
+                  <ol type="1">
+                  <li><code>seed</code> is spent</li>
+                  <li>Own mint value is twin pair with
+                  <code>tag(seed)</code></li>
+                  <li>Output script token to own (payment) address</li>
+                  </ol>
+                  <p>When red is <code>Burn</code>:</p>
+                  <ol type="1">
+                  <li>Own mint value is negative</li>
+                  </ol>
+                  <p>Three params: Purpose is
+                  <code>Spend(own_oref)</code>.</p>
+                  <p>For all but one case, we expect a continuing
+                  output, where attributes will have the prefix
+                  <code>cont</code>. The redeemer is used to inform the
+                  validator where to find the <code>cont_output</code>,
+                  and it is verified by the inclusion of the script
+                  token. The script token never leaves the script
+                  payment credential, while the owner may update the
+                  stake credential. The value <code>cont_value</code> of
+                  the continuing output will be ada and the script
+                  token. Let <code>diff = cont_value - own_value</code>,
+                  an difference between <code>cont</code> and
+                  <code>own</code> of ada.</p>
+                  <p>Match on <code>(dat, red)</code>:</p>
+                  <ol type="1">
+                  <li><code>Open(open_params), Add(cont_idx, auth_idx)</code>
+                  <ol type="1">
+                  <li>Cont address is:
+                  <ol type="1">
+                  <li>Own address, or</li>
+                  <li>Own payment credential, and auth token in
+                  <code>auth_idx</code> output</li>
+                  </ol></li>
+                  <li><code>diff &gt;= 0</code></li>
+                  <li>Cont datum is own datum</li>
+                  </ol></li>
+                  <li><code>Open(open_params), Sub(cont_idx, count, proof)</code>
+                  <ol type="1">
+                  <li>Cont address is own address</li>
+                  <li><code>count - open_params.count &gt;= (- diff)</code></li>
+                  <li>Cont datum is
+                  <code>Open { ..open_params , count}</code></li>
+                  <li>Provider has signed tx</li>
+                  <li>Verify proof
+                  <code>verify(consumer, count, proof)</code></li>
+                  </ol></li>
+                  <li><code>Open(OpenParams { consumer, provider, last, count,}), Close(cont_idx, auth_idx)</code>
+                  <ol type="1">
+                  <li>Cont payment cred is own payment cred</li>
+                  <li><code>diff &gt;= 0</code></li>
+                  <li>Cont datum is
+                  <code>Closed { consumer, provider, deadline, count}</code></li>
+                  <li>Auth token in <code>auth_idx</code> output</li>
+                  <li>Validity interval has upper bound <code>ub</code>
+                  and <code>deadline &gt;= ub + last</code></li>
+                  </ol></li>
+                  <li><code>Closed(shut_params), Sub(cont_idx, count, proof)</code>
+                  <ol type="1">
+                  <li>Cont address is own address</li>
+                  <li><code>count - open_params.count &gt;= (- diff)</code></li>
+                  <li>Cont datum is <code>Done</code></li>
+                  <li>Provider has signed tx</li>
+                  <li>Verify proof
+                  <code>verify(consumer, count, proof)</code></li>
+                  </ol></li>
+                  <li><code>Closed(shut_params), Drain</code>
+                  <ol type="1">
+                  <li>Validity interval has lower bound <code>lb</code>
+                  and <code>deadline &lt;= lb</code></li>
+                  <li>Token twins are burnt</li>
+                  </ol></li>
+                  <li><code>Done, Drain</code>
+                  <ol type="1">
+                  <li>Token twins are burnt</li>
+                  </ol></li>
+                  </ol>
+                  <h3 data-number="4.2.1" id="notes"><span
+                  class="header-section-number">4.2.1</span> Notes</h3>
+                  <p>Users must verify aspects off-chain.</p>
+                  <p>Providers will need to be watching and
+                  interrogating accounts regularly. It is in their
+                  interest and is their responsibility to check that the
+                  any account is well-formed before engaging with it.
+                  There is not, and could not be, a check that the
+                  <code>provider</code> field is correct, since a priori
+                  this key may only be known to the two parties.
+                  Similarly <code>last</code> is up to the two
+                  parties.</p>
+                  <p>A provider must check the initial account utxo has:
+                  - validity token present at utxo at correct payment
+                  credential address - correct <code>provider</code> and
+                  <code>last</code> values - <code>count == 0</code> -
+                  no reference script, although this is at most an
+                  irritant</p>
+                  <p>After the init, the validator script does check the
+                  continuing utxo is well-formed. This keeps both
+                  parties safe from malicious behaviours of others.</p>
+                  <h1 data-number="5" id="functions"><span
+                  class="header-section-number">5</span> Functions</h1>
+                  <p><strong>Make Message</strong></p>
+                  <p>There are many ways we do this.</p>
+                  <p>The message should be salted. That way, if the
+                  consumer was reusing their key for multiple accounts,
+                  or for another purpose, the provider cannot reuse an
+                  existing proof. The account tag is essentially unique,
+                  and thus we use it as a salt.</p>
+                  <p>We should not serialise more than once - a general
+                  rule when handling cbor and signatures. Thus if the
+                  message is a cbor serialized datastructure, then it
+                  should appear in the redeemer, be deserialised
+                  on-chain, and checked. An alternative is not use
+                  cbor,</p>
+                  <p>We concat byte arrays</p>
+                  <pre><code>  concat(tag, integer_to_bytearray(count)) </code></pre>
+                  <p>There is then a choice about how
+                  <code>integer_to_bytearray</code> works. We use little
+                  endian, of smallest length. Plutus V3 has a builtin
+                  with args for endianness and length and then</p>
+                  <pre><code>integer_to_bytearray = builtin.integer_to_bytearray(False, 0, _)</code></pre>
+                  <p><strong>Verify</strong></p>
+                  <p>With the message we then use ED25519 signatures
+                  since they are widely supported.</p>
+                  <pre><code>  builtin.verify_ed25519_signature( vkey, message, proof) </code></pre>
+                  <p>Other signature schemes are easily used in
+                  place.</p>
+                  <h1 data-number="6" id="transactions"><span
+                  class="header-section-number">6</span>
+                  Transactions</h1>
+                  <p>A transaction consists of inputs and outputs of
+                  utxos. Each utxo has a</p>
+                  <ul>
+                  <li>unique reference,</li>
+                  <li>an address it belongs to</li>
+                  <li>a value of ada + native assets (possibly no native
+                  assets)</li>
+                  <li>maybe a datum or datum hash. (Note that a utxo at
+                  a script address must have a datum or datum hash to be
+                  spendable.)</li>
+                  </ul>
+                  <p>Addresses correspond to either agents (eg normal
+                  addresses), or script addresses. All transactions must
+                  have at least one input that belongs to a payment
+                  address <em>ie</em> an agent’s address. When there are
+                  no constraints as to who the payment address belongs
+                  to, then we may write <em>Any</em> as the address
+                  owner. Addresses, unless otherwise stated, refer to
+                  only the payment credential while the staking
+                  credential is unrestricted.</p>
+                  <p>The diagrams are to be indicative and informative,
+                  rather than provide and exhaustive description.</p>
+                  <p>In the following diagrams boxes denote utxos.
+                  Owners of an address are stated first, then any
+                  notable assets or ada (that is, ignoring min ada or
+                  ada value doesn’t change or change is negligible),
+                  then datums where relevant. All datums are assumed
+                  inline unless stated otherwise.</p>
+                  <h2 data-number="6.1" id="tx.open"><span
+                  class="header-section-number">6.1</span>
+                  <code>tx.open</code></h2>
+                  <p>The consumer opens a subbit account.</p>
+                  <pre class="mermaid">flowchart LR
+                      i_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle ada \n
+                      "]
+
+                      m_s["
+                      fa:fa-circle Subbit\n
+                      "]
+
+                      m["tx"]
+
+                      o_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle auth \n
+                      "]
+
+                      o_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity\n
+                      "]
+
+                      i_c --&gt; m --&gt; o_c & o_s
+                      m_s --&gt;|init| m </pre>
+                  <h2 data-number="6.2" id="tx.add"><span
+                  class="header-section-number">6.2</span>
+                  <code>tx.add</code></h2>
+                  <p>The consumer adds funds to their account. This can
+                  happen any time the account is <code>Open</code>. They
+                  can also use this to re-stake the account.</p>
+                  <p>Provided the stake credential of the account is
+                  unchanged, then no auth token is required.<br />
+                  (A consumer is happy to accept donations.)</p>
+                  <pre class="mermaid">flowchart LR
+                      i_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle ada, auth \n
+                      "]
+
+                      i_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle validity \n
+                      fa:fa-database Open(details) \n
+                      "]
+
+                      m["tx"]
+
+                      o_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle auth \n
+                      "]
+
+                      o_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity \n
+                      fa:fa-database Open(details) \n
+                      "]
+
+                      i_c --&gt; m --&gt; o_c
+                      i_s --&gt;|add| m --&gt; o_s</pre>
+                  <h2 data-number="6.3" id="tx.sub"><span
+                  class="header-section-number">6.3</span>
+                  <code>tx.sub</code></h2>
+                  <p>The provider removes funds using their redemption
+                  code. They tx must be signed by them.</p>
+                  <p>The datum records the cumulative amount withdrawn,
+                  while all other information is unchanged.</p>
+                  <pre class="mermaid">flowchart LR
+                      i_c["
+                      fa:fa-address-book Provider\n
+                      "]
+
+                      i_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity \n
+                      fa:fa-database Open(details) \n
+                      "]
+
+                      m["tx"]
+
+                      o_c["
+                      fa:fa-address-book Provider\n
+                      fa:fa-circle ada \n
+                      "]
+
+                      o_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity \n
+                      fa:fa-database Open(details') \n
+                      "]
+
+                      i_c --&gt; m --&gt; o_c
+                      i_s --&gt;|sub *code*| m --&gt; o_s</pre>
+                  <h2 data-number="6.4" id="tx.close"><span
+                  class="header-section-number">6.4</span>
+                  <code>tx.close</code></h2>
+                  <p>The consume closes the account using their auth
+                  token. This fixes a deadline, recorded in the datum
+                  before which the provider must make their final
+                  <code>sub</code>.</p>
+                  <pre class="mermaid">flowchart LR
+                      i_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle ada, auth \n
+                      "]
+
+                      i_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle validity \n
+                      fa:fa-database Open(details) \n
+                      "]
+
+                      m["tx"]
+
+                      o_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle auth \n
+                      "]
+
+                      o_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity \n
+                      fa:fa-database Closed(details') \n
+                      "]
+
+                      i_c --&gt; m --&gt; o_c
+                      i_s --&gt;|close| m --&gt; o_s</pre>
+                  <h2 data-number="6.5" id="tx.final_sub"><span
+                  class="header-section-number">6.5</span>
+                  <code>tx.final_sub</code></h2>
+                  <p>The provider performs their final withdraw.</p>
+                  <pre class="mermaid">flowchart LR
+                      i_c["
+                      fa:fa-address-book Provider\n
+                      "]
+
+                      i_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity \n
+                      fa:fa-database Closed(details) \n
+                      "]
+
+                      m["tx"]
+
+                      o_c["
+                      fa:fa-address-book Provider\n
+                      fa:fa-circle ada \n
+                      "]
+
+                      o_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle ada, validity \n
+                      fa:fa-database Done\n
+                      "]
+
+                      i_c --&gt; m --&gt; o_c
+                      i_s --&gt;|sub *code*| m --&gt; o_s</pre>
+                  <h2 data-number="6.6" id="tx.drain"><span
+                  class="header-section-number">6.6</span>
+                  <code>tx.drain</code></h2>
+                  <p>If either:</p>
+                  <ul>
+                  <li>the deadline has past for final sub</li>
+                  <li>the account is <code>Done</code></li>
+                  </ul>
+                  <p>then the consumer can burn the twin tokens and
+                  drain the remaining ada.</p>
+                  <p>In this example, the deadline has passed.</p>
+                  <pre class="mermaid">flowchart LR
+                      i_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle ada, auth \n
+                      "]
+
+                      i_s["
+                      fa:fa-address-book Subbit\n
+                      fa:fa-circle validity \n
+                      fa:fa-database Closed(details) \n
+                      "]
+
+                      m_s["
+                      fa:fa-circle Subbit \n
+                      "]
+
+                      m["tx"]
+
+                      o_c["
+                      fa:fa-address-book Consumer\n
+                      fa:fa-circle ada \n
+                      "]
+
+                      i_c --&gt; m --&gt; o_c
+                      i_s --&gt;|drain| m 
+                      m_s --&gt;|burn| m </pre>
+                  <h1 data-number="7" id="comments"><span
+                  class="header-section-number">7</span> Comments</h1>
+                  <h2 data-number="7.1" id="weaknesses"><span
+                  class="header-section-number">7.1</span>
+                  Weaknesses</h2>
+                  <h1 data-number="8" id="appendix"><span
+                  class="header-section-number">8</span> Appendix</h1>
+                  <h2 data-number="8.1" id="documentation-issues"><span
+                  class="header-section-number">8.1</span> Documentation
+                  Issues</h2>
+                  <ul>
+                  <li><a
+                  href="https://github.com/mermaid-js/mermaid/pull/4740">mermaidjs
+                  bug: direction of subgraphs untameable</a></li>
+                  </ul>
+          </main>
+  </body>
+</html>
