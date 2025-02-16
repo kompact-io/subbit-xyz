@@ -1,54 +1,83 @@
-use aiken/transaction.{OutputReference}
+use aiken/crypto.{ScriptHash, Signature, VerificationKey, VerificationKeyHash}
 
-pub type Count =
+pub type Amount =
   Int
 
-pub type PubKey =
+pub type Timestamp =
+  Int
+
+pub type SubbitId =
   ByteArray
 
-pub type Dat {
-  Open(OpenParams)
-  Closed(ClosedParams)
-  Done
+pub type Currency {
+  Ada
+  ByHash(ScriptHash)
+  ByClass(ScriptHash, ByteArray)
 }
 
-pub type OpenParams {
-  consumer: PubKey,
-  provider: PubKey,
-  last: Int,
-  count: Count,
+pub type Constants {
+  subbit_id: SubbitId,
+  currency: Currency,
+  iou_key: VerificationKey,
+  consumer: VerificationKeyHash,
+  provider: VerificationKeyHash,
+  close_period: Int,
 }
 
-pub type ClosedParams {
-  consumer: PubKey,
-  provider: PubKey,
-  deadline: Int,
-  count: Count,
+pub type Datum {
+  own_hash: ScriptHash,
+  stage: Stage,
 }
 
-pub type Red2 {
-  Init(OutputReference)
-  Burn
+pub type Stage {
+  Opened(Constants, Amount)
+  Closed(Constants, Amount, Timestamp)
+  Settled(VerificationKeyHash)
 }
 
-pub type ContIdx =
-  Int
-
-pub type AuthIdx =
-  Int
-
-pub type Proof =
-  ByteArray
-
-pub type Red3 {
-  Add(ContIdx, AuthIdx)
-  Sub(ContIdx, Count, Proof)
-  Close(ContIdx, AuthIdx)
-  Drain
+// Alternative consideration 
+// pub type StageAlt {
+//   StageMid(Constants, MidStage) 
+//   StageEnd(VerificationKeyHash)
+// }
+// 
+// pub type MidStage {
+//   Open_(OpenParams)
+//   Closed_(ClosedParams)
+// }
+//
+pub type Redeemer {
+  Batch
+  Main(Steps)
+  Mutual
 }
 
-pub type SubParams {
-  cont_idx: Int,
-  amt: Int,
-  proof: ByteArray,
+pub type Step {
+  StepCont(Cont)
+  StepEol(Eol)
+}
+
+pub type Steps =
+  List<Step>
+
+pub type Cont {
+  Add
+  Sub(Iou)
+  Close
+  Settle(Iou)
+}
+
+pub type Eol {
+  End
+  Expire
+}
+
+pub type Iou {
+  amount: Amount,
+  signature: Signature,
+}
+
+pub type IouMessage {
+  subbit_id: SubbitId,
+  amount: Amount,
 }

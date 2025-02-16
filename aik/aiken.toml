@@ -1,7 +1,9 @@
-name = "kompact-io/subbit"
+name = "kompact-io/subbit-xyz"
 version = "0.0.0"
+compiler = "v1.1.11"
+plutus = "v3"
 license = "Apache-2.0"
-description = "Aiken contracts for project 'kompact-io/subbit'"
+description = "Aiken contracts for project 'kompact-io/subbit-xyz'"
 
 [repository]
 user = "kompact-io"
@@ -10,5 +12,12 @@ platform = "github"
 
 [[dependencies]]
 name = "aiken-lang/stdlib"
+version = "v2.2.0"
+source = "github"
+
+[[dependencies]]
+name = "aiken-lang/fuzz"
 version = "main"
 source = "github"
+
+[config]
