@@ -1,0 +1,21 @@
+{
+  "name": "@subbit-tx/tx",
+  "version": "0.0.1",
+  "description": "Tx",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "scripts": {
+    "test": "jest",
+    "build": "rm -rf dist && tsc --build"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.js",
+    "typings": "dist/src/index.d.ts"
+  },
+  "dependencies": {
+    "@subbit-tx/kio": "workspace:^",
+    "typescript": "^5.7.2"
+  }
+}

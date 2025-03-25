@@ -4,7 +4,7 @@ The Subbit.xyz validator(s).
 
 ## Building
 
-For testing, add tracing 
+For testing, add tracing
 
 ```sh
 aiken build --trace-filter all --trace-level verbose
@@ -27,4 +27,3 @@ aiken check
 ## Documentation
 
 See the spec
-

@@ -78,8 +78,8 @@ The default currency is ada.
 
 ### eol
 
-"End of life" [step](#step)s of a [subbit](#subbit).
-These are: [close](#close), [settle](#settle), [expire](#expire), [end](#end).
+"End of life" [step](#step)s of a [subbit](#subbit). These are: [close](#close),
+[settle](#settle), [expire](#expire), [end](#end).
 
 ### end
 
@@ -125,11 +125,13 @@ The key data object exchanged on the L2 in relation to demonstrating funds owed.
 It is attached to each [bit](#bit) of service. It is used on the L1 to prove
 what funds are owed, and can be subbed.
 
-(More accurately, it may not be explicitly be exchanged on the L2, but is certainly derivable from whatever is.)
+(More accurately, it may not be explicitly be exchanged on the L2, but is
+certainly derivable from whatever is.)
 
 ### iou body
 
-The data object derived from an iou and a subbit id that forms the body that is signed, and verified against.
+The data object derived from an iou and a subbit id that forms the body that is
+signed, and verified against.
 
 ### open
 

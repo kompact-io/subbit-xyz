@@ -178,12 +178,12 @@ type Datum {
 }
 
 type Stage {
-  Open(Constants, OpenParams)
+  Opened(Constants, OpenParams)
   Closed(Constants, ClosedParams)
   Settled(VerificationKeyHash)
 }
 
-type OpenParams {
+type OpenedParams {
   subbed : Int,
 }
 
@@ -300,8 +300,8 @@ The logic when the redeemer is `Main(steps)`:
 ### Recur
 
 The recur function exhausts the list of steps that need to be verified. Each
-step verification requires some context, which varies subtly between the different steps. 
-All steps require some info from the subbit input, and if a
+step verification requires some context, which varies subtly between the
+different steps. All steps require some info from the subbit input, and if a
 continuing step then the continuing output, as well as the tx signers list and
 perhaps the tx validity range. The recur function organises this.
 
@@ -350,8 +350,7 @@ subbits spent alongside a `Mutual` spend.
 
 ### No more
 
-FIXME :: The one liner is sufficient 
-
+FIXME :: The one liner is sufficient
 
 In the case of batch txs, there cannot be any subbit spent without a
 corresponding step. In the case of mutual txs, there is only a single, solo
@@ -372,8 +371,7 @@ fn no_more(own_hash, inputs) {
 
 ### Solo subbit
 
-FIXME :: The one liner is sufficient 
-
+FIXME :: The one liner is sufficient
 
 Solo subbit input:
 
@@ -407,7 +405,7 @@ does not appear here.
 The step context:
 
 - `stage` - the stage of either from input subbit or continuing output
-- `funds` - the funds of the subbit equal to amount of currency in the value 
+- `funds` - the funds of the subbit equal to amount of currency in the value
 - `signers`
 - `upper_bound`
 - `lower_bound`
@@ -437,7 +435,8 @@ Redeemer params: `iou`
 
 #### Close
 
-Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
+Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
+`funds_out`
 
 - close.0 : Stage in is opened : `stage_in = Opened(constants, subbed)`
 - close.0 : Consumer has signed
@@ -449,7 +448,8 @@ Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`, `funds_
 
 #### Settle
 
-Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`, `funds_out`
+Context : `signers`, `upper_bound`, `stage_in`, `funds_in`, `stage_out`,
+`funds_out`
 
 Redeemer params: `iou`
 
@@ -507,9 +507,9 @@ fn yield_in(
 }
 ```
 
-FIXME :: This design is not the most efficient. We could embed this logic somehow into
-the `do_step` functions. In doing cull redundant logic (for example, Eol checks
-do not require extracting `amount`), as well as reduce the
+FIXME :: This design is not the most efficient. We could embed this logic
+somehow into the `do_step` functions. In doing cull redundant logic (for
+example, Eol checks do not require extracting `amount`), as well as reduce the
 constructing/deconstructing across the function boundary. However, in the
 interest of audit-ability and separation of concerns, we stomach this additional
 cost.
@@ -917,60 +917,62 @@ flowchart LR
 
 ### What if ...
 
-> ... there are subbits with the same subbit id? 
+> ... there are subbits with the same subbit id?
 
-Nothing necessarily bad. See the [subbit id](../adrs/subbit-id.md). 
+Nothing necessarily bad. See the [subbit id](../adrs/subbit-id.md).
 
-> ... a subbit has the wrong `own_hash`? 
+> ... a subbit has the wrong `own_hash`?
 
-Suppose we have a subbit with incorrect `own_hash`. 
-We say it is ill formed.
-There are three cases to consider: one for each redeemer type. 
+Suppose we have a subbit with incorrect `own_hash`. We say it is ill formed.
+There are three cases to consider: one for each redeemer type.
 
-If it is spent with `Mutual`, there is no problem, but also no issue. 
-Both partners consent.
-By the "solo" restriction, no other subbit can be spent in this tx. 
+If it is spent with `Mutual`, there is no problem, but also no issue. Both
+partners consent. By the "solo" restriction, no other subbit can be spent in
+this tx.
 
-If it is spent with `Main`, then it finds itself by `own_oref`. 
-However, it then fails since it's `own_hash` does not match that derived from its payment credential. 
+If it is spent with `Main`, then it finds itself by `own_oref`. However, it then
+fails since it's `own_hash` does not match that derived from its payment
+credential.
 
-If if is spent with `Batch`, then there must be another input from the indicated validator address.
-If that validator cannot be executed (cos it is not known for example) then the funds are stranded. 
-If the validator can be executed then the funds can be released. 
+If if is spent with `Batch`, then there must be another input from the indicated
+validator address. If that validator cannot be executed (cos it is not known for
+example) then the funds are stranded. If the validator can be executed then the
+funds can be released.
 
-Importantly note that an ill formed subbit cannot be spent with `Main`, 
-the continuing output will have the correct `own_hash`. 
-Thus, no continuing output can be ill formed in this way. 
+Importantly note that an ill formed subbit cannot be spent with `Main`, the
+continuing output will have the correct `own_hash`. Thus, no continuing output
+can be ill formed in this way.
 
-It follows that such an input exists only when a user has spent their own funds,  
-and not those belonging to a partner.
-This property is in keeping with our guiding principles of design:
-On-chain code keeps users safe from others, but not necessarily from themselves.
-It is the role of off-chain code to keep users safe from themselves.
+It follows that such an input exists only when a user has spent their own
+funds,  
+and not those belonging to a partner. This property is in keeping with our
+guiding principles of design: On-chain code keeps users safe from others, but
+not necessarily from themselves. It is the role of off-chain code to keep users
+safe from themselves.
 
-> ... another subbit has the wrong `own_hash`? 
+> ... another subbit has the wrong `own_hash`?
 
-The above argument regarding an ill-formed subbit 
-allows us to restrict our attention to the case of a tx in which: 
+The above argument regarding an ill-formed subbit allows us to restrict our
+attention to the case of a tx in which:
 
-- well formed subbit is spent as either `Main` or `Batch`, and 
+- well formed subbit is spent as either `Main` or `Batch`, and
 - ill formed subbit is spent with `Batch`
 
-Regardless of the exact make-up as long as there is a `Main` spent, 
-then the well formed subbits will be unaffected.
-It remains to justify that there is a `Main` in the spend. 
+Regardless of the exact make-up as long as there is a `Main` spent, then the
+well formed subbits will be unaffected. It remains to justify that there is a
+`Main` in the spend.
 
 > ... there are `Batch` spends but no `Main`?
 
-If there is a `Mutual` input, then solo validator input constraint will fail. 
+If there is a `Mutual` input, then solo validator input constraint will fail.
 
-It remains to consider the case where there are only `Batch` inputs. 
-One of these must appear first in the inputs. 
-On that invocation either: 
+It remains to consider the case where there are only `Batch` inputs. One of
+these must appear first in the inputs. On that invocation either:
 
-- It is well formed. Thus it finds itself as first validator input, and fails since it matches on `own_oref`
-- It is ill formed. Every well formed `Batch` input will find this as first validator input. 
-They will then fail, since the `own_hash` value is incorrect. 
+- It is well formed. Thus it finds itself as first validator input, and fails
+  since it matches on `own_oref`
+- It is ill formed. Every well formed `Batch` input will find this as first
+  validator input. They will then fail, since the `own_hash` value is incorrect.
 
 In this case one of the `Batch` inputs will find itself b
 
@@ -978,10 +980,11 @@ In this case one of the `Batch` inputs will find itself b
 
 This is possible, and it's not a problem.
 
-We've already established that regardless of the other inputs, a `Main` must appear as a first validator input. 
-This invocation will conduct all the verification over all subsequent subbits. 
-Any other invocations will simply be re-doing some of this work.
-The purpose of `Batch` is to reduce the cost, by avoiding this repetition.
+We've already established that regardless of the other inputs, a `Main` must
+appear as a first validator input. This invocation will conduct all the
+verification over all subsequent subbits. Any other invocations will simply be
+re-doing some of this work. The purpose of `Batch` is to reduce the cost, by
+avoiding this repetition.
 
 ### Weaknesses
 

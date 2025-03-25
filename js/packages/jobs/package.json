@@ -1,0 +1,24 @@
+{
+  "name": "@subbit-tx/jobs",
+  "version": "0.0.1",
+  "description": "Run txs in sequence as tests or deployments",
+  "main": "./dist/index.js",
+  "scripts": {
+    "test": "jest --silent --verbose",
+    "b": "tsc --build",
+    "build": "rm -rf dist && tsc --build",
+    "start": "node dist/src/index.js"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.js",
+    "typings": "dist/src/index.d.ts"
+  },
+  "dependencies": {
+    "@subbit-tx/kio": "workspace:^",
+    "@subbit-tx/tx": "workspace:^",
+    "commander": "^12.1.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -4,8 +4,6 @@ authors: "@waalge"
 date: 2025-02-15
 ---
 
-> Note:: A later draft of this was published on our blog [here](https://subbit.xyz/posts/subbit-takes-the-bench.html)
-
 ## Intro
 
 ### Aims
@@ -144,18 +142,20 @@ The fuzzers for these aren't the most elaborate, but we deem them good enough.
 
 ### Steps fail
 
-We do some sanity checks that things that ought to fail do. 
-For every step we have a `{{step}}_not_signed` to check 
-the expected party has signed. 
-In addition we have the following:
+We do some sanity checks that things that ought to fail do. For every step we
+have a `{{step}}_not_signed` to check the expected party has signed. In addition
+we have the following:
 
 1. `add_less` : An add step in which the continuing output has less funds.
-2. `sub_too_much` : A sub that in which the continuing output has less funds than should be allowed by the iou
+2. `sub_too_much` : A sub that in which the continuing output has less funds
+   than should be allowed by the iou
 3. `sub_bad_id` : A sub in which the iou is for a different subbit
 4. `sub_bad_sig` : A sub in which the iou has a bad id
-5. `close_bad_data` : A close in which the continuing output datum has changed, other than the stage
+5. `close_bad_data` : A close in which the continuing output datum has changed,
+   other than the stage
 6. `close_bad_expire` : A close in which the expire at timestamp is too soon
-7. `expire_too_soon` : An expire in which the time lower bound is not after expire at. 
+7. `expire_too_soon` : An expire in which the time lower bound is not after
+   expire at.
 
 ### Mutual
 

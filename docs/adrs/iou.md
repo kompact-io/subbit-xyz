@@ -20,7 +20,7 @@ serialization is consistent where its used.
 
 ### Overview
 
-```aiken 
+```aiken
 type Amount = Int
 type Signature = ByteArray // 64 Bytes
 
@@ -39,7 +39,7 @@ type IouBody {
 
 There is not to much to this decision.
 
-The subbit id is required to make ious attributable to only matching subbits. 
+The subbit id is required to make ious attributable to only matching subbits.
 
 ## Discussion, Counter and Comments
 
@@ -51,7 +51,7 @@ The subbit id is required to make ious attributable to only matching subbits.
 
 ### Considered Alternatives
 
-. 
+.
 
 ## Consequences
 

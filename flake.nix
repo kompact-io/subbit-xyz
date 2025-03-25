@@ -51,18 +51,41 @@
             entry = "${inputs'.aiken.packages.aiken}/bin/aiken fmt ./aik";
           };
         };
-        devShells.default = pkgs.mkShell {
-          nativeBuildInputs = [
-            config.treefmt.build.wrapper
-          ];
-          shellHook = ''
-            ${config.pre-commit.installationScript}
-            echo 1>&2 "Welcome to the development shell!"
-          '';
-          packages = [
-            inputs'.aiken.packages.aiken
-          ];
-        };
+        devShells.default = let
+          mk-blueprint =
+            pkgs.writeShellScriptBin "mk-blueprint"
+            ''
+              #!/usr/bin/env bash
+              root=$(git rev-parse --show-toplevel)
+              aik=$root/aik
+              out=$root/js/packages/tx/src/blueprint.ts
+              bp=$root/js/node_modules/blueprint-ts/dist/src/index.js
+              if [ ! -f $bp ]; then
+                echo "blueprint-ts script not found"
+                echo "expected ($bp)"
+                echo "Maybe it needs to be installed? cd js; pnpm -wD i"
+                exit 1
+              fi
+              aiken build $@ $aik
+              node $bp --input $aik/plutus.json --output $out
+            '';
+        in
+          pkgs.mkShell {
+            nativeBuildInputs = [
+              config.treefmt.build.wrapper
+            ];
+            shellHook = ''
+              ${config.pre-commit.installationScript}
+              echo 1>&2 "Welcome to the development shell!"
+            '';
+            packages = [
+              inputs'.aiken.packages.aiken
+              pkgs.nodePackages_latest.nodejs
+              pkgs.pnpm
+              pkgs.typescript-language-server
+              mk-blueprint
+            ];
+          };
       };
       flake = {};
     };

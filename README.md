@@ -26,8 +26,8 @@ milestone will be polishing, and outreach.
 
 The output of the first three milestones will be mainly found here:
 
-- [ ] M1: Spec
-- [ ] M2: Tx builders
+- [x] M1: Spec & validator
+- [x] M2: Tx builders
 - [ ] M3: Integration toolkit/ SDK and e2e example
 
 ## Repo
@@ -41,7 +41,8 @@ $tree -L 1
 ├── aik  # Aiken, on-chain code
 ├── docs # Docs
 ├── flake.lock
-└── flake.nix
+├── flake.nix
+└── js   # Javascript based tx builders
 ```
 
 ## Using Subbit.xyz
@@ -52,6 +53,8 @@ github issue, or otherwise.
 While we're still cooking is a great time to share potential applications.
 
 Once we're ready, there will be docs and examples for self on-boarding.
+
+For the brave: head to `./js/packages/jobs/`
 
 ## Partners & Sponsors
 

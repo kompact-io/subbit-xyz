@@ -2,7 +2,7 @@ use cardano/transaction.{OutputReference, Transaction}
 use subbit/logic.{batch, main, mutual}
 use subbit/types as t
 
-validator placeholder {
+validator subbit {
   spend(
     datum: Option<t.Datum>,
     redeemer: t.Redeemer,
