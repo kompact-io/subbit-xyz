@@ -20,7 +20,7 @@ Fund the admin wallet from the faucet. To get the address see the `show` command
 below. Then request funds from
 [here](https://docs.cardano.org/cardano-testnets/tools/faucet).
 
-## cli
+## CLI
 
 The cli exposes a way to run txs and inspect the chain state.
 
@@ -46,9 +46,39 @@ To see wallet info
 subbit show wallets
 ```
 
-### NOTES
+## L1 Liaison for SubbitMan
 
-#### Patching lucid-evo
+The L1 liaison tools are wrapped with `just`.
+
+Pull from the L1, filter and map to SubbitMan's input form:
+
+```sh
+just get-tip
+```
+
+This saves the output to a temp file for inspection, rather than trying to pipe
+directly into SubbitMan. A second step is to sync. That is, send the content of
+the temp file to SubbitMan.
+
+```sh
+just sync
+```
+
+Fetch the IOUs from SubbitMan, and save them to a local file for inspection.
+
+```sh
+just ious > ious.json
+```
+
+Submit in a batch tx (set to the correct provider in the `.env`):
+
+```sh
+pnpm start tx subs --provider provider0 --ious $(cat ious.json)
+```
+
+## NOTES
+
+### Patching lucid-evo
 
 https://github.com/Anastasia-Labs/lucid-evolution/issues/534
 
