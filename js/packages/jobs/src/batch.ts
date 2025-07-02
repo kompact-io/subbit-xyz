@@ -4,7 +4,7 @@ import * as dapp from "./dapp";
 
 const ADA = 1_000_000n;
 
-const mkSubbitId = (idx: number) => String(idx).padStart(32, "0");
+const mkTag = (idx: number) => String(idx).padStart(32, "0");
 
 export async function job(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const hash = lucid.validatorToScriptHash(new tx.validator.Validator());
@@ -15,7 +15,7 @@ export async function job(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     const iouKey = userIdx == 0 ? w.iou0.vkey : w.iou1.vkey;
     const consumer = userIdx == 0 ? w.consumer0.vkey : w.consumer1.vkey;
     return {
-      subbitId: mkSubbitId(idx),
+      tag: mkTag(idx),
       currency: "Ada",
       iouKey,
       consumer,
@@ -49,7 +49,7 @@ export async function job(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     if (ss.state.kind != "Opened") throw new Error("Impossible");
     const iouLabel =
       ss.state.value.constants.iouKey == w.iou0.vkey ? "iou0" : "iou1";
-    const sig = dapp.sign(iouLabel, ss.state.value.constants.subbitId, iouAmt);
+    const sig = dapp.sign(iouLabel, ss.state.value.constants.tag, iouAmt);
     return {
       utxo: ss.utxo,
       state: ss.state.value,

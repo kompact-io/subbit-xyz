@@ -1,6 +1,7 @@
 import * as lucid from "@lucid-evolution/lucid";
 import retry from "async-retry";
-import { privateKey } from "../env";
+import * as env from "../env";
+import * as wallets from "../wallets";
 import { logger } from "./logger";
 import { txFinish } from "../index";
 import { TxBuilder } from "../txFinish.js";
@@ -14,7 +15,9 @@ export async function sequence(
 ) {
   /// Set wallet
   if (walletLabel !== "")
-    l.selectWallet.fromPrivateKey(privateKey(walletLabel));
+    l.selectWallet.fromPrivateKey(
+      wallets.privateKey(env.privateKey(walletLabel)).to_bech32(),
+    );
   if (txLabel !== "") console.log({ txLabel });
   /// Set defaults
   const finish_ = finish ? finish : (txb: TxBuilder) => txFinish.simple(l, txb);

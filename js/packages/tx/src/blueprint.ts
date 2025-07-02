@@ -9,7 +9,7 @@ export interface SubbitSubbitSpend {
       | {
           Opened: [
             {
-              subbitId: string;
+              tag: string;
               currency:
                 | "Ada"
                 | { ByHash: [string] }
@@ -25,7 +25,7 @@ export interface SubbitSubbitSpend {
       | {
           Closed: [
             {
-              subbitId: string;
+              tag: string;
               currency:
                 | "Ada"
                 | { ByHash: [string] }
@@ -94,7 +94,7 @@ export const SubbitSubbitSpend = Object.assign(
                           dataType: "constructor",
                           index: 0,
                           fields: [
-                            { title: "subbitId", dataType: "bytes" },
+                            { title: "tag", dataType: "bytes" },
                             {
                               title: "currency",
                               anyOf: [
@@ -144,7 +144,7 @@ export const SubbitSubbitSpend = Object.assign(
                           dataType: "constructor",
                           index: 0,
                           fields: [
-                            { title: "subbitId", dataType: "bytes" },
+                            { title: "tag", dataType: "bytes" },
                             {
                               title: "currency",
                               anyOf: [
@@ -311,7 +311,7 @@ export const SubbitSubbitSpend = Object.assign(
 export interface XConstantsMint {
   new (): Validator;
   _0: {
-    subbitId: string;
+    tag: string;
     currency: "Ada" | { ByHash: [string] } | { ByClass: [string, string] };
     iouKey: string;
     consumer: string;
@@ -338,7 +338,7 @@ export const XConstantsMint = Object.assign(
           dataType: "constructor",
           index: 0,
           fields: [
-            { title: "subbitId", dataType: "bytes" },
+            { title: "tag", dataType: "bytes" },
             {
               title: "currency",
               anyOf: [
@@ -532,7 +532,7 @@ export const XIouMint = Object.assign(
 
 export interface XIouMessageMint {
   new (): Validator;
-  _0: { subbitId: string; amount: bigint };
+  _0: { tag: string; amount: bigint };
 }
 
 export const XIouMessageMint = Object.assign(
@@ -553,7 +553,7 @@ export const XIouMessageMint = Object.assign(
           dataType: "constructor",
           index: 0,
           fields: [
-            { title: "subbitId", dataType: "bytes" },
+            { title: "tag", dataType: "bytes" },
             { title: "amount", dataType: "integer" },
           ],
         },
@@ -568,7 +568,7 @@ export interface XStageMint {
     | {
         Opened: [
           {
-            subbitId: string;
+            tag: string;
             currency:
               | "Ada"
               | { ByHash: [string] }
@@ -584,7 +584,7 @@ export interface XStageMint {
     | {
         Closed: [
           {
-            subbitId: string;
+            tag: string;
             currency:
               | "Ada"
               | { ByHash: [string] }
@@ -626,7 +626,7 @@ export const XStageMint = Object.assign(
                   dataType: "constructor",
                   index: 0,
                   fields: [
-                    { title: "subbitId", dataType: "bytes" },
+                    { title: "tag", dataType: "bytes" },
                     {
                       title: "currency",
                       anyOf: [
@@ -676,7 +676,7 @@ export const XStageMint = Object.assign(
                   dataType: "constructor",
                   index: 0,
                   fields: [
-                    { title: "subbitId", dataType: "bytes" },
+                    { title: "tag", dataType: "bytes" },
                     {
                       title: "currency",
                       anyOf: [

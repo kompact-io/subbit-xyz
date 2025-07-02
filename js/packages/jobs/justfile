@@ -1,0 +1,20 @@
+set dotenv-load
+base_url:=env('SUBBIT_MAN_URL', "http://127.0.0.1:7822/l1")
+
+file_def := "/tmp/subbit-man-l1s.json"
+
+help: 
+  just -l
+
+# Get ious
+ious:
+  curl -X GET "{{base_url}}/ious" -H "Content-Type: application/json" -w "\n"
+
+# Sync L1s
+get-tip file=file_def:
+  pnpm --silent start show subbits --subbit-man-format > {{file_def}}
+
+# Sync L1s
+sync file=file_def:
+  pnpm --silent start show subbits --subbit-man-format > {{file_def}}
+  curl -X POST "{{base_url}}/sync" -H "Content-Type: application/json" -w "\n"  -d "@{{file}}" 

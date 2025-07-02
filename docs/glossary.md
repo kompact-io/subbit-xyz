@@ -130,8 +130,13 @@ certainly derivable from whatever is.)
 
 ### iou body
 
-The data object derived from an iou and a subbit id that forms the body that is
+The data object derived from an iou and a subbit tag that forms the body that is
 signed, and verified against.
+
+### iou key
+
+The ED25519 key used in the signing and verification of [ious](#iou). Unless the
+context suggests otherwise, it usually refers to the verification key part.
 
 ### open
 
@@ -212,6 +217,19 @@ A [step](#step) on an [opened](#opened) [subbit](#subbit) by the
 ### subbit
 
 The barefaced re-branding of the more usual term "channel".
+
+### tag
+
+A [consumer](#consumer) determined byte string associated to a
+[subbit](#subbit). The tag is included in the [iou body](#iou-body), and so
+allows for safe [iou key](#iou-key) reuse across subbits.
+
+Warning: an iou is valid for the associated pair (iou-key, tag). Any subbit with
+this pair may accept the iou, regardless of whether other fields such as
+currency or provider are shared. This may be desirable in more exotic contexts,
+but generally a consumer will choose the tag so that this pair is unique.
+
+There is no need for the tag to be unique on its own.
 
 ### tos
 

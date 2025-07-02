@@ -6,7 +6,7 @@ pub type Amount =
 pub type Timestamp =
   Int
 
-pub type SubbitId =
+pub type Tag =
   ByteArray
 
 pub type Currency {
@@ -16,7 +16,7 @@ pub type Currency {
 }
 
 pub type Constants {
-  subbit_id: SubbitId,
+  tag: Tag,
   currency: Currency,
   iou_key: VerificationKey,
   consumer: VerificationKeyHash,
@@ -78,6 +78,6 @@ pub type Iou {
 }
 
 pub type IouMessage {
-  subbit_id: SubbitId,
+  tag: Tag,
   amount: Amount,
 }

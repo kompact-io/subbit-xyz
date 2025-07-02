@@ -9,7 +9,7 @@ export async function add(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -24,11 +24,7 @@ export async function add(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "open",
   );
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer0",
@@ -42,7 +38,7 @@ export async function addFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -57,11 +53,7 @@ export async function addFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "open",
   );
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer0",
@@ -75,7 +67,7 @@ export async function sub(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -90,13 +82,9 @@ export async function sub(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "open",
   );
 
-  const sig = dapp.sign("iou0", constants.subbitId, 2n * ADA);
+  const sig = dapp.sign("iou0", constants.tag, 2n * ADA);
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "provider0",
@@ -110,7 +98,7 @@ export async function subFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -125,13 +113,9 @@ export async function subFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "open",
   );
 
-  const sig = dapp.sign("iou0", constants.subbitId, 1n * ADA);
+  const sig = dapp.sign("iou0", constants.tag, 1n * ADA);
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "provider0",
@@ -145,7 +129,7 @@ export async function close(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -160,11 +144,7 @@ export async function close(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "open",
   );
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer0",
@@ -178,7 +158,7 @@ export async function closeFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -193,11 +173,7 @@ export async function closeFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "open",
   );
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer1",
@@ -211,7 +187,7 @@ export async function settle(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -234,13 +210,9 @@ export async function settle(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "fauxSubbit",
   );
 
-  const sig = dapp.sign("iou0", constants.subbitId, 2n * ADA);
+  const sig = dapp.sign("iou0", constants.tag, 2n * ADA);
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "provider0",
@@ -254,7 +226,7 @@ export async function settleFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -277,13 +249,9 @@ export async function settleFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "fauxSubbit",
   );
 
-  const sig = dapp.sign("iou0", constants.subbitId, 2n * ADA);
+  const sig = dapp.sign("iou0", constants.tag, 2n * ADA);
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "provider0",
@@ -357,16 +325,16 @@ export async function expire(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
     provider: w.provider0.vkh,
-    closePeriod: 1001n,
+    closePeriod: 999n,
   };
 
   const now = BigInt(
-    lucid.slotToUnixTime(l.config().network!, l.currentSlot() + 3),
+    lucid.slotToUnixTime(l.config().network!, l.currentSlot()),
   );
 
   await dapp.sequence(
@@ -377,18 +345,14 @@ export async function expire(l: lucid.LucidEvolution, ref: lucid.UTxO) {
         tx.txs.fauxSubbit.tx(
           l,
           address,
-          { Closed: [constants, 0n, now + 20000n] },
+          { Closed: [constants, 0n, now - 10n * 60n * 1000n] },
           { lovelace: 10n * ADA },
         ),
     ],
     "fauxSubbit",
   );
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer0",
@@ -402,7 +366,7 @@ export async function expireFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
   const address = tx.validator.mkAddress(l.config().network!, hash);
   const w = dapp.wallets(l.config().network!);
   const constants: tx.types.Constants = {
-    subbitId: "deadbeef",
+    tag: "deadbeef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -429,11 +393,7 @@ export async function expireFail(l: lucid.LucidEvolution, ref: lucid.UTxO) {
     "fauxSubbit",
   );
 
-  const subbit = await tx.validator.getStateBySubbitId(
-    l,
-    address,
-    constants.subbitId,
-  );
+  const subbit = await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer0",

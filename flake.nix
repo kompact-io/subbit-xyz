@@ -84,6 +84,7 @@
               pkgs.pnpm
               pkgs.typescript-language-server
               mk-blueprint
+              pkgs.just
             ];
           };
       };

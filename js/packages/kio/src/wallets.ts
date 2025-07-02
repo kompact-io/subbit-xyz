@@ -19,6 +19,15 @@ function getPrivateKeys(): Record<string, string> {
   );
 }
 
+export function privateKey(s: string) {
+  if (s.startsWith("ed25519_sk1")) {
+    return cml.PrivateKey.from_bech32(s);
+  } else if (s.length == 64) {
+    return cml.PrivateKey.from_normal_bytes(Buffer.from(s, "hex"));
+  }
+  throw new Error("Cannot coerce string to private key");
+}
+
 export const privateKeys = getPrivateKeys();
 
 export function walletInfo(
@@ -28,7 +37,10 @@ export function walletInfo(
 ): WalletInfo {
   const networkId = network === "Mainnet" ? 1 : 0;
   const addressPrefix = network === "Mainnet" ? "addr" : "addr_test";
-  const vkey = cml.PrivateKey.from_bech32(sk).to_public();
+  const skey = sk.startsWith("ed25519_sk1")
+    ? cml.PrivateKey.from_bech32(sk)
+    : cml.PrivateKey.from_normal_bytes(Buffer.from(sk, "hex"));
+  const vkey = skey.to_public();
   const pkh = vkey.hash();
   const address = cml.EnterpriseAddress.new(
     networkId,
@@ -43,7 +55,15 @@ export function walletInfo(
 }
 
 export function setWallet(l: lucid.LucidEvolution, walletName: string) {
-  l.selectWallet.fromPrivateKey(getPrivateKeys()[walletName]!);
+  // Guess form
+  const sk = getPrivateKeys()[walletName]!;
+  if (sk.startsWith("ed25519_sk1")) {
+    l.selectWallet.fromPrivateKey(sk);
+  } else {
+    l.selectWallet.fromPrivateKey(
+      cml.PrivateKey.from_normal_bytes(Buffer.from(sk, "hex")).to_bech32(),
+    );
+  }
   return l;
 }
 

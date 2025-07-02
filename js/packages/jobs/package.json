@@ -4,7 +4,8 @@
   "description": "Run txs in sequence as tests or deployments",
   "main": "./dist/index.js",
   "scripts": {
-    "test": "jest --silent --verbose",
+    "test": "jest",
+    "test:x": "jest --silent --verbose",
     "b": "tsc --build",
     "build": "rm -rf dist && tsc --build",
     "start": "node dist/src/index.js"

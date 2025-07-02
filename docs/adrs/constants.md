@@ -26,7 +26,7 @@ The constants are
 
 ```aiken
 type Constants {
-  subbit_id : SubbitId,
+  tag : Tag,
   currency : Currency,
   iou : VerificationKey,
   consumer : VerificationKeyHash,
@@ -35,7 +35,7 @@ type Constants {
 }
 ```
 
-- See [subbit-id](./subbit-id.md) for the definition of `SubbitId`.
+- See [tag](./tag.md) for the definition of `Tag`.
 - See [auth](./auth.md) for the relevance of the verification keys.
 - See [lifecycle](./lifecycle.md) for the meaning of the close period
 - See [funds](./funds.md) for the definition of `Currency`.

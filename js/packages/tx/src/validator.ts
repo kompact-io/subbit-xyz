@@ -12,7 +12,7 @@ const d: Datum = {
   stage: {
     Opened: [
       {
-        subbitId: "",
+        tag: "",
         currency: "Ada",
         iouKey: "",
         consumer: "",
@@ -305,28 +305,28 @@ export async function getStates(
   return subbits;
 }
 
-export async function getStateBySubbitId(
+export async function getStateByTag(
   l: lucid.LucidEvolution,
   address: lucid.Address,
-  subbitId: string,
+  tag: string,
 ): Promise<Subbit> {
-  const candidates = await getStatesBySubbitId(l, address, subbitId);
+  const candidates = await getStatesByTag(l, address, tag);
   const candidate = candidates.pop();
   if (candidate == undefined) throw new Error("No subbit found");
   if (candidates.length > 0)
-    console.warn(`More than one subbit with given id: ${subbitId}`);
+    console.warn(`More than one subbit with given id: ${tag}`);
   return candidate;
 }
 
-export async function getStatesBySubbitId(
+export async function getStatesByTag(
   l: lucid.LucidEvolution,
   address: lucid.Address,
-  subbitId: string,
+  tag: string,
 ): Promise<Subbit[]> {
   const subbits = await getStates(l, address);
   return subbits.filter((r) => {
     if (r.state.kind == "Settled") return false;
-    return r.state.value.constants.subbitId == subbitId;
+    return r.state.value.constants.tag == tag;
   });
 }
 

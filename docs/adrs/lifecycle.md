@@ -64,8 +64,8 @@ A staged subbit will be at a **stage** in its lifecycle. A step may:
 flowchart LR
     n0("o")
 
-    open["
-    Open \n
+    opened["
+    Opened \n
     "]
 
     closed["
@@ -78,10 +78,10 @@ flowchart LR
 
     n1("x")
 
-    n0 -->|open| open
-    open -->|sub| open
-    open --->|add| open
-    open -->|close| closed
+    n0 -->|open| opened
+    opened -->|sub| opened
+    opened --->|add| opened
+    opened -->|close| closed
     closed -->|settle| settled
     settled -->|end| n1
     closed -->|expire| n1

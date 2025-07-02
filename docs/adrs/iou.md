@@ -4,7 +4,7 @@ status: proposed
 authors: "@waalge"
 date: 2025-02-01
 tags:
-  - optional
+  - iou
 ---
 
 ## Context
@@ -30,7 +30,7 @@ type Iou {
 }
 
 type IouBody {
-  subbit_id : SubbitId,
+  tag : Tag,
   amount : Amount,
 }
 ```
@@ -39,7 +39,8 @@ type IouBody {
 
 There is not to much to this decision.
 
-The subbit id is required to make ious attributable to only matching subbits.
+The tag is required to allow iou keys to be safely reused. (See
+[tags](./tag.md)).
 
 ## Discussion, Counter and Comments
 

@@ -89,8 +89,8 @@ The lifecycle of a subbit is as follows:
 flowchart LR
     n0("o")
 
-    open["
-    Open \n
+    opened["
+    Opened \n
     "]
 
     closed["
@@ -103,10 +103,10 @@ flowchart LR
 
     n1("x")
 
-    n0 -->|open| open
-    open -->|sub| open
-    open --->|add| open
-    open -->|close| closed
+    n0 -->|open| opened
+    opened -->|sub| opened
+    opened --->|add| opened
+    opened -->|close| closed
     closed -->|settle| settled
     settled -->|end| n1
     closed -->|expire| n1
@@ -164,7 +164,7 @@ expressed in the aiken language.
 
 ```aiken
 type Constants {
-  subbit_id : SubbitId,
+  tag : Tag,
   currency : Currency,
   iou : VerificationKey,
   consumer : VerificationKeyHash,
@@ -799,28 +799,28 @@ A batch tx is "composition" of txs above.
 ```mermaid
 flowchart LR
     i_subbit_0["
-      id : 0000
+      tag : 0000
       @validator \n
       $coinA \n
       #Opened
     "]
 
     i_subbit_1["
-      id : 0001
+      tag : 0001
       @validator \n
       $coinB \n
       #Opened
     "]
 
     i_subbit_2["
-      id : 0002
+      tag : 0002
       @validator \n
       $coinC \n
       #Opened
     "]
 
     i_subbit_3["
-      id : 0003
+      tag : 0003
       @validator \n
       $coinD \n
       #Opened
@@ -829,7 +829,7 @@ flowchart LR
     m["tx"]
 
     o_subbit_0["
-      id : 0000
+      tag : 0000
       @validator \n
       $coinA' \n
       #Opened
@@ -841,21 +841,21 @@ flowchart LR
     "]
 
     o_subbit_1["
-      id : 0001
+      tag : 0001
       @validator \n
       $coinB' \n
       #Opened
     "]
 
     o_subbit_2["
-      id : 0002
+      tag : 0002
       @validator \n
       $coinC' \n
       #Opened
     "]
 
     o_subbit_3["
-      id : 0003
+      tag : 0003
       @validator \n
       $coinD' \n
       #Settled
@@ -917,9 +917,9 @@ flowchart LR
 
 ### What if ...
 
-> ... there are subbits with the same subbit id?
+> ... there are subbits with the same tag?
 
-Nothing necessarily bad. See the [subbit id](../adrs/subbit-id.md).
+See [tag adr](../adrs/tag.md).
 
 > ... a subbit has the wrong `own_hash`?
 

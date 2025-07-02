@@ -26,7 +26,7 @@ fn iou_test() {
 
 // Hash 
 
-fn subbit_id() {
+fn tag() {
   fuzz.bytearray_between(3, 32)
 }
 
@@ -90,39 +90,25 @@ fn subbed_lt(amt: t.Amount) {
 // Datum 
 
 pub fn constants() {
-  let subbit_id <- and_then(subbit_id())
+  let tag <- and_then(tag())
   let currency <- and_then(currency())
   let iou_key <- and_then(verification_key())
   let consumer <- and_then(verification_key_hash())
   let provider <- and_then(verification_key_hash())
   let close_period <- and_then(fuzz.int_between(100000000, 1000000000000))
   let constants =
-    t.Constants {
-      subbit_id,
-      currency,
-      iou_key,
-      consumer,
-      provider,
-      close_period,
-    }
+    t.Constants { tag, currency, iou_key, consumer, provider, close_period }
   fuzz.constant(constants)
 }
 
 fn constants_with(currency: t.Currency) {
-  let subbit_id <- and_then(subbit_id())
+  let tag <- and_then(tag())
   let iou_key <- and_then(verification_key())
   let consumer <- and_then(verification_key_hash())
   let provider <- and_then(verification_key_hash())
   let close_period <- and_then(fuzz.int_between(100000000, 1000000000000))
   let constants =
-    t.Constants {
-      subbit_id,
-      currency,
-      iou_key,
-      consumer,
-      provider,
-      close_period,
-    }
+    t.Constants { tag, currency, iou_key, consumer, provider, close_period }
   fuzz.constant(constants)
 }
 
@@ -261,12 +247,12 @@ pub fn sub(own_hash: ScriptHash) {
   let own_address <- and_then(address_with_payment_credential(Script(own_hash)))
   let c <- and_then(constants())
 
-  let iou_tests.IouTest { vkey: iou_key, subbit_id, amount, sig, .. } <-
+  let iou_tests.IouTest { vkey: iou_key, tag, amount, sig, .. } <-
     and_then(iou_test())
   let iou = t.Iou { amount, signature: sig }
   let step = t.StepCont(t.Sub(iou))
 
-  let c = t.Constants { ..c, subbit_id: subbit_id, iou_key: iou_key }
+  let c = t.Constants { ..c, tag: tag, iou_key: iou_key }
 
   let subbed_in <- and_then(subbed_lt(amount))
   let subbed = amount - subbed_in
@@ -330,12 +316,12 @@ pub fn settle(own_hash: ScriptHash) {
   let own_address <- and_then(address_with_payment_credential(Script(own_hash)))
   let c <- and_then(constants())
 
-  let iou_tests.IouTest { vkey: iou_key, subbit_id, amount, sig, .. } <-
+  let iou_tests.IouTest { vkey: iou_key, tag, amount, sig, .. } <-
     and_then(iou_test())
   let iou = t.Iou { amount, signature: sig }
   let step = t.StepCont(t.Settle(iou))
 
-  let c = t.Constants { ..c, subbit_id: subbit_id, iou_key: iou_key }
+  let c = t.Constants { ..c, tag: tag, iou_key: iou_key }
 
   let subbed_in <- and_then(subbed_lt(amount))
   let subbed = amount - subbed_in

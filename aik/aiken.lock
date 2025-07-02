@@ -8,7 +8,7 @@ source = "github"
 
 [[requirements]]
 name = "aiken-lang/fuzz"
-version = "main"
+version = "2.1.0"
 source = "github"
 
 [[packages]]
@@ -19,9 +19,8 @@ source = "github"
 
 [[packages]]
 name = "aiken-lang/fuzz"
-version = "main"
+version = "2.1.0"
 requirements = []
 source = "github"
 
 [etags]
-"aiken-lang/fuzz@main" = [{ secs_since_epoch = 1742580425, nanos_since_epoch = 986346898 }, "6a86fdbbe058d5c816ecbaeab45dc5a2569074b9ceb43095093d970d27a09f02"]

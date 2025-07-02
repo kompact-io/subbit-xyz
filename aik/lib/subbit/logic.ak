@@ -23,9 +23,9 @@ fn unbound(b: Bound) {
   b
 }
 
-pub fn verify_iou(key: VerificationKey, subbit_id: t.SubbitId, iou: t.Iou) {
+pub fn verify_iou(key: VerificationKey, tag: t.Tag, iou: t.Iou) {
   let t.Iou { amount, signature } = iou
-  let message: Data = t.IouMessage(subbit_id, amount)
+  let message: Data = t.IouMessage(tag, amount)
   verify_ed25519_signature(key, cbor.serialise(message), signature)
 }
 
@@ -381,7 +381,7 @@ pub fn do_sub(
 ) -> Bool {
   trace @"sub.0": @"Stage in is opened : `stage_in = Opened(constants, subbed_in)`"
   expect t.Opened(constants, subbed_in) = stage_in
-  let t.Constants { subbit_id, iou_key, provider, .. } = constants
+  let t.Constants { tag, iou_key, provider, .. } = constants
   trace @"sub.1": @"Provider has signed"
   expect signers |> list.has(provider)
   trace @"sub.2": @"Stage out is opened : `stage_out = Opened(constants_, subbed_out)`"
@@ -392,7 +392,7 @@ pub fn do_sub(
   trace @"sub.4": @"Subbed amount is correct `subbed_out == subbed_in + subbed`"
   expect subbed_out == subbed_in + subbed
   trace @"sub.5": @"iou has valid signature"
-  expect verify_iou(iou_key, subbit_id, iou)
+  expect verify_iou(iou_key, tag, iou)
   trace @"sub.6": @"iou permits subbed out `iou.amount >= subbed_out`"
   iou.amount >= subbed_out
 }
@@ -432,7 +432,7 @@ pub fn do_settle(
 ) -> Bool {
   trace @"settle.0": @"Stage in is Closed : `stage_in = Closed(constants, subbed, _)`"
   expect t.Closed(constants, subbed_in, _) = stage_in
-  let t.Constants { subbit_id, iou_key, consumer, provider, .. } = constants
+  let t.Constants { tag, iou_key, consumer, provider, .. } = constants
   trace @"settle.1": @"Provider has signed"
   expect signers |> list.has(provider)
   trace @"settle.2": @"Stage out is opened : `stage_out = Settled(constants.consumer)`"
@@ -443,7 +443,7 @@ pub fn do_settle(
   trace @"settle.4": @"Subbed amount is correct `subbed_out == subbed_in + subbed`"
   let subbed_out = subbed_in + subbed
   trace @"settle.5": @"iou has valid signature"
-  expect verify_iou(iou_key, subbit_id, iou)
+  expect verify_iou(iou_key, tag, iou)
   trace @"settle.6": @"iou permits subbed out `iou.amount >= subbed_out`"
   iou.amount >= subbed_out
 }

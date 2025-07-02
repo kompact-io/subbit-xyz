@@ -5,7 +5,7 @@ use subbit/types as t
 /// Testing expected failures
 const c =
   t.Constants {
-    subbit_id: #"b10da48cea4c0967",
+    tag: #"b10da48cea4c0967",
     currency: t.ByHash(
       #"1234567890abcdef1234567890abcde1234567890abcdef123456789",
     ),
@@ -63,7 +63,7 @@ test sub_not_signed() fail {
 
 test sub_bad_id() fail {
   // A sub in which the iou is for a different subbit
-  let c = t.Constants { ..c, subbit_id: #"1234567890abcdef1234567890abcdef" }
+  let c = t.Constants { ..c, tag: #"1234567890abcdef1234567890abcdef" }
   let signers = [c.provider]
   let funds_in = 2000
   let stage_in = t.Opened(c, iou.amount - 1000)

@@ -36,6 +36,7 @@ function addTxs(cmd: Command) {
   end(cmd);
   expire(cmd);
   batch(cmd);
+  subs(cmd);
   mutualEnd(cmd);
 }
 
@@ -55,7 +56,17 @@ function showWallets(cmd: Command) {
         let tot = await l
           .utxosAt(val.address)
           .then((r) => kio.lucidExtras.sumUtxos(r));
-        console.log(key, "\n", w[key].address, "\n", w[key].vkh, "\n", tot);
+        console.log(
+          key,
+          "\n",
+          w[key].address,
+          "\n",
+          w[key].vkey,
+          "\n",
+          w[key].vkh,
+          "\n",
+          tot,
+        );
       });
     });
 }
@@ -80,9 +91,10 @@ function showSubbits(cmd: Command) {
   cmd
     .command("subbits")
     .description("Show subbits")
-    .option("--subbit-id <subbit-id>", "Filter on subbit id")
+    .option("--tag <tag>", "Filter on subbit id")
     .option("--consumer <consumer>", "Filter on consumer (wallet label or vkh)")
     .option("--provider <provider>", "Filter on provider (wallet label or vkh)")
+    .option("--subbit-man-format", "Output aligns with input for subbit-man-js")
     .option(
       "--vkh <vkh>",
       "Filter on vkh of either consumer or provider (wallet label or vkh)",
@@ -94,10 +106,8 @@ function showSubbits(cmd: Command) {
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
       let subbits: tx.validator.Subbit[] = [];
-      if (opts.subbitId != undefined) {
-        subbits = [
-          await tx.validator.getStateBySubbitId(l, address, opts.subbitId),
-        ];
+      if (opts.tag != undefined) {
+        subbits = [await tx.validator.getStateByTag(l, address, opts.tag)];
       } else {
         subbits = await tx.validator.getStates(l, address);
       }
@@ -105,22 +115,71 @@ function showSubbits(cmd: Command) {
         const consumer = w[opts.consumer]
           ? w[opts.consumer].vkh
           : opts.consumer;
-        subbits.filter((s) => hasConsumer(s, consumer));
+        subbits = subbits.filter((s) => hasConsumer(s, consumer));
       }
       if (opts.provider != undefined) {
         const provider = w[opts.provider] ? w[opts.provider].vkh : opts.vkh;
-        subbits.filter((s) => hasConsumer(s, provider));
+        subbits = subbits.filter((s) => hasProvider(s, provider));
       }
       if (opts.vkh != undefined) {
         const vkh = w[opts.vkh] ? w[opts.vkh].vkh : opts.vkh;
-        subbits.filter((s) => hasConsumer(s, vkh) || hasProvider(s, vkh));
+        subbits = subbits.filter(
+          (s) => hasConsumer(s, vkh) || hasProvider(s, vkh),
+        );
       }
-      subbits.forEach((s) => {
-        console.log(JSON.stringify(s, null, 2));
-      });
+      if (opts.subbitManFormat) {
+        console.log(
+          JSON.stringify(
+            subbits.map(convSubbit).filter((x) => x != undefined),
+            null,
+            2,
+          ),
+        );
+      } else {
+        console.log(JSON.stringify(subbits, null, 2));
+      }
     });
 }
 
+function convSubbit(s) {
+  const {
+    utxo: { txHash: txId, outputIndex: outputIdx },
+    state: { kind, value },
+  } = s;
+  if (kind == "Settled") {
+    return;
+  } else if (kind == "Closed") {
+    return;
+  } else {
+    const {
+      constants: { provider, consumer, tag, iouKey, currency, closePeriod },
+      subbed: sub,
+      amt,
+    } = value;
+    if (currency != "Ada") {
+      console.warn(`Expected Ada, but saw ${currency}`);
+    }
+    const minClosePeriod = 24 * 60 * 60 * 1000;
+    if (Number(closePeriod) > minClosePeriod) {
+      console.warn(
+        `Expected close period to be ${minClosePeriod}, but saw ${closePeriod}`,
+      );
+    }
+    const minAdaBuffer = 2000000;
+    const subbitAmt = Number(amt) - minAdaBuffer;
+    return {
+      provider: String(provider),
+      currency: String(currency),
+      closePeriod: String(closePeriod),
+      iouKey: String(iouKey),
+      tag: String(tag),
+      txId: String(txId),
+      outputIdx: String(outputIdx),
+      sub: String(sub),
+      subbitAmt: String(subbitAmt),
+    };
+  }
+}
 async function mkLucid() {
   return await kio.mkLucid.mkLucidWithBlockfrost();
 }
@@ -243,7 +302,7 @@ function open(cmd: Command) {
   cmd
     .command("open")
     .description("open subbit")
-    .requiredOption("--subbit-id <subbit-id>", "The (probably) unique id")
+    .requiredOption("--tag <tag>", "The (probably) unique id")
     .option(
       "--currency <currency>",
       "Currency of subbit. Defaults to ada",
@@ -273,7 +332,7 @@ function open(cmd: Command) {
       const l = await mkLucid();
       const w = dapp.wallets(l.config().network!);
       const constants: tx.types.Constants = {
-        subbitId: opts.subbitId,
+        tag: opts.tag,
         currency: opts.currency,
         iouKey: w[opts.iouKey].vkey,
         consumer: w[opts.consumer].vkh,
@@ -295,7 +354,7 @@ function openMany(cmd: Command) {
     .command("open-many")
     .description("open many subbits (useful for testing)")
     .requiredOption("--many <many>", "The number of subbits", Number)
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id root")
+    .requiredOption("--tag <tag>", "Subbit id root")
     .option(
       "--currency <currency>",
       "Currency of subbit. Defaults to ada",
@@ -325,7 +384,7 @@ function openMany(cmd: Command) {
       const l = await mkLucid();
       const w = dapp.wallets(l.config().network!);
       const constants = {
-        subbitId: opts.subbitId,
+        tag: opts.tag,
         currency: opts.currency,
         iouKey: w[opts.iouKey].vkey,
         consumer: w[opts.consumer].vkh,
@@ -345,7 +404,7 @@ function openMany(cmd: Command) {
                 amt: opts.amt,
                 constants: {
                   ...constants,
-                  subbitId: `${constants.subbitId}${i.toString(16).padStart(4, "0")}`,
+                  tag: `${constants.tag}${i.toString(16).padStart(4, "0")}`,
                 },
               })),
             ),
@@ -359,7 +418,7 @@ function add(cmd: Command) {
   cmd
     .command("add")
     .description("Add")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--consumer <consumer>", "Consumer label")
     .requiredOption("--amt <amt>", "Iou amount", (s) => BigInt(s))
     .option("--address <address>", "Address of subbit. Default to stakeless")
@@ -368,11 +427,7 @@ function add(cmd: Command) {
       const ref = await dapp.getRef(l);
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
-      const subbit = await tx.validator.getStateBySubbitId(
-        l,
-        address,
-        opts.subbitId,
-      );
+      const subbit = await tx.validator.getStateByTag(l, address, opts.tag);
       await dapp.sequence(
         l,
         opts.consumer,
@@ -386,7 +441,7 @@ function sub(cmd: Command) {
   cmd
     .command("sub")
     .description("Sub")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--provider <provider>", "Provider label")
     .requiredOption("--amt <amt>", "Iou amount", (s) => BigInt(s))
     .requiredOption("--sig <sig>", "Signature of the iou")
@@ -396,11 +451,7 @@ function sub(cmd: Command) {
       const ref = await dapp.getRef(l);
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
-      const subbit = await tx.validator.getStateBySubbitId(
-        l,
-        address,
-        opts.subbitId,
-      );
+      const subbit = await tx.validator.getStateByTag(l, address, opts.tag);
       await dapp.sequence(
         l,
         opts.provider,
@@ -414,7 +465,7 @@ function close(cmd: Command) {
   cmd
     .command("close")
     .description("Close")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--consumer <consumer>", "Consumer label")
     .option("--address <address>", "Address of subbit. Default to stakeless")
     .action(async (opts) => {
@@ -422,11 +473,7 @@ function close(cmd: Command) {
       const ref = await dapp.getRef(l);
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
-      const subbit = await tx.validator.getStateBySubbitId(
-        l,
-        address,
-        opts.subbitId,
-      );
+      const subbit = await tx.validator.getStateByTag(l, address, opts.tag);
       await dapp.sequence(
         l,
         opts.consumer,
@@ -440,7 +487,7 @@ function settle(cmd: Command) {
   cmd
     .command("settle")
     .description("Settle")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--provider <provider>", "Provider label")
     .requiredOption("--amt <amt>", "Iou amount", (s) => BigInt(s))
     .requiredOption("--sig <sig>", "Signature of the iou")
@@ -450,11 +497,7 @@ function settle(cmd: Command) {
       const ref = await dapp.getRef(l);
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
-      const subbit = await tx.validator.getStateBySubbitId(
-        l,
-        address,
-        opts.subbitId,
-      );
+      const subbit = await tx.validator.getStateByTag(l, address, opts.tag);
       await dapp.sequence(
         l,
         opts.provider,
@@ -499,7 +542,7 @@ function expire(cmd: Command) {
   cmd
     .command("expire")
     .description("Expire")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--consumer <consumer>", "Consumer label")
     .option("--address <address>", "Address of subbit. Default to stakeless")
     .action(async (opts) => {
@@ -507,11 +550,7 @@ function expire(cmd: Command) {
       const ref = await dapp.getRef(l);
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
-      const subbit = await tx.validator.getStateBySubbitId(
-        l,
-        address,
-        opts.subbitId,
-      );
+      const subbit = await tx.validator.getStateByTag(l, address, opts.tag);
       await dapp.sequence(
         l,
         opts.consumer,
@@ -521,21 +560,185 @@ function expire(cmd: Command) {
     });
 }
 
-type OneArg = {
-  subbitId: string;
+type Iou = {
+  iouAmt: bigint;
+  sig: string;
+  underwriter?: string;
+};
+
+type MaybeStep = tx.validator.SubbitStep | undefined;
+
+function subs(cmd: Command) {
+  cmd
+    .command("subs")
+    .description("Batch subs and settles")
+    .requiredOption("--provider <provider>", "Provider wallet label")
+    .requiredOption(
+      "--ious <ious>",
+      "Stringified JSON. See help for form.",
+      parseIous,
+    )
+    .option(
+      "--addresses <addresses>",
+      "Comma sep list of addresses to find subbits, otherwise uses default address.",
+    )
+    .option(
+      "--currencies <currencies>",
+      "Optional additional filter on utxos. Comma sep list",
+      (x) => x.split(",").map(parseCurrency),
+    )
+    .option(
+      "--threshold <min>",
+      "Below which IOUs are ignored. Defaults to 1_000_000 eg 1 Ada if that is the currency",
+      BigInt,
+      1_000_000n,
+    )
+    .addHelpText(
+      "after",
+      [
+        "",
+        "ARG :: The arg is a stringified JSON.",
+        "The content is an object.",
+        "The object keys are keytags; the values are objects with three entries.",
+        "Each object contains `iouAmt`, `sig`, and if 'Opened' in the L2, then the UTXO underwriting it.",
+        "All values are strings: numbers in digits, bytes are hex encoded, output reference is the join by '#'",
+        "An IOU should be spent with a settle **only if** either, the subbit is not being underwritten (ie is suspended)",
+        "OR the subbit is being underwritten by another UTXO at tip (and we can see it).",
+        // TODO : "The code will sort ious by most urgent to claim.",
+        // TODO : "Most urgent: first settles, then subs, each sorted by amount claimed.",
+        // TODO : "It will spend the top 45 (at time of writing).",
+        "Example input:",
+        "   {",
+        "       '0000...deadbeef00' : { 'underwriter' : '00000...#3', 'iouAmt': '123232', 'sig' : '00000000...' },",
+        "       '1000...deadbeef01' : { 'iouAmt': '123456', 'sig' : '00000000...' },",
+        "   }",
+        "",
+      ].join("\n"),
+    )
+    .action(async (opts) => {
+      const l = await mkLucid();
+      const w = dapp.wallets(l.config().network!);
+      const ref = await dapp.getRef(l);
+      let { provider, addresses, ious, currencies, threshold } = opts;
+      if (currencies) {
+        throw new Error("Not yet implemented");
+      }
+      const providerVkh = provider in w ? w[provider].vkh : provider;
+      const defaultAddress = tx.validator.mkAddress(l.config().network!);
+      addresses = addresses ? addresses.split(",") : [defaultAddress];
+
+      const stateFilter = (s: tx.validator.Subbit) => {
+        if (s.state.kind == "Settled") {
+          return false;
+        } else {
+          return providerVkh == s.state.value.constants.provider;
+        }
+      };
+      const stateMap = (s: tx.validator.Subbit) => {
+        if (s.state.kind == "Settled") {
+          throw new Error("Impossible");
+        } else {
+          const oref = `${s.utxo.txHash}#${s.utxo.outputIndex}`;
+          return [oref, s];
+        }
+      };
+      const unsettled: Record<
+        string,
+        {
+          utxo: lucid.UTxO;
+          state:
+            | { kind: "Opened"; value: tx.validator.OpenedE }
+            | { kind: "Closed"; value: tx.validator.ClosedE };
+        }
+      > = await Promise.all(
+        addresses.map((a: string) => tx.validator.getStates(l, a)),
+      )
+        .then((r) => r.flat())
+        .then((r) => r.filter(stateFilter).map(stateMap))
+        .then(Object.fromEntries);
+
+      const sss: tx.validator.SubbitStep[] = Object.entries(unsettled)
+        .map(([k, v]): MaybeStep => {
+          const keytag = `${v.state.value.constants.iouKey}${v.state.value.constants.tag}`;
+          const iou: Iou | undefined = ious[keytag];
+          if (iou == undefined) {
+            console.log(`${k} : Missing IOU for`);
+            return undefined;
+          }
+          if (v.state.kind == "Closed") {
+            if (
+              iou.underwriter != undefined &&
+              !(iou.underwriter in unsettled)
+            ) {
+              console.log(
+                `${k} : IOU underwriter not found. Cannot settle safely. Please resync, or manually resolve.`,
+              );
+              return undefined;
+            } else if (iou.iouAmt <= v.state.value.subbed) {
+              console.log(`${k} : IOU not usable`);
+              return undefined;
+            }
+            return {
+              utxo: v.utxo,
+              state: v.state.value,
+              step: "settle",
+              amt: iou.iouAmt,
+              sig: iou.sig,
+            };
+          } else if (iou.iouAmt <= v.state.value.subbed + threshold) {
+            console.log(`${k} : IOU not usable`);
+            return undefined;
+          }
+          return {
+            utxo: v.utxo,
+            state: v.state.value,
+            step: "sub",
+            amt: iou.iouAmt,
+            sig: iou.sig,
+          };
+        })
+        .filter((s) => s != undefined);
+
+      console.log("SSS", JSON.stringify(sss, null, 2));
+      await dapp.sequence(
+        l,
+        provider,
+        [() => tx.txs.batch.tx(l, ref, sss)],
+        "batch",
+        //(txb) => kio.txFinish.costBreakdown(txb),
+      );
+    });
+}
+
+type IouStr = {
+  iouAmt: string;
+  sig: string;
+  underwriter?: string;
+};
+
+function parseIous(x: string): Record<string, Iou> {
+  // @ts-ignore
+  return Object.fromEntries(
+    Object.entries(JSON.parse(x)).map(([k, v]) => {
+      return [k, { ...v, iouAmt: BigInt(v.iouAmt) }];
+    }),
+  );
+}
+
+type BatchEntry = {
+  tag: string;
   address?: string;
   step: StepArg;
 };
 
-function parseOneArg(x: object): OneArg {
-  if (!("subbitId" in x)) throw new Error("Expect key subbitId");
-  if (typeof x.subbitId != "string")
-    throw new Error("Expect subbitId of type string");
+function parseBatchEntry(x: object): BatchEntry {
+  if (!("tag" in x)) throw new Error("Expect key tag");
+  if (typeof x.tag != "string") throw new Error("Expect tag of type string");
   if (!("step" in x)) throw new Error("Expect key step");
   if (typeof x.step != "object") throw new Error("Expect step of type object");
   if (x.step == null) throw new Error("Expect step to not be null");
   return {
-    subbitId: x.subbitId,
+    tag: x.tag,
     step: parseStepArg(x.step),
   };
 }
@@ -577,10 +780,10 @@ function parseStepArg(x: object): StepArg {
   throw new Error("Cannot parse step");
 }
 
-function parseBatchArg(arg: string): OneArg[] {
+function parseBatchEntries(arg: string): BatchEntry[] {
   const x = JSON.parse(arg);
   if (typeof x != "object") throw new Error("Expect object");
-  return x.map(parseOneArg);
+  return x.map(parseBatchEntry);
 }
 
 function batch(cmd: Command) {
@@ -588,14 +791,18 @@ function batch(cmd: Command) {
     .command("batch")
     .description("Batch tx")
     .argument("<user>", "Wallet label of user")
-    .argument("<arg>", "Stringified JSON. See help for form.", parseBatchArg)
+    .argument(
+      "<arg>",
+      "Stringified JSON. See help for form.",
+      parseBatchEntries,
+    )
     .addHelpText(
       "after",
       [
         "",
         "ARG :: The arg is a stringified JSON.",
         "The content is an array of objects.",
-        "Each object contains the `subbitId`, `step`, and optional `address`.",
+        "Each object contains the `tag`, `step`, and optional `address`.",
         "The step value is an object with key `step` that must be one of:",
         "   add, sub, close, settle, end, expire.",
         "Additional keys are required in the case of add, sub, and settle.",
@@ -603,9 +810,9 @@ function batch(cmd: Command) {
         "For sub and settle, the `amt` and `sig` must be included.",
         "For example:",
         "   [",
-        "       { 'subbitId' : 'deadbeef00' , 'step' : { 'step' : 'add', 'amt' : '10000000' } }, ",
-        "       { 'subbitId' : 'deadbeef01' , 'step' : { 'step' : 'sub', 'amt' : '10000000' , sig : '0000000000000000000000000000...'} }, ",
-        "       { 'subbitId' : 'deadbeef02' , 'step' : { 'step' : 'close' } }",
+        "       { 'tag' : 'deadbeef00' , 'step' : { 'step' : 'add', 'amt' : '10000000' } }, ",
+        "       { 'tag' : 'deadbeef01' , 'step' : { 'step' : 'sub', 'amt' : '10000000' , sig : '0000000000000000000000000000...'} }, ",
+        "       { 'tag' : 'deadbeef02' , 'step' : { 'step' : 'close' } }",
         "   ]",
         "",
       ].join("\n"),
@@ -624,15 +831,14 @@ function batch(cmd: Command) {
           ),
         ).then(Object.fromEntries);
       const sss: tx.validator.SubbitStep[] = await Promise.all(
-        arg.map(async (oneArg: OneArg) => {
+        arg.map(async (oneArg: BatchEntry) => {
           const address = oneArg.address || defaultAddress;
           const subbit = cacheStates[address].find(
             (s) =>
               s.state.kind != "Settled" &&
-              s.state.value.constants.subbitId == oneArg.subbitId,
+              s.state.value.constants.tag == oneArg.tag,
           );
-          if (subbit == undefined)
-            throw new Error(`Cannot find ${oneArg.subbitId}`);
+          if (subbit == undefined) throw new Error(`Cannot find ${oneArg.tag}`);
           return {
             utxo: subbit.utxo,
             state: subbit.state.value,
@@ -654,7 +860,7 @@ function mutualEnd(cmd: Command) {
   cmd
     .command("mutual-end")
     .description("End subbit with mutual consent. Funds return to consumer")
-    .requiredOption("--subbit-id <subbit-id>", "The (probably) unique id")
+    .requiredOption("--tag <tag>", "The (probably) unique id")
     .requiredOption("--consumer <consumer>", "Consumer label")
     .requiredOption("--provider <provider>", "Provider label")
     .option("--address <address>", "Address of subbit. Default to stakeless")
@@ -663,11 +869,7 @@ function mutualEnd(cmd: Command) {
       const ref = await dapp.getRef(l);
       const address =
         opts.address || tx.validator.mkAddress(l.config().network!);
-      const subbit = await tx.validator.getStateBySubbitId(
-        l,
-        address,
-        opts.subbitId,
-      );
+      const subbit = await tx.validator.getStateByTag(l, address, opts.tag);
       await dapp.sequence(
         l,
         opts.consumer,
@@ -687,12 +889,10 @@ function sign(cmd: Command) {
   cmd
     .command("sign")
     .description("Output a signature for the iou")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--amt <amt>", "Iou amount", (s) => BigInt(s))
     .requiredOption("--iou-key <iou-key>", "Iou key label")
-    .action((opts) =>
-      console.log(dapp.sign(opts.iouKey, opts.subbitId, opts.amt)),
-    );
+    .action((opts) => console.log(dapp.sign(opts.iouKey, opts.tag, opts.amt)));
 }
 
 function signMany(cmd: Command) {
@@ -700,20 +900,20 @@ function signMany(cmd: Command) {
     .command("sign-many")
     .description("Output a signature for the ious (useful in testing)")
     .requiredOption("--many <many>", "The number of subbits", Number)
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id root")
+    .requiredOption("--tag <tag>", "Subbit id root")
     .requiredOption("--amt <amt>", "Iou amount", (s) => BigInt(s))
     .requiredOption("--iou-key <iou-key>", "Iou key label")
     .action((opts) =>
       console.log(
         JSON.stringify(
-          [...Array(opts.many).keys()].map((i): OneArg => {
-            const subbitId = `${opts.subbitId}${i.toString(16).padStart(4, "0")}`;
+          [...Array(opts.many).keys()].map((i): BatchEntry => {
+            const tag = `${opts.tag}${i.toString(16).padStart(4, "0")}`;
             return {
-              subbitId,
+              tag,
               step: {
                 step: "sub",
                 amt: opts.amt,
-                sig: dapp.sign(opts.iouKey, subbitId, opts.amt),
+                sig: dapp.sign(opts.iouKey, tag, opts.amt),
               },
             };
           }),
@@ -726,12 +926,12 @@ function verify(cmd: Command) {
   cmd
     .command("verify")
     .description("Verify an iou")
-    .requiredOption("--subbit-id <subbit-id>", "Subbit id")
+    .requiredOption("--tag <tag>", "Subbit id")
     .requiredOption("--amt <amt>", "Iou amount", (s) => BigInt(s))
     .requiredOption("--iou-key <iou-key>", "Iou label or vkey")
     .requiredOption("--sig <sig>", "Signature")
     .action((opts) => {
-      console.log(dapp.verify(opts.iouKey, opts.subbitId, opts.amt, opts.sig));
+      console.log(dapp.verify(opts.iouKey, opts.tag, opts.amt, opts.sig));
     });
 }
 

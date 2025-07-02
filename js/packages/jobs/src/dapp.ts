@@ -65,22 +65,22 @@ export async function getRef(l: lucid.LucidEvolution, hash?: string) {
   );
 }
 
-export function sign(w: WalletLabel, subbitId: string, amount: bigint): string {
-  return tx.iou.sign(privateKey(w), { subbitId, amount });
+export function sign(w: WalletLabel, tag: string, amount: bigint): string {
+  return tx.iou.sign(privateKey(w), { tag, amount });
 }
 
 export function verify(
   w: WalletLabel | string,
-  subbitId: string,
+  tag: string,
   amount: bigint,
   sig: string,
 ): boolean {
   let vkey = walletLabels.includes(w as WalletLabel)
     ? wallets("Custom")[w].vkey
     : w;
-  return tx.iou.verify(vkey, { subbitId, amount }, sig);
+  return tx.iou.verify(vkey, { tag, amount }, sig);
 }
 
 export function privateKey(w: WalletLabel): string {
-  return kio.env.privateKey(w);
+  return kio.wallets.privateKey(kio.env.privateKey(w)).to_bech32();
 }

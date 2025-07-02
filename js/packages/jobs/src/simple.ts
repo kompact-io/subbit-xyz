@@ -11,7 +11,7 @@ export async function job(l: lucid.LucidEvolution) {
   const w = dapp.wallets(l.config().network!);
 
   const constants: tx.types.Constants = {
-    subbitId: "1234567890abcdef1234567890abcdef",
+    tag: "1234567890abcdef1234567890abcdef",
     currency: "Ada",
     iouKey: w.iou0.vkey,
     consumer: w.consumer0.vkh,
@@ -19,7 +19,7 @@ export async function job(l: lucid.LucidEvolution) {
     closePeriod: 999n,
   };
   const getSubbit = async () =>
-    await tx.validator.getStateBySubbitId(l, address, constants.subbitId);
+    await tx.validator.getStateByTag(l, address, constants.tag);
   await dapp.sequence(
     l,
     "consumer0",
@@ -28,7 +28,7 @@ export async function job(l: lucid.LucidEvolution) {
   );
 
   let iouAmt = 1n * ADA;
-  let sig = dapp.sign("iou0", constants.subbitId, iouAmt);
+  let sig = dapp.sign("iou0", constants.tag, iouAmt);
   let subbit = await getSubbit();
   await dapp.sequence(
     l,
@@ -38,7 +38,7 @@ export async function job(l: lucid.LucidEvolution) {
   );
 
   iouAmt = iouAmt + 2n * ADA;
-  sig = dapp.sign("iou0", constants.subbitId, iouAmt);
+  sig = dapp.sign("iou0", constants.tag, iouAmt);
   subbit = await getSubbit();
   await dapp.sequence(
     l,
@@ -48,7 +48,7 @@ export async function job(l: lucid.LucidEvolution) {
   );
 
   iouAmt = iouAmt + 3n * ADA;
-  sig = dapp.sign("iou0", constants.subbitId, iouAmt);
+  sig = dapp.sign("iou0", constants.tag, iouAmt);
   subbit = await getSubbit();
   await dapp.sequence(
     l,
@@ -66,7 +66,7 @@ export async function job(l: lucid.LucidEvolution) {
   );
 
   iouAmt = iouAmt + 4n * ADA;
-  sig = dapp.sign("iou0", constants.subbitId, iouAmt);
+  sig = dapp.sign("iou0", constants.tag, iouAmt);
   subbit = await getSubbit();
   await dapp.sequence(
     l,
@@ -84,7 +84,7 @@ export async function job(l: lucid.LucidEvolution) {
   );
 
   iouAmt = iouAmt + 5n * ADA;
-  sig = dapp.sign("iou0", constants.subbitId, iouAmt);
+  sig = dapp.sign("iou0", constants.tag, iouAmt);
   subbit = await getSubbit();
   await dapp.sequence(
     l,

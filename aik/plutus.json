@@ -244,8 +244,8 @@
           "index": 0,
           "fields": [
             {
-              "title": "subbit_id",
-              "$ref": "#/definitions/subbit~1types~1SubbitId"
+              "title": "tag",
+              "$ref": "#/definitions/subbit~1types~1Tag"
             },
             {
               "title": "currency",
@@ -408,8 +408,8 @@
           "index": 0,
           "fields": [
             {
-              "title": "subbit_id",
-              "$ref": "#/definitions/subbit~1types~1SubbitId"
+              "title": "tag",
+              "$ref": "#/definitions/subbit~1types~1Tag"
             },
             {
               "title": "amount",
@@ -522,8 +522,8 @@
         "$ref": "#/definitions/subbit~1types~1Step"
       }
     },
-    "subbit/types/SubbitId": {
-      "title": "SubbitId",
+    "subbit/types/Tag": {
+      "title": "Tag",
       "dataType": "bytes"
     },
     "subbit/types/Timestamp": {
