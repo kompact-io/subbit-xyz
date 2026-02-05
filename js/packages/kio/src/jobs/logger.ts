@@ -1,3 +1,3 @@
-import pinoPretty from "pino";
+import { pino } from 'pino';
 
-export const logger = pinoPretty();
+export const logger = pino();

@@ -1,12 +1,12 @@
-import { describe, expect, test } from "@jest/globals";
-import * as kio from "@subbit-tx/kio";
-import { setup } from "./setup";
-import { job } from "./simple";
+import { describe, test } from '@jest/globals';
+import * as kio from '@subbit-tx/kio';
+import { setup } from './setup.js';
+import { job } from './simple.js';
 
-describe("simple", () => {
-  test("simple", async () => {
-    let l = await kio.mkLucid.mkLucidWithEmulator();
-    let _hash = await setup(l);
-    let _res = await job(l);
-  });
+describe('simple', () => {
+	test('simple', async () => {
+		const l = await kio.mkLucid.mkLucidWithEmulator();
+		await setup(l);
+		await job(l);
+	});
 });
