@@ -72,23 +72,3 @@ validator eol {
     fail
   }
 }
-
-validator iou {
-  mint(_0: t.Iou, _1: Data, _2: data) {
-    False
-  }
-
-  else(_) {
-    fail
-  }
-}
-
-validator iou_message {
-  mint(_0: t.IouMessage, _1: Data, _2: data) {
-    False
-  }
-
-  else(_) {
-    fail
-  }
-}

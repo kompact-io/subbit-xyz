@@ -1,53 +1,42 @@
 use aiken/crypto.{ScriptHash, Signature, VerificationKey, VerificationKeyHash}
-
-pub type Amount =
-  Int
-
-pub type Timestamp =
-  Int
+use subbit/prelude.{Amount, Timestamp}
 
 pub type Tag =
   ByteArray
 
 pub type Currency {
   Ada
-  ByHash(ScriptHash)
-  ByClass(ScriptHash, ByteArray)
+  Asset { hash: ScriptHash, name: ByteArray }
 }
 
-pub type Constants {
-  tag: Tag,
-  currency: Currency,
-  iou_key: VerificationKey,
-  consumer: VerificationKeyHash,
-  provider: VerificationKeyHash,
-  close_period: Int,
-}
+// Unwrap with 
+// let (tag, currency, iou_key, consumer, provider, close_period) = constants
 
-pub type Datum {
-  own_hash: ScriptHash,
-  stage: Stage,
-}
+pub type Constants =
+  (
+    Tag,
+    Currency,
+    VerificationKey,
+    VerificationKeyHash,
+    VerificationKeyHash,
+    Int,
+  )
+
+// Flatten 
+// { own_hash: ScriptHash, constants: Constants, stage: Stage, }
+// Unwrap with: 
+// let (own_hash, constants, stage) = datum
+pub type Datum =
+  (ScriptHash, Constants, Stage)
 
 pub type Stage {
-  Opened(Constants, Amount)
-  Closed(Constants, Amount, Timestamp)
-  Settled(VerificationKeyHash)
+  Opened { subbed: Amount }
+  Closed { subbed: Amount, elapse_at: Timestamp }
+  Settled
 }
 
-// Alternative consideration 
-// pub type StageAlt {
-//   StageMid(Constants, MidStage) 
-//   StageEnd(VerificationKeyHash)
-// }
-// 
-// pub type MidStage {
-//   Open_(OpenParams)
-//   Closed_(ClosedParams)
-// }
-//
 pub type Redeemer {
-  Batch
+  Defer
   Main(Steps)
   Mutual
 }
@@ -62,22 +51,12 @@ pub type Steps =
 
 pub type Cont {
   Add
-  Sub(Iou)
+  Sub { n: Amount, sig: Signature }
   Close
-  Settle(Iou)
+  Settle { n: Amount, sig: Signature }
 }
 
 pub type Eol {
   End
-  Expire
-}
-
-pub type Iou {
-  amount: Amount,
-  signature: Signature,
-}
-
-pub type IouMessage {
-  tag: Tag,
-  amount: Amount,
+  Elapse
 }

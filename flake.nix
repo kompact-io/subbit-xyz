@@ -8,7 +8,7 @@
     git-hooks-nix.inputs.nixpkgs.follows = "nixpkgs";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
-    aiken.url = "github:waalge/aiken/waalge/fix-nix-build";
+    aiken.url = "github:aiken-lang/aiken";
   };
 
   outputs = inputs @ {flake-parts, ...}:

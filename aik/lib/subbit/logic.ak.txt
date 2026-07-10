@@ -5,7 +5,7 @@ use aiken/crypto.{
   ScriptHash, VerificationKey, VerificationKeyHash, verify_ed25519_signature,
 }
 use aiken/interval.{Finite, Interval, IntervalBound}
-use cardano/address.{Address, Credential, Script}
+use cardano/address.{Address, Credential, Script, StakeCredential}
 use cardano/assets.{Value}
 use cardano/transaction.{
   Datum, InlineDatum, Input, Output, OutputReference, Transaction,
@@ -15,10 +15,7 @@ use subbit/types as t
 type Signers =
   List<VerificationKeyHash>
 
-type Bound =
-  IntervalBound<Int>
-
-fn unbound(b: Bound) {
+fn unbound(b: IntervalBound) {
   expect IntervalBound { bound_type: Finite(b), .. } = b
   b
 }
@@ -36,14 +33,9 @@ pub fn verify_iou(key: VerificationKey, tag: t.Tag, iou: t.Iou) {
 /// redeemer `Main`, and all the rest are spent with `Batch`.
 /// 
 /// The logic when the redeemer is `Batch`:
-type DatumReduce {
-  own_hash: ScriptHash,
-  other: Data,
-}
-
 fn get_own_hash(datum: Datum) {
   expect InlineDatum(inline): Datum = datum
-  expect DatumReduce { own_hash, .. }: DatumReduce = inline
+  expect (own_hash, _, _): (ScriptHash, Data, Data) = inline
   own_hash
 }
 
@@ -64,10 +56,12 @@ pub fn first_oref_with_cred(
 ) -> OutputReference {
   when inputs is {
     [input, ..inputs] -> {
-      let Input {
-        output_reference: oref,
-        output: Output { address, datum, .. },
-      } = input
+      let  
+          Input {
+            output_reference: oref,
+            output: Output { address, datum, .. },
+          }
+        = input
       if address.payment_credential == cred {
         expect Script(get_own_hash(datum)) == cred
         oref
@@ -110,22 +104,20 @@ pub fn main(
   tx: Transaction,
 ) {
   trace @"main.0": @"Extract `bounds`, and `extra_signatories`,"
-  let Transaction { inputs, outputs, validity_range, extra_signatories, .. } =
-    tx
+  let Transaction { inputs, outputs, validity_range, extra_signatories, .. } = tx
   trace @"main.1": @"Find own input"
   let (input, inputs) = yield_own_input(own_oref, inputs)
-  let own_hash = datum.own_hash
-  expect Script(datum.own_hash) == input.output.address.payment_credential
+  let own_hash = datum.1st
+  expect Script(own_hash) == input.output.address.payment_credential
   trace @"main.2": @"`recur` over `steps`, `inputs` and `outputs`"
-  let inputs =
-    recur(
-      own_hash,
-      extra_signatories,
-      validity_range,
-      steps,
-      inputs |> list.push(input),
-      outputs,
-    )
+  let inputs = recur(
+    own_hash,
+    extra_signatories,
+    validity_range,
+    steps,
+    inputs |> list.push(input),
+    outputs,
+  )
   trace @"main.3": @"No more subbits"
   let own_cred = Script(own_hash)
   !(inputs
@@ -142,7 +134,7 @@ pub fn main(
 fn recur(
   own_hash: ScriptHash,
   signers: Signers,
-  bounds: Interval<Int>,
+  bounds: Interval,
   steps: t.Steps,
   inputs: List<Input>,
   outputs: List<Output>,
@@ -150,40 +142,29 @@ fn recur(
   when steps is {
     [step, ..steps] -> {
       trace @"recur.0": @"yield subbit in else fail"
-      let (address_in, value_in, stage_in, inputs) = yield_in(own_hash, inputs)
+      let delegation, v_in, c, stage_in, inputs <- yield_in(own_hash, inputs)
       trace @"recur.1": @"yield step else return inputs"
       when step is {
         t.StepCont(step) -> {
           trace @"recur.2": @"if step is continuing"
-          let currency = get_currency(stage_in)
-          let funds_in = amount_in(currency, value_in)
+          // FIXME :: This should pushed lower a la konduit
           trace @"recur.2.0": @"yield continuing output else fail"
-          let (funds_out, stage_out, outputs) =
-            yield_out(address_in, currency, outputs)
+          let v_out, s_out, outputs <- yield_out(
+            Script(own_hash),
+            delegation,
+            c,
+            outputs,
+          )
           trace @"recur.2.1": @"verify step"
           expect
             when step is {
-              t.Add -> do_add(signers, funds_in, stage_in, funds_out, stage_out)
-              t.Sub(iou) ->
-                do_sub(signers, funds_in, stage_in, funds_out, stage_out, iou)
+              t.Add -> do_add(signers, v_in, s_in, v_out, s_out)
+              t.Sub { amount, signature } ->
+                do_sub(signers, v_in, s_in, v_out, s_out, iou)
               t.Close ->
-                do_close(
-                  signers,
-                  bounds.upper_bound,
-                  funds_in,
-                  stage_in,
-                  funds_out,
-                  stage_out,
-                )
-              t.Settle(iou) ->
-                do_settle(
-                  signers,
-                  funds_in,
-                  stage_in,
-                  funds_out,
-                  stage_out,
-                  iou,
-                )
+                do_close(signers, bounds.upper_bound, v_in, s_in, v_out, s_out)
+              t.Settle { amount, signature } ->
+                do_settle(signers, v_in, s_in, v_out, s_out, iou)
             }
           recur(own_hash, signers, bounds, steps, inputs, outputs)
         }
@@ -192,8 +173,8 @@ fn recur(
           trace @"recur.3": @"verify step"
           expect
             when step is {
-              t.End -> do_end(signers, stage_in)
-              t.Expire -> do_expire(signers, bounds.lower_bound, stage_in)
+              t.End -> do_end(signers, s_in)
+              t.Expire -> do_expire(signers, bounds.lower_bound, s_in)
             }
           recur(own_hash, signers, bounds, steps, inputs, outputs)
         }
@@ -210,22 +191,14 @@ fn recur(
 /// exploits, and by the way `Batch` and `Main` interplay, we prevent any other
 /// subbits spent alongside a `Mutual` spend.
 pub fn mutual(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
-  let (consumer, provider) =
-    when datum.stage is {
-      t.Opened(t.Constants { consumer, provider, .. }, _) ->
-        (consumer, provider)
-      t.Closed(t.Constants { consumer, provider, .. }, _, _) ->
-        (consumer, provider)
-      _ -> fail @"unsupported"
-    }
+  let (_own_hash, constants, _stage) = datum
+  let (_tag, _currency, _iou_key, consumer, provider, _close_period) = constants
   let Transaction { inputs, extra_signatories, .. } = tx
   trace @"mutual.0": @"Both participants sign"
-  expect and {
-      extra_signatories |> list.has(consumer),
-      extra_signatories |> list.has(provider),
-    }
-  expect Some(own_input) =
-    inputs |> list.find(fn(i) { i.output_reference == own_oref })
+  expect extra_signatories |> list.has(consumer)
+  expect extra_signatories |> list.has(provider)
+  expect Some(own_input) = inputs
+    |> list.find(fn(i) { i.output_reference == own_oref })
   let own_cred = own_input.output.address.payment_credential
   trace @"mutual.1": @"Is solo subbit input"
   1 == (
@@ -255,17 +228,22 @@ fn no_more(own_hash: ScriptHash, inputs: List<Input>) {
 /// We define a function that "yields" the next subbit input. A subbit input is
 /// identified by its payment credential. The rest of the input is then parsed to
 /// check correctness. 
+/// Note that we do not verify own_hash in datum is correct.
 fn yield_in(
   own_hash: ScriptHash,
   inputs: List<Input>,
-) -> (Address, Value, t.Stage, List<Input>) {
+  return: fn(Option<StakeCredential>, Value, t.Constants, t.Stage, List<Input>) ->
+    result,
+) -> result {
   when inputs is {
-    [input, ..inputs] -> {
+    [input, ..rest] -> {
       let Output { address, value, datum, .. } = input.output
+
       if address.payment_credential == Script(own_hash) {
-        (address, value, coerce_datum(datum).stage, inputs)
+        let _hash, constants, stage <- coerce_datum(datum)
+        return(address.stake_credential, value, constants, stage, rest)
       } else {
-        yield_in(own_hash, inputs)
+        yield_in(own_hash, rest, return)
       }
     }
     [] -> fail @"expect subbit in"
@@ -280,12 +258,7 @@ fn yield_in(
 fn amount_in(currency: t.Currency, value: Value) -> t.Amount {
   when currency is {
     t.Ada -> value |> assets.lovelace_of
-    t.ByHash(hash) -> {
-      expect [Pair(_name, amount), ..] =
-        value |> assets.tokens(hash) |> dict.to_pairs()
-      amount
-    }
-    t.ByClass(hash, name) -> value |> assets.quantity_of(hash, name)
+    t.Asset(hash, name) -> value |> assets.quantity_of(hash, name)
   }
 }
 
@@ -295,29 +268,24 @@ fn amount_in(currency: t.Currency, value: Value) -> t.Amount {
 /// amount out function is similar to the amount in function, but checks the value
 /// contains no additional assets. This is to prevent token spamming attacks.
 fn amount_out(currency: t.Currency, value: Value) -> t.Amount {
-  let flat = value |> assets.flatten
-  when flat is {
-    [(_, _, amt)] ->
-      when currency is {
-        t.Ada -> amt
-        _ -> 0
-      }
-    [_, (hash_, name_, amt)] ->
-      when currency is {
-        t.ByHash(hash) -> {
+  let flat = value |> assets.to_dict |> dict.to_list
+  when currency is {
+    t.Ada -> {
+      expect [(_, ada)] = flat
+      expect [(_, amt)] = ada |> dict.to_list
+      amt
+    }
+    t.Asset { hash, name } ->
+      when flat is {
+        [_] -> 0
+        [_, (hash_, token)] -> {
           expect hash == hash_
+          expect [(name_, amt)] = token |> dict.to_list
+          expect name == name_
           amt
         }
-        t.ByClass(hash, name) -> {
-          expect and {
-              hash == hash_,
-              name == name_,
-            }
-          amt
-        }
-        t.Ada -> fail @"only ada"
+        _ -> fail @"bad value"
       }
-    _ -> fail @"<2 assets"
   }
 }
 
@@ -331,26 +299,28 @@ fn amount_out(currency: t.Currency, value: Value) -> t.Amount {
 /// from the subbit input. The step logic will verify all the entire constant value
 /// is unchanged, where relevant.
 fn yield_out(
-  address_: Address,
-  currency: t.Currency,
+  own_cred: Credential,
+  delegation: Option<StakeCredential>,
+  constants: t.Constants,
   outputs: List<Output>,
-) -> (t.Amount, t.Stage, List<Output>) {
+  return: fn(Value, t.Stage, List<Output>) -> result,
+) -> result {
   when outputs is {
-    [output, ..outputs] -> {
+    [output, ..rest] -> {
       let Output { address, value, datum, reference_script } = output
-      if address_ == address {
-        let t.Datum { own_hash, stage } = coerce_datum(datum)
-        expect and {
-            Script(own_hash) == address.payment_credential,
-            reference_script == None,
-          }
-        let amount = amount_out(currency, value)
-        (amount, stage, outputs)
+      let Address { payment_credential, stake_credential } = address
+      if payment_credential == own_cred {
+        expect delegation == stake_credential
+        let own_hash, constants_, stage <- coerce_datum(datum)
+        expect own_cred == Script(own_hash)
+        expect constants == constants_
+        expect reference_script == None
+        return(value, stage, rest)
       } else {
-        yield_out(address_, currency, outputs)
+        yield_out(own_cred, delegation, constants, rest, return)
       }
     }
-    _ -> fail @"expected output"
+    [] -> fail @"expected output"
   }
 }
 
@@ -399,7 +369,7 @@ pub fn do_sub(
 
 pub fn do_close(
   signers: Signers,
-  upper_bound: Bound,
+  upper_bound: IntervalBound,
   funds_in: t.Amount,
   stage_in: t.Stage,
   funds_out: t.Amount,
@@ -457,7 +427,7 @@ pub fn do_end(signers: Signers, stage_in: t.Stage) -> Bool {
 
 pub fn do_expire(
   signers: Signers,
-  lower_bound: Bound,
+  lower_bound: IntervalBound,
   stage_in: t.Stage,
 ) -> Bool {
   trace @"expire.0": @"Stage in is Closed : `stage_in = Closed(constants, _, expired_at)`"
@@ -469,16 +439,52 @@ pub fn do_expire(
   expire_at <= unbound(lower_bound)
 }
 
-fn coerce_datum(d: Datum) -> t.Datum {
+fn coerce_datum(
+  d: Datum,
+  return: fn(ScriptHash, t.Constants, t.Stage) -> result,
+) -> result {
   expect InlineDatum(data) = d
-  expect d: t.Datum = data
-  d
+  expect (hash, constants, stage): (ScriptHash, t.Constants, t.Stage) = data
+  return(hash, constants, stage)
 }
 
-fn get_currency(stage: t.Stage) -> t.Currency {
-  when stage is {
-    t.Opened(c, _) -> c.currency
-    t.Closed(c, _, _) -> c.currency
-    _ -> fail @"currency unknown"
-  }
+test amount_out_ada() {
+  let value = assets.from_lovelace(100)
+  amount_out(t.Ada, value) == 100
+}
+
+test amount_out_ada_fails_with_extra_asset() fail {
+  let value = assets.from_lovelace(100)
+    |> assets.add(#"deadbeef", #"aabbcc", 50)
+  amount_out(t.Ada, value) == 100
+}
+
+test amount_out_asset() {
+  let value = assets.from_lovelace(2_000_000)
+    |> assets.add(#"deadbeef", #"aabbcc", 50)
+  amount_out(t.Asset { hash: #"deadbeef", name: #"aabbcc" }, value) == 50
+}
+
+test amount_out_asset_only_ada() {
+  let value = assets.from_lovelace(2_000_000)
+  amount_out(t.Asset { hash: #"deadbeef", name: #"aabbcc" }, value) == 0
+}
+
+test amount_out_asset_wrong_hash() fail {
+  let value = assets.from_lovelace(2_000_000)
+    |> assets.add(#"deadbeef", #"aabbcc", 50)
+  amount_out(t.Asset { hash: #"cafebabe", name: #"aabbcc" }, value) == 50
+}
+
+test amount_out_asset_wrong_name() fail {
+  let value = assets.from_lovelace(2_000_000)
+    |> assets.add(#"deadbeef", #"aabbcc", 50)
+  amount_out(t.Asset { hash: #"deadbeef", name: #"ccbbaa" }, value) == 50
+}
+
+test amount_out_asset_too_many_policies() fail {
+  let value = assets.from_lovelace(2_000_000)
+    |> assets.add(#"deadbeef", #"aabbcc", 50)
+    |> assets.add(#"cafebabe", #"aabbcc", 50)
+  amount_out(t.Asset { hash: #"deadbeef", name: #"aabbcc" }, value) == 50
 }
