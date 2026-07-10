@@ -1,8 +1,8 @@
 use cardano/transaction.{OutputReference, Transaction}
-use subbit/logic.{batch, main, mutual}
+use subbit/spend.{do}
 use subbit/types as t
 
-validator subbit {
+validator konduit {
   spend(
     datum: Option<t.Datum>,
     redeemer: t.Redeemer,
@@ -10,11 +10,7 @@ validator subbit {
     tx: Transaction,
   ) {
     expect Some(datum) = datum
-    when redeemer is {
-      t.Batch -> batch(datum.own_hash, own_oref, tx.inputs)
-      t.Main(steps) -> main(datum, steps, own_oref, tx)
-      t.Mutual -> mutual(datum, own_oref, tx)
-    }
+    do(datum, redeemer, own_oref, tx)
   }
 
   else(_) {
