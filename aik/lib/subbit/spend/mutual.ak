@@ -1,5 +1,4 @@
 use aiken/collection/list
-use aiken/crypto.{blake2b_224}
 use cardano/address.{Address}
 use cardano/transaction.{Input, Output, OutputReference, Transaction}
 use subbit/types as t
@@ -13,8 +12,8 @@ pub fn do(datum: t.Datum, own_oref: OutputReference, tx: Transaction) {
   let (_tag, _currency, _iou_key, consumer, provider, _close_period) = constants
   let Transaction { inputs, extra_signatories, .. } = tx
   trace @"mutual.0": @"Both participants sign"
-  expect extra_signatories |> list.has(consumer |> blake2b_224)
-  expect extra_signatories |> list.has(provider |> blake2b_224)
+  expect extra_signatories |> list.has(consumer)
+  expect extra_signatories |> list.has(provider)
   expect Some(own_input) = inputs
     |> list.find(fn(i) { i.output_reference == own_oref })
   let own_cred = own_input.output.address.payment_credential

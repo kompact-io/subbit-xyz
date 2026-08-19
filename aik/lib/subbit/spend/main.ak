@@ -1,6 +1,5 @@
-use aiken/builtin.{blake2b_224}
 use aiken/collection/list
-use aiken/crypto.{VerificationKey}
+use aiken/crypto.{VerificationKey, VerificationKeyHash}
 use aiken/interval.{Interval, IntervalBound}
 use cardano/address.{Address, Credential, Script}
 use cardano/transaction.{Input, Output, Transaction}
@@ -28,12 +27,10 @@ pub fn do(datum: t.Datum, steps: List<t.Step>, tx: Transaction) {
   let (own_hash, _, _) = datum
   let own_cred = Script(own_hash)
   let with = mk_with(own_cred, lower_bound, upper_bound, _, _, _, _, _)
-  let inputs, _outputs, vkeys <- foldl3(steps, inputs, outputs, [], with, _)
+  let inputs, _outputs, vkhs <- foldl3(steps, inputs, outputs, [], with, _)
   expect
-    vkeys
-      |> list.all(
-          fn(vkey) { extra_signatories |> list.has(vkey |> blake2b_224) },
-        )
+    vkhs
+      |> list.all(fn(vkey) { extra_signatories |> list.has(vkey) })
   inputs
     |> list.all(fn(i) { i.output.address.payment_credential != own_cred })
 }
@@ -48,7 +45,7 @@ fn mk_with(
   step: t.Step,
   inputs: List<Input>,
   outputs: List<Output>,
-  vkeys: List<VerificationKey>,
+  vkhs: List<VerificationKeyHash>,
   return: WithReturn<result>,
 ) -> result {
   let delegation, v_in, c, s_in, inputs <- yield_in(own_cred, inputs)
@@ -61,16 +58,16 @@ fn mk_with(
         t.Close -> close.do(ub, c, v_in, s_in, v_out, s_out)
         t.Settle { n, sig } -> settle.do(c, v_in, s_in, v_out, s_out, n, sig)
       }
-      let vkeys = vkeys |> xlist.ordered_insert(vkey)
-      return(inputs, outputs, vkeys)
+      let vkhs = vkhs |> xlist.ordered_insert(vkey)
+      return(inputs, outputs, vkhs)
     }
     t.StepEol(step) -> {
       let vkey = when step is {
         t.End -> end.do(c, s_in)
         t.Elapse -> elapse.do(lb, c, s_in)
       }
-      let vkeys = vkeys |> xlist.ordered_insert(vkey)
-      return(inputs, outputs, vkeys)
+      let vkhs = vkhs |> xlist.ordered_insert(vkey)
+      return(inputs, outputs, vkhs)
     }
   }
 }
