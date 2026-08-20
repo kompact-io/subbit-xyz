@@ -12,7 +12,7 @@ subscriptions_.
 For more about Subbit.xyz, check out the [site](https://subbit.xyz) for an
 overview.
 
-Status: WIP.
+Status: alpha.
 
 ## Roadmap/TODOs
 
@@ -28,7 +28,10 @@ The output of the first three milestones will be mainly found here:
 
 - [x] M1: Spec & validator
 - [x] M2: Tx builders
-- [ ] M3: Integration toolkit/ SDK and e2e example
+- [x] M3: Integration toolkit/ SDK and e2e example
+- [x] M4: ?
+- [x] M5: ?
+- [ ] M6: ?
 
 ## Repo
 

@@ -1,0 +1,29 @@
+[package]
+name = "subbit-session"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+serde = ["dep:serde", "subbit-tx/serde", "cardano-sdk/serde"]
+
+
+[dependencies]
+cardano-connector.workspace = true
+cardano-connector-direct.workspace = true
+cardano-sdk.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+subbit-tx.workspace = true
+# FIXME :: serde ought to be a feature
+cardano-session.workspace = true
+
+# Serde 
+serde = { workspace = true, optional = true, features = ["derive"] }

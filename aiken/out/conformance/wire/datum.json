@@ -1,0 +1,170 @@
+{
+  "name": "conformance/wire.datum",
+  "parameters": [
+    {
+      "title": "datum",
+      "schema": {
+        "$ref": "#/definitions/subbit~1types~1Datum"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "59011f01010029800aba2aba1aab9eaab9dab9a9bac0019b89480012222222323322598009919191919912cc004c96600266e1d2000300e375400314a313233224a260166eb8c044004c02cdd71808980900098079baa0014034601e00b1980098049bae300f00498049bae300f00398049bae300f0024888c034dd698091809802a2c8060c038004c01cdd718068021806800980600098058009bac30090018acc004c8c96600266e1d20000018acc004c018dd6980598051baa0028a518b20108acc004cdc3a40040031325980098039bad300c0018acc004c01cdd698061806800c528c5900945900918051baa0028a5140208040c020dd500098049805000c528c5900645900618009bae3007003300800325980098011b8d0018a4d16401001",
+  "hash": "22d17a65220834cad5f82ade6e7a99eddd165eca3c91286a9d59ceb2",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "aiken/crypto/ScriptHash": {
+      "title": "ScriptHash",
+      "dataType": "bytes"
+    },
+    "aiken/crypto/VerificationKey": {
+      "title": "VerificationKey",
+      "dataType": "bytes"
+    },
+    "aiken/crypto/VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    },
+    "subbit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "subbit/prelude/Timestamp": {
+      "title": "Timestamp",
+      "dataType": "integer"
+    },
+    "subbit/types/Constants": {
+      "title": "Constants",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/subbit~1types~1Tag"
+        },
+        {
+          "$ref": "#/definitions/subbit~1types~1Currency"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
+    "subbit/types/Currency": {
+      "title": "Currency",
+      "anyOf": [
+        {
+          "title": "Ada",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Asset",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "hash",
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            },
+            {
+              "title": "name",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "subbit/types/Datum": {
+      "title": "Datum",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+        },
+        {
+          "$ref": "#/definitions/subbit~1types~1Constants"
+        },
+        {
+          "$ref": "#/definitions/subbit~1types~1Stage"
+        }
+      ]
+    },
+    "subbit/types/Stage": {
+      "title": "Stage",
+      "anyOf": [
+        {
+          "title": "Opened",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "subbed",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            }
+          ]
+        },
+        {
+          "title": "Closed",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "subbed",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            },
+            {
+              "title": "elapse_at",
+              "$ref": "#/definitions/subbit~1prelude~1Timestamp"
+            }
+          ]
+        },
+        {
+          "title": "Settled",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    },
+    "subbit/types/Tag": {
+      "title": "Tag",
+      "dataType": "bytes"
+    }
+  }
+}

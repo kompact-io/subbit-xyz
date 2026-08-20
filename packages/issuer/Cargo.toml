@@ -1,0 +1,62 @@
+[package]
+name = "subbit-issuer"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "subbit-issuer"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[dependencies]
+subbit-core = { workspace = true, features = ["serde"] }
+ed25519-dalek = { workspace = true, default-features = false, features = [
+  "rand_core",
+] }
+thiserror = { workspace = true, default-features = false }
+hex.workspace = true
+matchit.workspace = true
+serde.workspace = true
+minicbor = { workspace = true }
+web-time.workspace = true # wasm-ready
+
+# cli-only (test client, not the wasm-embedded path)
+clap = { workspace = true, features = ["derive"], optional = true }
+toml = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+subbit-config = { workspace = true, optional = true, features = ["clap"] }
+
+# reqwest
+reqwest = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+reqwest-middleware = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+
+[features]
+default = ["cli", "reqwest"]
+cli = [
+  "dep:clap",
+  "dep:toml",
+  "dep:subbit-config",
+  "native_url_lookup",
+  "serde_json",
+]
+native_url_lookup = ["subbit-core/serde"]
+reqwest = [
+  "dep:reqwest",
+  "dep:http",
+  "dep:async-trait",
+  "dep:reqwest-middleware",
+  "dep:anyhow",
+]

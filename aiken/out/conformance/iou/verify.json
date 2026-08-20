@@ -1,0 +1,82 @@
+{
+  "name": "conformance/iou.verify",
+  "parameters": [
+    {
+      "title": "v",
+      "schema": {
+        "$ref": "#/definitions/conformance~1iou~1Verify"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "584e01010029800aba2aba1aba0aab9e4888a60026eb8c00cc004dd5002cdd99ba733002300330043001375400a6600460066008600860026ea80152f5c1375c600660086008600860026ea801572a01",
+  "hash": "6fa599ef9d783da11b287b921d4a105f31be25c8ceb7530b9718b5a8",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/VerificationKey": {
+      "title": "VerificationKey",
+      "dataType": "bytes"
+    },
+    "conformance/iou/Verify": {
+      "title": "Verify",
+      "anyOf": [
+        {
+          "title": "Verify",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "key",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+            },
+            {
+              "title": "tag",
+              "$ref": "#/definitions/subbit~1types~1Tag"
+            },
+            {
+              "title": "amount",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            },
+            {
+              "title": "signature",
+              "$ref": "#/definitions/subbit~1prelude~1Signature"
+            }
+          ]
+        }
+      ]
+    },
+    "subbit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "subbit/prelude/Signature": {
+      "title": "Signature",
+      "dataType": "bytes"
+    },
+    "subbit/types/Tag": {
+      "title": "Tag",
+      "dataType": "bytes"
+    }
+  }
+}

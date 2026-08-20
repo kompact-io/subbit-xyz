@@ -1,0 +1,169 @@
+{
+  "name": "conformance/wire.redeemer",
+  "parameters": [
+    {
+      "title": "redeemer",
+      "schema": {
+        "$ref": "#/definitions/subbit~1types~1Redeemer"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "59011701010029800aba2aba1aab9faab9eaab9dab9a9b8748001222222232598009801000c528c56600266e1d20020018acc004c8c8cc004004dd6180498039baa00b2259800800c528c56600260066014003133002002300b0018a50401880488c8c966002600a600e6ea800e26464b300130070018a518acc004cdc3a40040031325980098029bad300d0018992513004375c601a601c00316402460146ea800a2b30013370e9002000c528c4c966002600a6eb4c034006264944c010dd718069807000c5900918051baa0024020804100818041baa001300a30083754007159800980298039baa300a3008375400714a314a2803100612cc004c008dc6800c5268b200c371290004528c590034528a006400c60066ea8021",
+  "hash": "4148a3f26054a6402d41085b0d8adf5c67ff1238a28356e6c7962da4",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "aiken/crypto/Signature": {
+      "title": "Signature",
+      "dataType": "bytes"
+    },
+    "subbit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "subbit/types/Cont": {
+      "title": "Cont",
+      "anyOf": [
+        {
+          "title": "Add",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Sub",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "n",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            },
+            {
+              "title": "sig",
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        },
+        {
+          "title": "Close",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        },
+        {
+          "title": "Settle",
+          "dataType": "constructor",
+          "index": 3,
+          "fields": [
+            {
+              "title": "n",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            },
+            {
+              "title": "sig",
+              "$ref": "#/definitions/aiken~1crypto~1Signature"
+            }
+          ]
+        }
+      ]
+    },
+    "subbit/types/Eol": {
+      "title": "Eol",
+      "anyOf": [
+        {
+          "title": "End",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Elapse",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "subbit/types/Redeemer": {
+      "title": "Redeemer",
+      "anyOf": [
+        {
+          "title": "Defer",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Main",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/subbit~1types~1Steps"
+            }
+          ]
+        },
+        {
+          "title": "Mutual",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    },
+    "subbit/types/Step": {
+      "title": "Step",
+      "anyOf": [
+        {
+          "title": "StepCont",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/subbit~1types~1Cont"
+            }
+          ]
+        },
+        {
+          "title": "StepEol",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/subbit~1types~1Eol"
+            }
+          ]
+        }
+      ]
+    },
+    "subbit/types/Steps": {
+      "title": "Steps",
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/subbit~1types~1Step"
+      }
+    }
+  }
+}

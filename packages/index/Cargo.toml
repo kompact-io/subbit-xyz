@@ -1,0 +1,45 @@
+[package]
+name = "subbit-index"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "subbit_index"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mock-index"
+path = "src/bin/mock.rs"
+
+[[bin]]
+name = "naive-index"
+path = "src/bin/naive.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+tokio = { workspace = true, features = ["time"] }
+reqwest.workspace = true
+minicbor = { workspace = true, features = ["alloc", "derive"] }
+hex = { workspace = true, features = ["alloc", "serde"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+csv.workspace = true
+toml.workspace = true
+url.workspace = true
+
+subbit-config = { workspace = true, features = ["clap"] }
+subbit-core = { workspace = true, features = ["serde"] }
+subbit-tx = { workspace = true, features = ["serde"] }
+subbit-session = { workspace = true, features = ["serde"] }
+cardano-sdk.workspace = true
