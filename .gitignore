@@ -1,3 +1,20 @@
-.direnv/
-.pre-commit-config.yaml
+secrets/
 
+# No idea :) 
+.idea
+
+# Direnv
+.direnv/
+.envrc
+result
+
+# Nix dev shell 
+.nix-prek-config.yaml
+
+# Rust
+debug/
+target/
+
+# Envs
+.env
+.env.*

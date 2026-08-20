@@ -1,0 +1,110 @@
+{
+  "name": "conformance/wire.constants",
+  "parameters": [
+    {
+      "title": "constants",
+      "schema": {
+        "$ref": "#/definitions/subbit~1types~1Constants"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "58a001010029800aba2aba1aab9eaab9dab9a9bac0014888888cc88c8c8cc896600264b30013370e900018051baa0018a5189919912513007375c601a002600e6eb8c034c038004c02cdd5000a012300b0068cc004c014dd718058024c014dd71805801cc014dd71805801244466e252000375a601c601e00a8b2010300a0013003375c601200a60120026010004600c0024b30013371290001b8d0018a4d16400c1",
+  "hash": "1e10da1021816c64da8dcc6fab53a88646fd777221dea7522655c9f1",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "Int": {
+      "dataType": "integer"
+    },
+    "aiken/crypto/ScriptHash": {
+      "title": "ScriptHash",
+      "dataType": "bytes"
+    },
+    "aiken/crypto/VerificationKey": {
+      "title": "VerificationKey",
+      "dataType": "bytes"
+    },
+    "aiken/crypto/VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    },
+    "subbit/types/Constants": {
+      "title": "Constants",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/subbit~1types~1Tag"
+        },
+        {
+          "$ref": "#/definitions/subbit~1types~1Currency"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
+    "subbit/types/Currency": {
+      "title": "Currency",
+      "anyOf": [
+        {
+          "title": "Ada",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Asset",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "hash",
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            },
+            {
+              "title": "name",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "subbit/types/Tag": {
+      "title": "Tag",
+      "dataType": "bytes"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "name": "conformance/wire.currency",
+  "parameters": [
+    {
+      "title": "currency",
+      "schema": {
+        "$ref": "#/definitions/subbit~1types~1Currency"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "585101010029800aba2aba1aab9eaab9dab9a4888896600266e1d20003002375400d14a31332233224a260026eb8c018008c004dd71803180380118019baa00625980099b8948000dc6800c5268b2004400401",
+  "hash": "6cfa26c94563f8057395fa726e0ac03704b10cdc0b4c8efcdd7a4774",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "ByteArray": {
+      "dataType": "bytes"
+    },
+    "aiken/crypto/ScriptHash": {
+      "title": "ScriptHash",
+      "dataType": "bytes"
+    },
+    "subbit/types/Currency": {
+      "title": "Currency",
+      "anyOf": [
+        {
+          "title": "Ada",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Asset",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "hash",
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            },
+            {
+              "title": "name",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

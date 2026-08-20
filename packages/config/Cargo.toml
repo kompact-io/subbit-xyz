@@ -1,0 +1,22 @@
+[package]
+name = "subbit-config"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+figment = { workspace = true, features = ["env", "toml"] }
+thiserror.workspace = true
+serde = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive"], optional = true }
+
+
+[features]
+default = ["clap"]
+clap = ["dep:clap"]

@@ -1,0 +1,83 @@
+{
+  "name": "conformance/wire.stage",
+  "parameters": [
+    {
+      "title": "stage",
+      "schema": {
+        "$ref": "#/definitions/subbit~1types~1Stage"
+      }
+    }
+  ],
+  "return_type": {
+    "title": "return_type",
+    "schema": {
+      "$ref": "#/definitions/Bool"
+    }
+  },
+  "compiledCode": "587001010029800aba2aba1aab9eaab9dab9a9b8948001222222325980099b87480000062b30013002375a600c600a6ea802229462c801a2b30013370e9001000c4c96600260066eb4c01c0062b30013003375a600e601000314a3164011164010600a6ea8022294500320063003375400e1",
+  "hash": "d136ae58d18e17f5605cfce559d688b6f504ef262c522ef3c0250b9c",
+  "definitions": {
+    "Bool": {
+      "title": "Bool",
+      "anyOf": [
+        {
+          "title": "False",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "True",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "subbit/prelude/Amount": {
+      "title": "Amount",
+      "dataType": "integer"
+    },
+    "subbit/prelude/Timestamp": {
+      "title": "Timestamp",
+      "dataType": "integer"
+    },
+    "subbit/types/Stage": {
+      "title": "Stage",
+      "anyOf": [
+        {
+          "title": "Opened",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "subbed",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            }
+          ]
+        },
+        {
+          "title": "Closed",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "subbed",
+              "$ref": "#/definitions/subbit~1prelude~1Amount"
+            },
+            {
+              "title": "elapse_at",
+              "$ref": "#/definitions/subbit~1prelude~1Timestamp"
+            }
+          ]
+        },
+        {
+          "title": "Settled",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        }
+      ]
+    }
+  }
+}

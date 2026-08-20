@@ -1,0 +1,57 @@
+[package]
+name = "subbit-server"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["main"]
+main = [
+  "dep:axum",
+  "dep:clap",
+  "dep:tokio",
+  "dep:anyhow",
+  "dep:toml",
+  "dep:tracing-subscriber",
+  "dep:subbit-config",
+]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+axum = { workspace = true, optional = true, features = ["macros"] }
+clap = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+blake3.workspace = true
+cryptoxide.workspace = true
+hex.workspace = true
+minicbor.workspace = true
+matchit.workspace = true
+postcard.workspace = true
+redb.workspace = true
+serde.workspace = true
+subbit-core = { workspace = true, features = ["serde"] }
+thiserror.workspace = true
+toml = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+subbit-config = { workspace = true, optional = true, features = ["clap"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+criterion = "0.5"
+tempfile = "3"
+
+[[bin]]
+name = "subbit-server"
+path = "src/main.rs"
+required-features = ["main"]
+
+
+[[bench]]
+name = "db_throughput"
+harness = false

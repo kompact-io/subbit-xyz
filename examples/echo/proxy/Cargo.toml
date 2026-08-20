@@ -1,0 +1,31 @@
+[package]
+name = "subbit-examples-echo-proxy"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "echo-proxy"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+pingora = { version = "0.8", features = ["openssl", "proxy"] }
+serde = { workspace = true }
+toml = { workspace = true }
+subbit-client = { workspace = true, optional = true }
+subbit-config = { workspace = true, features = ["clap"] }
+
+[features]
+default = ["subbit"]           # nothing interesting happens without subbit.
+subbit = ["dep:subbit-client"]

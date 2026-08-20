@@ -1,0 +1,27 @@
+{
+  "string": "Hello, world! Includes special characters: \n \t \" \\",
+  "numberInteger": 42,
+  "numberNegative": -100,
+  "numberFloat": 3.14159,
+  "numberExponential": 1.23e4,
+  "booleanTrue": true,
+  "booleanFalse": false,
+  "nullValue": null,
+  "objectNested": {
+    "key": "value",
+    "deeplyNested": {
+      "level": 3
+    }
+  },
+  "arrayHomogeneous": ["apple", "banana", "cherry"],
+  "arrayMixed": [
+    "text",
+    123,
+    true,
+    null,
+    {
+      "nestedInArray": "item"
+    },
+    [1, 2, 3]
+  ]
+}

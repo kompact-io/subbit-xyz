@@ -1,0 +1,34 @@
+[package]
+name = "subbit-examples-echo-client"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "echo-client"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+reqwest.workspace = true
+reqwest-middleware.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+toml.workspace = true
+http.workspace = true
+
+subbit-config = { workspace = true, features = ["clap"] }
+subbit-issuer = { workspace = true, features = [
+  "native_url_lookup",
+  "reqwest",
+] }
