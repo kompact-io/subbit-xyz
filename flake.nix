@@ -96,6 +96,8 @@
               path = ./examples/echo/proxy;
               crane.args.nativeBuildInputs = [
                 pkgs.cmake
+                pkgs.pkg-config
+                pkgs.perl
               ];
             };
           };
