@@ -55,3 +55,6 @@ required-features = ["main"]
 [[bench]]
 name = "db_throughput"
 harness = false
+
+[build-dependencies]
+subbit-build-info.workspace = true

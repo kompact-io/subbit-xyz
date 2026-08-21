@@ -11,7 +11,7 @@ authors.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "cardano-session-cli"
+name = "cardano-session"
 path = "./src/bin/cli.rs"
 required-features = ["cli"]
 
@@ -44,3 +44,6 @@ anyhow = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 
 [dev-dependencies]
+
+[build-dependencies]
+subbit-build-info.workspace = true

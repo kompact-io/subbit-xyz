@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "packages/build-info",
   "packages/config",
   "packages/core",
   "packages/conformance",
@@ -78,6 +79,7 @@ ed25519-dalek = { version = "3.0.0", default-features = false }
 
 cardano-session = { path = "packages/cardano-session", default-features = false }
 
+subbit-build-info = { path = "packages/build-info", default-features = false }
 subbit-cli = { path = "packages/cli", default-features = false }
 subbit-client = { path = "packages/client", default-features = false }
 subbit-config = { path = "packages/config", default-features = false }

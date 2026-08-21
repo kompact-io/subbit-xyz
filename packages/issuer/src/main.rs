@@ -9,6 +9,11 @@ use clap::{Parser, Subcommand};
 use subbit_issuer::native_url_lookup::{Config, NativeUrlLookup};
 
 #[derive(Parser)]
+#[command(
+    name = "subbit-issuer",
+    about = "Manage client side L2 ops",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
+)]
 struct Cli {
     #[command(flatten)]
     sources: subbit_config::Args,

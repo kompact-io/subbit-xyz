@@ -11,6 +11,11 @@ use subbit_index::naive::{Config, rows_from_channels};
 /// current (keytag -> backing) every tick. Closed channels post as
 /// `Backing: None`.
 #[derive(Parser)]
+#[command(
+    name = "naive-index",
+    about = "Submits whatever it sees at tip as backing",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
+)]
 struct Cli {
     #[command(flatten)]
     config: subbit_config::Args,
