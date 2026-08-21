@@ -5,7 +5,8 @@ pub mod commands;
 #[derive(Debug, Parser)]
 #[command(
     name = "cardano-session",
-    about = "Drive a CardanoSession from the command line"
+    about = "Drive a CardanoSession from the command line",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
 )]
 pub struct Cli {
     /// Path to a session config file.

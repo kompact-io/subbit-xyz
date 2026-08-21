@@ -60,3 +60,6 @@ reqwest = [
   "dep:reqwest-middleware",
   "dep:anyhow",
 ]
+
+[build-dependencies]
+subbit-build-info.workspace= true

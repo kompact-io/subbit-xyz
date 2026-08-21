@@ -28,3 +28,6 @@ inquire = "0.9.4"
 subbit-core = { workspace = true, default-features = false, features = [
   "serde",
 ] }
+
+[build-dependencies]
+subbit-build-info.workspace = true

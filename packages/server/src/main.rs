@@ -16,7 +16,11 @@ use tracing_subscriber::EnvFilter;
 use subbit_server::{Backing, Config, Ctx, Keytag};
 
 #[derive(Parser, Debug)]
-#[command(name = "subbit", about = "Subbit", version)]
+#[command(
+    name = "subbit-server",
+    about = "Manage server side L2 ops. Runs as a 'sidecar'",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
+)]
 struct Cli {
     #[command(flatten)]
     config: subbit_config::Args,

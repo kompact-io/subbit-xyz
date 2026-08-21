@@ -43,3 +43,6 @@ subbit-core = { workspace = true, features = ["serde"] }
 subbit-tx = { workspace = true, features = ["serde"] }
 subbit-session = { workspace = true, features = ["serde"] }
 cardano-sdk.workspace = true
+
+[build-dependencies]
+subbit-build-info.workspace = true

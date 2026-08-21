@@ -23,7 +23,11 @@
     aiken.url = "github:aiken-lang/aiken";
   };
 
-  outputs = inputs @ {flake-parts, ...}:
+  outputs = inputs @ {
+    self,
+    flake-parts,
+    ...
+  }:
     flake-parts.lib.mkFlake {inherit inputs;}
     {
       imports = [
@@ -41,8 +45,10 @@
         ...
       }: let
         clang-unwrapped = pkgs.llvmPackages_latest.clang-unwrapped;
+
+        gitHash = self.shortRev or self.dirtyShortRev or "unknown";
         devShell = {
-          name = "subbit-rs-shell";
+          name = "subbit-xyz-shell";
           shellHook = ''
               ${config.pre-commit.installationScript}
             echo 1>&2 "Welcome to the development shell!"
@@ -81,6 +87,9 @@
               ./aiken/plutus.json
               ./packages/tx/plutus.json
             ];
+          };
+          defaults.perCrate.crane.args = {
+            GIT_HASH = gitHash;
           };
           crates = {
             "subbit-examples-echo-proxy" = {

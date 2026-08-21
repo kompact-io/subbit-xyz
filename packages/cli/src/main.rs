@@ -12,8 +12,9 @@ use cmd::Cmd;
 
 #[derive(Parser)]
 #[command(
-    name = "subbit",
-    about = "Manage subbit sessions, keyrings, and staged transactions"
+    name = "subbit-cli",
+    about = "Manage subbit sessions, keyrings, and staged transactions",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
 )]
 struct Cli {
     /// Path to the CLI's config file (connector/wallet settings, script

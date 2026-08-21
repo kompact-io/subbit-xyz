@@ -632,6 +632,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
+ "subbit-build-info",
  "thiserror 2.0.18",
  "tokio",
  "toml 1.1.4+spec-1.1.0",
@@ -4561,6 +4562,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "subbit-build-info"
+version = "0.0.0"
+
+[[package]]
 name = "subbit-cli"
 version = "0.0.0"
 dependencies = [
@@ -4572,6 +4577,7 @@ dependencies = [
  "inquire",
  "serde",
  "serde_json",
+ "subbit-build-info",
  "subbit-core",
  "subbit-session",
  "subbit-tx",
@@ -4685,6 +4691,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "subbit-build-info",
  "subbit-config",
  "subbit-core",
  "subbit-session",
@@ -4713,6 +4720,7 @@ dependencies = [
  "reqwest-middleware",
  "serde",
  "serde_json",
+ "subbit-build-info",
  "subbit-config",
  "subbit-core",
  "thiserror 2.0.18",
@@ -4736,6 +4744,7 @@ dependencies = [
  "postcard",
  "redb",
  "serde",
+ "subbit-build-info",
  "subbit-config",
  "subbit-core",
  "tempfile",
