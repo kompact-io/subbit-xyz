@@ -74,11 +74,21 @@
         };
       in {
         rust-project = {
-          crates."subbit-examples-echo-proxy" = {
-            path = ./examples/echo/proxy;
-            crane.args.nativeBuildInputs = [
-              pkgs.cmake
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              (config.rust-project.crane-lib.fileset.commonCargoSources ./.)
+              ./aiken/plutus.json
+              ./packages/tx/plutus.json
             ];
+          };
+          crates = {
+            "subbit-examples-echo-proxy" = {
+              path = ./examples/echo/proxy;
+              crane.args.nativeBuildInputs = [
+                pkgs.cmake
+              ];
+            };
           };
         };
         treefmt = {
