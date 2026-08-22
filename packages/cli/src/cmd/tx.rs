@@ -221,10 +221,10 @@ fn prompt_duration_ms(field: &str) -> anyhow::Result<u64> {
     Ok(CustomType::<u64>::new(&format!("{field} (ms):")).prompt()?)
 }
 
-fn variant_prompt(
-    label: &str,
-    variants: &[(&str, fn() -> anyhow::Result<Option<Value>>)],
-) -> anyhow::Result<Value> {
+type VariantFn = fn() -> anyhow::Result<Option<Value>>;
+type Variants<'a> = &'a [(&'a str, VariantFn)];
+
+fn variant_prompt(label: &str, variants: Variants) -> anyhow::Result<Value> {
     let names: Vec<&str> = variants.iter().map(|(name, _)| *name).collect();
     let chosen = Select::new(label, names).prompt()?;
     let (name, build) = variants.iter().find(|(name, _)| *name == chosen).unwrap();
@@ -239,7 +239,7 @@ fn build_want_interactive<W: DeserializeOwned>(channel: &Channel) -> anyhow::Res
     let amount = variables.amount();
     let value = match variables.stage() {
         Stage::Opened { .. } => {
-            let mut variants: Vec<(&str, fn() -> anyhow::Result<Option<Value>>)> = vec![
+            let mut variants: Vec<(&str, VariantFn)> = vec![
                 ("Add", || {
                     Ok(Some(
                         json!({"amount": CustomType::<u64>::new("amount:").prompt()?}),

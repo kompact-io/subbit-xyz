@@ -11,7 +11,6 @@ use axum::{
 };
 use clap::{Parser, Subcommand};
 use subbit_core::envelope::{Request, Response};
-use tracing_subscriber::EnvFilter;
 
 use subbit_server::{Backing, Config, Ctx, Keytag};
 

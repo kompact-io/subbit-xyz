@@ -62,4 +62,4 @@ reqwest = [
 ]
 
 [build-dependencies]
-subbit-build-info.workspace= true
+subbit-build-info.workspace = true
