@@ -1,8 +1,6 @@
 use axum::{Router, routing::post};
 use clap::Parser;
 
-static ENV_PATH: &str = ".env.examples.echo";
-
 #[derive(Parser)]
 struct Cli {
     #[arg(long, env = "ECHO_SERVER_ADDR", default_value = "0.0.0.0")]
@@ -13,11 +11,11 @@ struct Cli {
 
 async fn run(addr: String, port: u16) {
     let bind = format!("{addr}:{port}");
-    tracing::info!("echo-demo listening on http://{bind}");
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
         .expect("bind failed");
     let app = Router::new().route("/echo", post(echo));
+    tracing::info!(listen=%bind, "Starting");
     axum::serve(listener, app).await.expect("server error");
 }
 
@@ -39,7 +37,6 @@ fn init_tracing() {
 #[tokio::main]
 async fn main() {
     init_tracing();
-    dotenvy::from_filename(ENV_PATH).ok();
     let cli = Cli::parse();
     run(cli.addr, cli.port).await;
 }

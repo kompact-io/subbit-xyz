@@ -51,7 +51,6 @@ cardano-sdk = { git = "https://github.com/cardano-lightning/konduit.git", branch
 clap = { version = "4.6.1", features = ["env", "derive"] }
 cryptoxide = "0.5.1"
 figment = "0.10"
-dotenvy = "0.15.7"
 http = "1.5.0"
 hex = { version = "0.4", default-features = false, features = ["serde"] }
 matchit = "0.9.2"
