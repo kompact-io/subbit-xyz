@@ -5,6 +5,11 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,6 +21,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
+      - uses: cachix/cachix-action@v14
+        with:
+          name: subbit-xyz
       - uses: DeterminateSystems/magic-nix-cache-action@v8
         # FIXME:  all systems once aiken is fixed
       - run: nix flake check --system x86_64-linux
+
+  packages:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v27
+      - uses: cachix/cachix-action@v14
+        with:
+          name: subbit-xyz
+          authToken: "${{ github.event_name == 'push' && secrets.CACHIX_AUTH_TOKEN || '' }}"
+        # FIXME:  all systems once aiken is fixed
+      - name: build every package (x86_64-linux)
+        run: |
+          mkdir -p artifacts
+          for p in $(nix eval --json '.#packages.x86_64-linux' --apply builtins.attrNames | nix run nixpkgs#jq -- -r '.[]'); do
+            echo "::group::nix build .#$p"
+            nix build ".#packages.x86_64-linux.$p" -L --out-link "/tmp/out-$p"
+            mkdir -p "artifacts/$p"
+            cp -rL "/tmp/out-$p"/. "artifacts/$p"/
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: subbit-xyz-packages
+          path: artifacts
+          if-no-files-found: error
