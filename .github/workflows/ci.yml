@@ -59,13 +59,22 @@ jobs:
           authToken: "${{ github.event_name == 'push' && secrets.CACHIX_AUTH_TOKEN || '' }}"
         # FIXME: all systems once aiken is fixed
       - name: build package
-        run: nix build ".#packages.x86_64-linux.${{ matrix.package }}" -L --out-link result
+        run: |
+          mkdir -p out
+          store_path=$(nix build ".#packages.x86_64-linux.${{ matrix.package }}" -L --no-link --json | nix run nixpkgs#jq -- -r '.[0].outputs.out // empty')
+          if [ -z "$store_path" ]; then
+            echo "::warning::${{ matrix.package }} has no binaries - skipping"
+          elif [ -d "$store_path" ]; then
+            cp -rL "$store_path/." out/
+          else
+            cp -L "$store_path" "out/${{ matrix.package }}"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: subbit-xyz-${{ matrix.package }}
-          path: result/
-          if-no-files-found: error
+          path: out/
+          if-no-files-found: warn
 
   merge-artifacts:
     needs: packages
