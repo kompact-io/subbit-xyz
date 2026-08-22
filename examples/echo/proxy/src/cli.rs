@@ -48,7 +48,7 @@ impl Cli {
         proxy.add_tcp(&config.listen.to_string());
         server.add_service(proxy);
 
-        tracing::info!(listen = %config.listen, upstream = %config.upstream, "echo-proxy listening");
+        tracing::info!(listen = %config.listen, upstream = %config.upstream, "Starting");
         server.run_forever();
     }
 }

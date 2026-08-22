@@ -11,7 +11,6 @@ use axum::{
 };
 use clap::{Parser, Subcommand};
 use subbit_core::envelope::{Request, Response};
-use tracing_subscriber::EnvFilter;
 
 use subbit_server::{Backing, Config, Ctx, Keytag};
 
@@ -71,19 +70,25 @@ impl Command {
     async fn serve(config: Config, listen: SocketAddr) -> anyhow::Result<()> {
         let ctx = Arc::new(Ctx::from_config(config)?);
         let app = router(ctx);
-        tracing::info!(%listen, "starting subbit");
         let listener = tokio::net::TcpListener::bind(listen).await?;
+        tracing::info!(%listen, "Starting");
         axum::serve(listener, app).await?;
         Ok(())
     }
 }
 
+fn init_tracing() {
+    let filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
+    init_tracing();
     let cli = Cli::parse();
     let sources = cli
         .config

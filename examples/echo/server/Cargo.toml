@@ -16,7 +16,6 @@ path = "src/main.rs"
 
 [dependencies]
 axum.workspace = true
-dotenvy.workspace = true
 clap.workspace = true
 tokio.workspace = true
 tracing.workspace = true

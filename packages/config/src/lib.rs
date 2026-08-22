@@ -14,7 +14,13 @@ use serde::de::DeserializeOwned;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
-pub struct Error(#[from] figment::Error);
+pub struct Error(Box<figment::Error>);
+
+impl From<figment::Error> for Error {
+    fn from(e: figment::Error) -> Self {
+        Error(Box::new(e))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sources<'a> {
