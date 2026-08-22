@@ -17,4 +17,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v27
       - uses: DeterminateSystems/magic-nix-cache-action@v8
-      - run: nix flake check --all-systems
+        # FIXME:  all systems once aiken is fixed
+      - run: nix flake check --system x86_64-linux

@@ -33,7 +33,7 @@ fn sample_channel(spent: u64) -> Channel {
 /// policy exercises both untouched `None` commits and forced
 /// checkpoints. Tune to your real traffic shape.
 fn mixed_amount(i: u64) -> u64 {
-    if i % 50 == 0 { 1_000 } else { 5 }
+    if i.is_multiple_of(50) { 1_000 } else { 5 }
 }
 
 fn open_db(exposure: ExposureConfig) -> (NamedTempFile, Db) {
@@ -85,7 +85,7 @@ fn bench_upsert(c: &mut Criterion) {
                 i += 1;
                 (sample_key(i), sample_channel(i))
             },
-            |(key, value)| db.upsert(value, &key, |ch| Ok(ch)).expect("upsert"),
+            |(key, value)| db.upsert(value, &key, Ok).expect("upsert"),
             BatchSize::SmallInput,
         );
     });
@@ -102,7 +102,7 @@ fn bench_upsert(c: &mut Criterion) {
                 (sample_key(i), sample_channel(i))
             },
             |(key, value)| {
-                db.upsert(value, &key, |ch| Ok(ch)).expect("upsert");
+                db.upsert(value, &key, Ok).expect("upsert");
                 db.checkpoint().expect("checkpoint");
             },
             BatchSize::SmallInput,
@@ -119,7 +119,7 @@ fn bench_update(c: &mut Criterion) {
     const POOL_SIZE: u64 = 10_000;
     fn seed_pool(db: &Db) {
         for i in 0..POOL_SIZE {
-            db.upsert(sample_channel(0), &sample_key(i), |ch| Ok(ch))
+            db.upsert(sample_channel(0), &sample_key(i), Ok)
                 .expect("seed");
         }
     }
@@ -161,7 +161,7 @@ fn bench_update_exposed(c: &mut Criterion) {
     const POOL_SIZE: u64 = 10_000;
     fn seed_pool(db: &Db) {
         for i in 0..POOL_SIZE {
-            db.upsert(sample_channel(0), &sample_key(i), |ch| Ok(ch))
+            db.upsert(sample_channel(0), &sample_key(i), Ok)
                 .expect("seed");
         }
     }
