@@ -23,9 +23,7 @@ pub struct SendResult {
     pub status: u16,
 }
 
-/// Thin client bound to one endpoint. Holds a `reqwest::Client` so its
-/// connection pool is reused across repeated `send` calls (matters for
-/// `naive`'s polling loop; a no-op for `mock`'s one-shot use).
+/// Thin subbit server client bound to one endpoint.
 #[derive(Clone)]
 pub struct Client {
     endpoint: Url,

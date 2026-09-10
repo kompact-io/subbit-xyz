@@ -1,6 +1,11 @@
+use std::iter;
 use std::path::Path;
 
+use cardano_connector::CardanoConnector;
+
 use clap::{Parser, Subcommand};
+use futures::future::try_join_all;
+use subbit_tx::VALIDATOR;
 use tokio::time::{Duration as TokioDuration, interval};
 use tracing::{info, warn};
 
@@ -13,7 +18,7 @@ use subbit_index::naive::{Config, rows_from_channels};
 #[derive(Parser)]
 #[command(
     name = "naive-index",
-    about = "Submits whatever it sees at tip as backing",
+    about = "Submits whatever it sees at tip as backing (after filter)",
     version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
 )]
 struct Cli {
@@ -45,33 +50,29 @@ impl Cli {
         }
 
         let config: Config = sources.load()?;
+        let cardano = config.cardano.clone().build();
+        let client = Client::new(config.endpoint.clone());
+        let delegations = iter::once(None).chain(config.delegations.clone().into_iter().map(Some)).collect::<Vec<_>>();
+        let subbit_cred = VALIDATOR.to_credential();
+        let mut ticker = interval(TokioDuration::from_secs(config.poll_interval_secs));
+        loop {
+            ticker.tick().await;
 
-        match self.command {
-            Command::Init => unreachable!(),
-            Command::Run => run(config).await,
-        }
-    }
-}
-
-async fn run(cfg: Config) -> anyhow::Result<()> {
-    let mut session = cfg.session.clone().build().await?;
-    session.init().await?;
-    let client = Client::new(cfg.endpoint.clone());
-
-    let mut ticker = interval(TokioDuration::from_secs(cfg.poll_interval_secs));
-    loop {
-        ticker.tick().await;
-
-        if let Err(e) = session.reload_channels().await {
-            warn!(error = %e, "reload_channels failed, will retry next tick");
-            continue;
-        }
-
-        let rows = rows_from_channels(&session.channels(), &cfg);
-        info!(count = rows.len(), "posting naive rows");
-        match client.send(rows).await {
-            Ok(result) => info!(status = result.status, "posted"),
-            Err(e) => warn!(error = %e, "send failed, will retry next tick"),
+            let utxos = try_join_all(
+                delegations
+                    .iter()
+                    .map(|d| cardano.utxos_at(&subbit_cred, d.as_ref())),
+            )
+                .await?
+                .into_iter()
+                .flatten()
+                .collect();
+            let rows = rows_from_channels(&utxos, &config);
+            info!(count = rows.len(), "posting naive rows");
+            match client.send(rows).await {
+                Ok(result) => info!(status = result.status, "posted"),
+                Err(e) => warn!(error = %e, "send failed, will retry next tick"),
+            }
         }
     }
 }

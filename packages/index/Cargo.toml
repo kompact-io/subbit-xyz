@@ -41,8 +41,10 @@ url.workspace = true
 subbit-config = { workspace = true, features = ["clap"] }
 subbit-core = { workspace = true, features = ["serde"] }
 subbit-tx = { workspace = true, features = ["serde"] }
-subbit-session = { workspace = true, features = ["serde"] }
 cardano-sdk.workspace = true
+cardano-connector-direct.workspace = true
+cardano-connector.workspace = true
+futures = "0.3.34"
 
 [build-dependencies]
 subbit-build-info.workspace = true
