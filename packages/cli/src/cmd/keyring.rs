@@ -20,7 +20,7 @@ pub struct Info {
 }
 
 impl Info {
-    fn new(sk: [u8; 32], label: String) -> Self {
+    fn new(label: String, sk: [u8; 32]) -> Self {
         let vk = SigningKey::from(sk).to_verification_key();
         let vkh = Hash::<28>::new(vk);
         Self { label, sk, vk, vkh }
@@ -56,26 +56,26 @@ fn hex32(s: &str) -> Result<[u8; 32], String> {
 
 /// Insert `key` (erroring if already present), tag it with `label`, persist,
 /// and return its record.
-fn insert(ctx: &mut Ctx, key: [u8; 32], label: String) -> Result<Info> {
+fn insert(ctx: &mut Ctx, label: String, key: [u8; 32]) -> Result<Info> {
     anyhow::ensure!(
-        ctx.config.keyring.insert(key, label.clone()),
+        ctx.config.keyring.insert(label.clone(), key),
         "key already exists"
     );
     ctx.save()?;
-    Ok(Info::new(key, label))
+    Ok(Info::new(label, key))
 }
 
 impl Cmd {
     pub fn run(self, mut ctx: Ctx) -> Result<()> {
         let output = match self {
-            Cmd::Add { key, label } => serde_json::to_string(&insert(&mut ctx, key, label)?)?,
+            Cmd::Add { key, label } => serde_json::to_string(&insert(&mut ctx, label, key)?)?,
             Cmd::Remove { key } => {
-                anyhow::ensure!(ctx.config.keyring.remove(key), "key does not exist");
+                anyhow::ensure!(ctx.config.keyring.remove_by_key(key), "key does not exist");
                 ctx.save()?;
                 "true".to_string()
             }
             Cmd::Generate { seed } => {
-                serde_json::to_string(&insert(&mut ctx, hash(seed.as_bytes()), seed)?)?
+                serde_json::to_string(&insert(&mut ctx, seed.clone(), hash(seed.as_bytes()))?)?
             }
             Cmd::List => {
                 let entries: Vec<_> = ctx
@@ -83,7 +83,7 @@ impl Cmd {
                     .keyring
                     .keys
                     .iter()
-                    .map(|(key, label)| Info::new(key.into(), label.clone()))
+                    .map(|(label, key)| Info::new(label.clone(), key.into()))
                     .collect();
                 serde_json::to_string_pretty(&entries)?
             }

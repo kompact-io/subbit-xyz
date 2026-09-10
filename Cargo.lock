@@ -4648,6 +4648,8 @@ dependencies = [
  "cardano-connector",
  "cardano-connector-direct",
  "cardano-sdk",
+ "cardano-session",
+ "cardano-wallet",
  "clap",
  "hex",
  "inquire",

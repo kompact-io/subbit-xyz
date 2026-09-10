@@ -49,7 +49,7 @@ fn select_key<T>(
         .keyring
         .keys
         .iter()
-        .map(|(k, label)| (label.clone(), derive(k.into())))
+        .map(|(label, k)| (label.clone(), derive(k.into())))
         .collect();
     let labels: Vec<String> = entries.iter().map(|(l, _)| l.clone()).collect();
     let chosen = Select::new(&format!("{field}:"), labels).prompt()?;

@@ -52,7 +52,9 @@ impl Cli {
         let config: Config = sources.load()?;
         let cardano = config.cardano.clone().build();
         let client = Client::new(config.endpoint.clone());
-        let delegations = iter::once(None).chain(config.delegations.clone().into_iter().map(Some)).collect::<Vec<_>>();
+        let delegations = iter::once(None)
+            .chain(config.delegations.clone().into_iter().map(Some))
+            .collect::<Vec<_>>();
         let subbit_cred = VALIDATOR.to_credential();
         let mut ticker = interval(TokioDuration::from_secs(config.poll_interval_secs));
         loop {
@@ -63,10 +65,10 @@ impl Cli {
                     .iter()
                     .map(|d| cardano.utxos_at(&subbit_cred, d.as_ref())),
             )
-                .await?
-                .into_iter()
-                .flatten()
-                .collect();
+            .await?
+            .into_iter()
+            .flatten()
+            .collect();
             let rows = rows_from_channels(&utxos, &config);
             info!(count = rows.len(), "posting naive rows");
             match client.send(rows).await {

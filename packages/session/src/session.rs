@@ -10,6 +10,7 @@ use cardano_sdk::{
     transaction::state::ReadyForSigning,
 };
 use cardano_session::{Session as CardanoSession, session};
+use cardano_wallet::{Embedded, Wallet};
 use subbit_tx::{VALIDATOR, tx::Tx, validator};
 
 #[derive(Debug, Clone, Default)]
@@ -21,7 +22,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub async fn build(self) -> Result<Session<Blockfrost>, session::Error> {
+    pub async fn build(self) -> Result<Session<Blockfrost, Embedded<Blockfrost>>, session::Error> {
         let cardano = cardano_session::Session::init(self.cardano).await?;
         Ok(Session::new(cardano, self.script_host, self.delegations))
     }
@@ -43,8 +44,8 @@ pub enum Error {
 
 /// Thin wrapper over `cardano::Session`, adding the subbit validator's
 /// address space (validator + maybe delegations) and ref-script resolution.
-pub struct Session<C> {
-    cardano: CardanoSession<C>,
+pub struct Session<C, W> {
+    cardano: CardanoSession<C, W>,
     /// Set if the ref script lives at an address other than the wallet's.
     /// Assumed already uploaded there - `upload`/`teardown` refuse to run
     /// while this is set, since both only know how to manage the wallet's
@@ -56,9 +57,9 @@ pub struct Session<C> {
     delegations: BTreeSet<Credential>,
 }
 
-impl<C: CardanoConnector> Session<C> {
+impl<C: CardanoConnector, W: Wallet> Session<C, W> {
     pub fn new(
-        cardano: CardanoSession<C>,
+        cardano: CardanoSession<C, W>,
         script_host: Option<Address<kind::Shelley>>,
         delegations: BTreeSet<Credential>,
     ) -> Self {
@@ -70,19 +71,20 @@ impl<C: CardanoConnector> Session<C> {
     }
 
     pub async fn init(&mut self) -> Result<(), Error> {
-        self.cardano.reload().await?;
-        if let Some(host) = self.script_host.clone() {
-            self.cardano.refresh_at(host).await?;
-        }
-        if self.ref_script().is_err() {
-            self.upload().await?
-        }
-        self.reload_channels().await
+        todo!();
+        // self.cardano.reload().await?;
+        // if let Some(host) = self.script_host.clone() {
+        //     self.cardano.refresh_at(host).await?;
+        // }
+        // if self.ref_script().is_err() {
+        //     self.upload().await?
+        // }
+        // self.reload_channels().await
     }
 
     // --- accessors ---
 
-    pub fn cardano(&self) -> &CardanoSession<C> {
+    pub fn cardano(&self) -> &CardanoSession<C, W> {
         &self.cardano
     }
 
@@ -110,7 +112,7 @@ impl<C: CardanoConnector> Session<C> {
             return Ok(false);
         }
         let addr = validator::address(self.cardano.network_id(), Some(cred));
-        self.cardano.untrack(&addr)?;
+        self.cardano.forget(&addr)?;
         Ok(true)
     }
 
@@ -168,16 +170,15 @@ impl<C: CardanoConnector> Session<C> {
         }
     }
 
-    pub async fn upload(&mut self) -> Result<(), Error> {
+    pub async fn upload(&mut self) -> Result<Hash<32>, Error> {
         if self.script_host.is_some() {
             return Err(Error::ScriptHostSet);
         }
-        let id = self.cardano.upload(VALIDATOR.script.clone()).await?;
-        Ok(self.cardano.wait_wallet(&id).await?)
+        Ok(self.cardano.upload(VALIDATOR.script.clone()).await?)
     }
 
     pub async fn teardown(&mut self, hash: &Hash<28>) -> Result<Hash<32>, Error> {
-        if self.script_host.is_some() {
+        if self.script_host.is_none() {
             return Err(Error::ScriptHostSet);
         }
         Ok(self.cardano.teardown(hash).await?)

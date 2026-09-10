@@ -6,12 +6,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub session: subbit_session::session::Config,
-
     pub keyring: subbit_session::keyring::Config,
-
+    #[serde(default)]
+    pub labels: Vec<(String, String)>,
     /// Where the staged (in-progress) `Tx` gets cached between CLI
-    /// invocations. Ephemeral/derived -- safe to delete, `tx new`
-    /// recreates it.
+    /// invocations.
     pub cache_path: PathBuf,
 }
 
@@ -21,6 +20,7 @@ impl Default for Config {
         Self {
             session: Default::default(),
             keyring: Default::default(),
+            labels: Default::default(),
             cache_path,
         }
     }
@@ -30,7 +30,7 @@ impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         if !path.exists() {
             bail!(
-                "no config at {}; run `subbit init --config {}` to scaffold one",
+                "no config at {}; run `init --config {}` to scaffold one",
                 path.display(),
                 path.display()
             );
