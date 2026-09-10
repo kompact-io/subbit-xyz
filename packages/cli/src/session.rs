@@ -1,47 +1,52 @@
+// session.rs
+
+use std::collections::BTreeMap;
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use cardano_connector::CardanoConnector;
 use cardano_connector_direct::Blockfrost;
 use cardano_sdk::{Credential, Hash, Input};
+use cardano_session::Session as CardanoSession;
 use cardano_wallet::{Embedded, Wallet};
 use clap::Subcommand;
 use serde::Serialize;
-use std::collections::BTreeMap;
 
+use cardano_session::tip::TipVec;
 use subbit_session::Session;
-use subbit_tx::Channel;
+use subbit_tx::{Channel, VALIDATOR};
 
-use crate::{ctx::Ctx, json_label};
-
-/// TODO:: upstream this ?? Rebuilds a live `Session` from config on every call.
-pub async fn build(
-    config: &subbit_session::session::Config,
-) -> anyhow::Result<Session<Blockfrost, Embedded<Blockfrost>>> {
-    let mut session = config.clone().build().await.context("building session")?;
-    session
-        .init()
-        .await
-        .context("initializing session (fetching chain state)")?;
-    Ok(session)
-}
+use crate::{cache, ctx::Ctx, json_label};
 
 #[derive(Subcommand)]
 pub enum Cmd {
+    /// Force a full refresh: bypass the tip/addressbook cache and refetch
+    /// from chain, then re-persist the cache.
+    Refresh,
     /// Rebuild the session against current chain state and print a summary.
     Status,
     /// Upload the subbit validator's reference script to the wallet.
     Upload,
-    /// Reclaim a tracked reference script back into the wallet.
-    Teardown { hash: Hash<28> },
-    /// Start tracking channels at an additional delegation.
+    /// Reclaim a tracked reference script back into the wallet. Default to subbit
+    Teardown { hash: Option<Hash<28>> },
+    /// Start tracking channels at an additional delegation. TODO:: UNTESTED
     AddDelegation { credential: Credential },
-    /// Stop tracking channels at a delegation.
+    /// Stop tracking channels at a delegation. TODO:: UNTESTED
     RemoveDelegation { credential: Credential },
 }
 
 impl Cmd {
     pub async fn run(self, mut ctx: Ctx) -> Result<()> {
-        let mut session = build(&ctx.config.session).await?;
-        match self {
+        let force = false; // matches!(self, Cmd::Refresh);
+        let mut session = build(&ctx.config.session, force).await?;
+
+        let result = match self {
+            Cmd::Refresh => {
+                session.refresh_all().await?;
+                session.refresh_channels().await?;
+                println!("session refreshed");
+                Ok(())
+            }
             Cmd::Status => {
                 println!(
                     "{}",
@@ -50,13 +55,14 @@ impl Cmd {
                 Ok(())
             }
             Cmd::Upload => {
-                session.upload().await?;
-                println!("validator ref script uploaded and confirmed");
+                let id = session.upload().await?;
+                println!("{id}");
                 Ok(())
             }
             Cmd::Teardown { hash } => {
+                let hash = hash.unwrap_or(VALIDATOR.hash);
                 let id = session.teardown(&hash).await?;
-                println!("teardown submitted: {id}");
+                println!("{id}");
                 Ok(())
             }
             Cmd::AddDelegation { credential } => {
@@ -85,7 +91,14 @@ impl Cmd {
                 );
                 Ok(())
             }
-        }
+        };
+
+        persist(
+            session.cardano(),
+            &ctx.config.session.tip_cache_path,
+            &ctx.config.session.addressbook_path,
+        )?;
+        result
     }
 }
 
@@ -95,7 +108,7 @@ pub struct StatusReport {
     pub change_address: String,
     pub script_host: String,
     pub fuel: FuelStatus,
-    pub ref_scripts: Vec<RefScriptEntry>,
+    pub ref_script: Option<Input>,
     pub delegations: Vec<String>,
     pub channels: Vec<(Input, Channel)>,
 }
@@ -106,20 +119,13 @@ pub struct FuelStatus {
     pub total_lovelace: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct RefScriptEntry {
-    pub hash: String,
-}
-
 impl StatusReport {
     pub fn from_session<C: CardanoConnector, W: Wallet>(session: &Session<C, W>) -> Self {
         let cardano = session.cardano();
 
         let fuel = cardano.fuel();
         let fuel_lovelace: u64 = fuel.values().map(|o| o.value().lovelace()).sum();
-
-        let ref_scripts = Vec::new();
-        // cardano .ref_scripts() .map(|(hash, _, _)| RefScriptEntry { hash: hash.to_string(), }) .collect();
+        let ref_script = session.ref_script().ok().map(|(i, _o)| i);
 
         let delegations = session
             .delegations()
@@ -144,7 +150,7 @@ impl StatusReport {
                 utxo_count: fuel.len(),
                 total_lovelace: fuel_lovelace,
             },
-            ref_scripts,
+            ref_script,
             delegations,
             channels,
         }
@@ -153,4 +159,52 @@ impl StatusReport {
     pub fn pretty(&self, lookup: &BTreeMap<String, String>) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(&json_label::map_labels(serde_json::to_value(self)?, lookup))
     }
+}
+
+/// Rebuilds a live `Session` from config. `force` skips the tip/addressbook
+/// cache and does a full chain fetch instead of hydrating from disk.
+pub async fn build(
+    config: &subbit_session::session::Config,
+    force: bool,
+) -> Result<Session<Blockfrost, Embedded<Blockfrost>>> {
+    let mut cardano = CardanoSession::init(config.cardano.clone())
+        .await
+        .context("initializing cardano session")?;
+    if !force {
+        hydrate(
+            &mut cardano,
+            &config.tip_cache_path,
+            &config.addressbook_path,
+        )
+        .context("hydrating session cache")?;
+    }
+    Ok(Session::new(
+        cardano,
+        config.script_host.clone(),
+        config.delegations.clone(),
+    ))
+}
+
+fn hydrate<C: CardanoConnector, W: Wallet>(
+    cardano: &mut CardanoSession<C, W>,
+    tip_cache_path: &Path,
+    addressbook_path: &Path,
+) -> Result<()> {
+    if let Some(tip) = cache::try_load::<TipVec>(tip_cache_path)? {
+        cardano.load_tip(tip.into());
+    }
+    if let Some(addressbook) = cache::try_load(addressbook_path)? {
+        cardano.load_addressbook(addressbook)?;
+    }
+    Ok(())
+}
+
+fn persist<C: CardanoConnector, W: Wallet>(
+    cardano: &CardanoSession<C, W>,
+    tip_cache_path: &Path,
+    addressbook_path: &Path,
+) -> Result<()> {
+    let tip_vec: TipVec = cardano.tip().clone().into();
+    cache::save(tip_cache_path, &tip_vec)?;
+    cache::save(addressbook_path, cardano.addressbook())
 }

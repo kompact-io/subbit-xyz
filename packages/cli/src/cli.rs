@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::{Config, Ctx, session};
+use crate::{Config, Ctx, iou, keyring, session, tx};
 
 #[derive(Parser)]
 #[command(
@@ -41,9 +41,9 @@ impl Cli {
                 Ok(())
             }
             Cmd::Session(cmd) => cmd.run(ctx).await,
-            // Cmd::Keyring(cmd) => cmd.run(ctx),
-            // Cmd::Iou(cmd) => cmd.run(&ctx),
-            // Cmd::Tx(cmd) => cmd.run(ctx).await,
+            Cmd::Keyring(cmd) => cmd.run(ctx),
+            Cmd::Iou(cmd) => cmd.run(&ctx),
+            Cmd::Tx(cmd) => cmd.run(ctx).await,
         }
     }
 }
@@ -57,13 +57,13 @@ enum Cmd {
     /// Manage the session (wallet, delegations, script host).
     #[command(subcommand)]
     Session(session::Cmd),
-    // /// Manage locally-held signing keys used for required-signer fields.
-    // #[command(subcommand)]
-    // Keyring(keyring::Cmd),
-    // /// Iou commands
-    // #[command(subcommand)]
-    // Iou(iou::Cmd),
-    // /// Iteratively stage and submit a subbit transaction.
-    // #[command(subcommand)]
-    // Tx(tx::Cmd),
+    /// Manage locally-held signing keys used for required-signer fields.
+    #[command(subcommand)]
+    Keyring(keyring::Cmd),
+    /// Iou commands
+    #[command(subcommand)]
+    Iou(iou::Cmd),
+    // Iteratively stage and submit a subbit transaction.
+    #[command(subcommand)]
+    Tx(tx::Cmd),
 }

@@ -11,3 +11,10 @@ pub fn resolve_json_arg(arg: &str) -> anyhow::Result<String> {
         None => Ok(arg.to_string()),
     }
 }
+
+pub fn hex32(s: &str) -> Result<[u8; 32], String> {
+    hex::decode(s)
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| "bad hex".into())
+}

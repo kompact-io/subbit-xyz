@@ -31,6 +31,7 @@ subbit-core = { workspace = true, default-features = false, features = [
 cardano-connector.workspace = true
 cardano-wallet.workspace = true
 cardano-session.workspace = true
+csv.workspace = true
 
 [build-dependencies]
 subbit-build-info.workspace = true

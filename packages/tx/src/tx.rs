@@ -6,7 +6,7 @@ use cardano_sdk::{
 };
 
 use subbit_core::Duration;
-use subbit_core::{Hash28, Redeemer, Step, Tag};
+use subbit_core::{Hash28, Redeemer, Step};
 
 use crate::{Bounds, Open, validator};
 use crate::{
@@ -50,7 +50,7 @@ pub struct Tx {
     #[cfg_attr(feature = "serde", serde(with = "as_pairs"))]
     wills: BTreeMap<Input, Will>,
     /// Cached intents to open new channels, keyed by the channel's own `Tag`.
-    opens: BTreeMap<Tag, Open>,
+    opens: BTreeMap<String, Open>,
 }
 
 impl Tx {
@@ -90,6 +90,22 @@ impl Tx {
         }
     }
 
+    /// Filtering mechanism
+    pub fn retain_channels(&mut self, keep: impl Fn(&Channel) -> bool) {
+        let drop: Vec<Input> = self
+            .channels
+            .iter()
+            .filter(|(_, c)| !keep(c))
+            .map(|(i, _)| i.clone())
+            .collect();
+
+        for input in drop {
+            self.channels.remove(&input);
+            self.utxos.remove(&input);
+            self.wills.remove(&input);
+        }
+    }
+
     // --- Wills: intents against existing channels ---
 
     pub fn channels(&self) -> &BTreeMap<Input, Channel> {
@@ -119,19 +135,21 @@ impl Tx {
 
     // --- Opens: intents to create new channels ---
 
-    pub fn opens(&self) -> &BTreeMap<Tag, Open> {
+    pub fn opens(&self) -> &BTreeMap<String, Open> {
         &self.opens
     }
 
     /// Caches an open, keyed by its channel's own `Tag`. Replaces any
     /// existing open already cached under the same `Tag`.
     pub fn add_open(&mut self, open: Open) {
-        let tag = open.channel().constants().tag().clone();
-        self.opens.insert(tag, open);
+        let keytag = open.channel().constants().iou_key().to_string()
+            + &open.channel().constants().tag().to_string();
+        self.opens.insert(keytag, open);
     }
 
-    pub fn drop_open(&mut self, tag: &Tag) -> Option<Open> {
-        self.opens.remove(tag)
+    /// Use hex-encoded keytag.
+    pub fn drop_open(&mut self, keytag: &str) -> Option<Open> {
+        self.opens.remove(keytag)
     }
 
     pub fn drop_all_opens(&mut self) {

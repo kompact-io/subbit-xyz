@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
+    path::PathBuf,
 };
 
 use cardano_connector::CardanoConnector;
@@ -13,12 +14,26 @@ use cardano_session::{Session as CardanoSession, session};
 use cardano_wallet::{Embedded, Wallet};
 use subbit_tx::{VALIDATOR, tx::Tx, validator};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Config {
     pub cardano: cardano_session::Config,
     pub script_host: Option<Address<kind::Shelley>>,
     pub delegations: BTreeSet<Credential>,
+    pub tip_cache_path: PathBuf,
+    pub addressbook_path: PathBuf,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            cardano: Default::default(),
+            script_host: Default::default(),
+            delegations: Default::default(),
+            tip_cache_path: "/tmp/subbit-cli-tip.json".into(),
+            addressbook_path: "/tmp/subbit-cli-addressbook.json".into(),
+        }
+    }
 }
 
 impl Config {
@@ -70,16 +85,17 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
         }
     }
 
+    /// Init. Why?
     pub async fn init(&mut self) -> Result<(), Error> {
         todo!();
-        // self.cardano.reload().await?;
+        // self.cardano.refresh().await?;
         // if let Some(host) = self.script_host.clone() {
         //     self.cardano.refresh_at(host).await?;
         // }
         // if self.ref_script().is_err() {
         //     self.upload().await?
         // }
-        // self.reload_channels().await
+        // self.refresh_channels().await
     }
 
     // --- accessors ---
@@ -94,6 +110,12 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
 
     pub fn delegations(&self) -> &BTreeSet<Credential> {
         &self.delegations
+    }
+
+    // --- cardano ---
+
+    pub async fn refresh_all(&mut self) -> Result<(), Error> {
+        Ok(self.cardano.refresh_all().await?)
     }
 
     // --- delegation management ---
@@ -126,7 +148,7 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
             .collect()
     }
 
-    pub async fn reload_channels(&mut self) -> Result<(), Error> {
+    pub async fn refresh_channels(&mut self) -> Result<(), Error> {
         let addresses = self.addresses();
         Ok(self.cardano.refresh_many(addresses).await?)
     }
@@ -147,7 +169,7 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
 
     /// Resolves the subbit validator's ref script UTXO. Checked at the
     /// wallet's address unless `script_host` overrides it.
-    fn ref_script(&self) -> Result<(Input, Output), Error> {
+    pub fn ref_script(&self) -> Result<(Input, Output), Error> {
         let hash = VALIDATOR.hash;
         let address = self.script_host.as_ref();
         match address {
@@ -178,7 +200,7 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
     }
 
     pub async fn teardown(&mut self, hash: &Hash<28>) -> Result<Hash<32>, Error> {
-        if self.script_host.is_none() {
+        if self.script_host.is_some() {
             return Err(Error::ScriptHostSet);
         }
         Ok(self.cardano.teardown(hash).await?)
@@ -186,7 +208,7 @@ impl<C: CardanoConnector, W: Wallet> Session<C, W> {
 
     pub async fn wait_til(&mut self, id: &Hash<32>) -> Result<(), Error> {
         self.cardano.wait_wallet(id).await?;
-        self.reload_channels().await
+        self.refresh_channels().await
     }
 
     // --- tx build/submit glue ---

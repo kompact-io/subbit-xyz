@@ -1,13 +1,16 @@
-use anyhow::{anyhow, Context};
-use inquire::{Confirm, CustomType, Select, Text};
+use anyhow::Context;
+use inquire::{Confirm, CustomType};
 use serde::de::DeserializeOwned;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use subbit_core::Stage;
 use subbit_tx::Channel;
 
 use crate::{
     ctx::Ctx,
-    prompt::{prompt_duration_ms, prompt_hex_field, prompt_json_field, prompt_key_field, variant_prompt, Variants, VariantFn},
+    ui::prompt::{
+        VariantFn, prompt_duration_ms, prompt_hex_field, prompt_json_field, prompt_key_field,
+        prompt_relative_duration, variant_prompt,
+    },
 };
 
 pub fn want<W: DeserializeOwned>(channel: &Channel) -> anyhow::Result<W> {
@@ -16,8 +19,16 @@ pub fn want<W: DeserializeOwned>(channel: &Channel) -> anyhow::Result<W> {
     let value = match variables.stage() {
         Stage::Opened { .. } => {
             let mut variants: Vec<(&str, VariantFn)> = vec![
-                ("Add", || Ok(Some(json!({"amount": CustomType::<u64>::new("amount:").prompt()?})))),
-                ("Close", || Ok(Some(json!({"upper": prompt_duration_ms("upper")?})))),
+                ("Add", || {
+                    Ok(Some(
+                        json!({"amount": CustomType::<u64>::new("amount:").prompt()?}),
+                    ))
+                }),
+                ("Close", || {
+                    Ok(Some(
+                        json!({"upper": prompt_relative_duration("upper", crate::ui::prompt::Relative::Future)?}),
+                    ))
+                }),
             ];
             if amount > 0 {
                 variants.insert(1, ("Sub", || Ok(Some(json!({"iou": iou()?})))));
@@ -30,7 +41,11 @@ pub fn want<W: DeserializeOwned>(channel: &Channel) -> anyhow::Result<W> {
                 &format!("Want variant: (available: {amount}, elapse_at: {elapse_at_ms}ms)"),
                 &[
                     ("Settle", || Ok(Some(json!({"iou": iou()?})))),
-                    ("Elapse", || Ok(Some(json!({"lower": prompt_duration_ms("lower")?})))),
+                    ("Elapse", || {
+                        Ok(Some(
+                            json!({"lower": prompt_relative_duration("lower", crate::ui::prompt::Relative::Past)?}),
+                        ))
+                    }),
                 ],
             )?
         }
@@ -48,7 +63,10 @@ fn iou() -> anyhow::Result<Value> {
 
 pub fn open<O: DeserializeOwned>(ctx: &Ctx) -> anyhow::Result<O> {
     let channel = channel(ctx)?;
-    let delegation = if Confirm::new("include a delegation credential?").with_default(false).prompt()? {
+    let delegation = if Confirm::new("include a delegation credential?")
+        .with_default(false)
+        .prompt()?
+    {
         prompt_json_field("delegation", "Credential, shape unconfirmed")?
     } else {
         Value::Null
@@ -87,7 +105,11 @@ fn currency() -> anyhow::Result<Value> {
         "Currency:",
         &[
             ("Ada", || Ok(None)),
-            ("Asset", || Ok(Some(json!({"hash": prompt_hex_field("hash")?, "name": prompt_hex_field("name")?})))),
+            ("Asset", || {
+                Ok(Some(
+                    json!({"hash": prompt_hex_field("hash")?, "name": prompt_hex_field("name")?}),
+                ))
+            }),
         ],
     )
 }
@@ -96,11 +118,17 @@ fn stage() -> anyhow::Result<Value> {
     variant_prompt(
         "Stage:",
         &[
-            ("Opened", || Ok(Some(json!({"subbed": CustomType::<u64>::new("subbed:").prompt()?})))),
-            ("Closed", || Ok(Some(json!({
-                "subbed": CustomType::<u64>::new("subbed:").prompt()?,
-                "elapse_at": prompt_duration_ms("elapse_at")?,
-            })))),
+            ("Opened", || {
+                Ok(Some(
+                    json!({"subbed": CustomType::<u64>::new("subbed:").prompt()?}),
+                ))
+            }),
+            ("Closed", || {
+                Ok(Some(json!({
+                    "subbed": CustomType::<u64>::new("subbed:").prompt()?,
+                    "elapse_at": prompt_duration_ms("elapse_at")?,
+                })))
+            }),
             ("Settled", || Ok(None)),
         ],
     )

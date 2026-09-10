@@ -4651,6 +4651,7 @@ dependencies = [
  "cardano-session",
  "cardano-wallet",
  "clap",
+ "csv",
  "hex",
  "inquire",
  "serde",
