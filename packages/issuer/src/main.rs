@@ -75,7 +75,7 @@ fn main() {
         Cmd::Response { body } => {
             let mut spender = NativeUrlLookup::build(&config).expect("build issuer");
             match spender.respond(&body) {
-                Ok(()) => println!("balance: {}", spender.issuer().spent()),
+                Ok(()) => println!("()"),
                 Err(e) => eprintln!("error: {e}"),
             }
         }

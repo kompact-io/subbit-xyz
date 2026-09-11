@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use subbit_core::{
     Auth, Duration,
     base64::{from_base64, to_base64},
-    envelope::{Body, Error as ServerError, Request, Response, Status},
+    envelope::{Body, Error as ProtocolError, Request, Response},
 };
 
 use crate::{Account, Cache, account, now};
@@ -34,7 +34,7 @@ pub enum ResponseError {
     #[error("failed to decode response envelope")]
     Decode,
     #[error("server error: {0:?}")]
-    Server(ServerError),
+    Protocol(ProtocolError),
     #[error("iou signature did not verify")]
     BadSignature,
 }
@@ -106,7 +106,7 @@ impl Issuer {
     pub fn request(&mut self, cost: u64) -> String {
         let spent = self.spent();
         let required = spent + cost;
-        let iou = if self.committed().unwrap_or(0) > required {
+        let iou = if self.committed().unwrap_or(0) >= required {
             None
         } else {
             let iou = self.account.iou(required);
@@ -123,17 +123,25 @@ impl Issuer {
     /// Commits from the verified iou's own amount — no local bookkeeping of
     /// what was requested needed.
     pub fn response(&mut self, envelope: &str) -> Result<(), ResponseError> {
-        let status: Status = from_base64::<Response>(envelope)
-            .map_err(|_| ResponseError::Decode)?
-            .map_err(ResponseError::Server)?;
+        let result = from_base64::<Response>(envelope).map_err(|_| ResponseError::Decode)?;
+
+        let status = match result {
+            Ok(status) => status,
+            Err(ProtocolError::InvalidAuth) => {
+                self.cache.clear_mac();
+                return Err(ResponseError::Protocol(ProtocolError::InvalidAuth));
+            }
+            Err(e) => return Err(ResponseError::Protocol(e)),
+        };
 
         if !self.account.verify_iou(&status.iou) {
             return Err(ResponseError::BadSignature);
         }
 
         self.cache.set_committed(status.iou.amount());
-        self.cache
-            .set_spent(status.spendable.unwrap_or(self.cache.spent()));
+        if let Some(spendable) = status.spendable {
+            self.cache.set_spenable(spendable);
+        };
         if let Some(mac) = status.mac {
             self.cache.set_mac(mac);
         }

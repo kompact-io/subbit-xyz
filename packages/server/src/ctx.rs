@@ -148,7 +148,7 @@ impl Ctx {
     }
 
     pub fn spend(&self, req: Request, url: &str) -> Response {
-        let spend = self.costings.lookup(url);
+        let cost = self.costings.lookup(url);
         let envelope::Request { auth, iou } = req;
 
         // Handle auth
@@ -167,12 +167,13 @@ impl Ctx {
         }
 
         // Apply spend
-        if spend > 0 {
-            self.db.update_exposed(&keytag, apply_spend(spend))?;
-        }
+        // if cost > 0 {
+        //     self.db.update_exposed(&keytag, apply_spend(cost))?;
+        // }
 
+        let channel = self.db.update_exposed(&keytag, apply_spend(cost))?;
         // Get l2 state
-        let channel = self.get(&keytag)?;
+        // let channel = self.get(&keytag)?;
         Ok(Status {
             iou: channel.iou().ok_or(Error::NoIou)?.clone(),
             spendable: channel.spendable(),

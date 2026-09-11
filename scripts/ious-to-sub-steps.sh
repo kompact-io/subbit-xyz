@@ -17,4 +17,4 @@ fi
 ious="$1"
 
 echo "iou_key,tag,kind,amount,signature,duration"
-tail -n +2 "$ious" | awk -F, '{print $1","$2",sub,"$3","$4","}'
+tail -n +2 "$ious" | awk -F, '$3 == "" { next } { print $1","$2",sub,"$3","$4","}'
