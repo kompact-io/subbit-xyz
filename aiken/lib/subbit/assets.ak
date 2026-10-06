@@ -1,5 +1,5 @@
 use aiken/collection/dict
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use subbit/prelude.{Amount}
 use subbit/types as t
 
@@ -8,7 +8,7 @@ use subbit/types as t
 /// A subbit supports mono-assets. See [funds](../adrs/funds.md). The subbit
 /// currency is recorded in the constants. On a subbit input, we are permissive
 /// about the value, ie any unanticipated native assets are ignored.
-pub fn amount_in(currency: t.Currency, value: Value) -> Amount {
+pub fn amount_in(currency: t.Currency, value: Assets) -> Amount {
   when currency is {
     t.Ada -> value |> assets.lovelace_of
     t.Asset { hash, name } -> value |> assets.quantity_of(hash, name)
@@ -20,7 +20,7 @@ pub fn amount_in(currency: t.Currency, value: Value) -> Amount {
 /// Continuing outputs value is handled in a stricter manner than subbit inputs. The
 /// amount out function is similar to the amount in function, but checks the value
 /// contains no additional assets. This is to prevent token spamming attacks.
-pub fn amount_out(currency: t.Currency, value: Value) -> Amount {
+pub fn amount_out(currency: t.Currency, value: Assets) -> Amount {
   let flat = value |> assets.to_dict |> dict.to_pairs
   when currency is {
     t.Ada -> {

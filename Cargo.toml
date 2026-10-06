@@ -30,7 +30,7 @@ repository = "https://github.com/kompact-io/subbit-rs"
 homepage = "https://github.com/kompact-io/subbit-rs"
 license = "MPL-2.0"
 authors = ["@waalge"]
-rust-version = "1.98"
+rust-version = "1.99"
 
 [workspace.metadata.release]
 shared-version = true
