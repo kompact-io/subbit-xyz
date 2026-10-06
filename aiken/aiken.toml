@@ -1,6 +1,6 @@
 name = "kompact-io/subbit-xyz"
 version = "0.0.0"
-compiler = "v1.1.23"
+compiler = "v1.1.24"
 plutus = "v3"
 license = "Apache-2.0"
 description = "Aiken contracts for project 'kompact-io/subbit-xyz'"
@@ -12,12 +12,12 @@ platform = "github"
 
 [[dependencies]]
 name = "aiken-lang/stdlib"
-version = "v3.1.0"
+version = "v4.0.0"
 source = "github"
 
 [[dependencies]]
 name = "aiken-lang/fuzz"
-version = "2.2.0"
+version = "3.0.0"
 source = "github"
 
 [config]

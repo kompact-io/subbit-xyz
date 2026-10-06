@@ -1,5 +1,5 @@
 use aiken/crypto.{Signature, VerificationKey}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use subbit/assets.{amount_in, amount_out} as assets_
 use subbit/iou
 use subbit/prelude.{Amount}
@@ -7,9 +7,9 @@ use subbit/types as t
 
 pub fn do(
   constants: t.Constants,
-  value_in: Value,
+  value_in: Assets,
   stage_in: t.Stage,
-  value_out: Value,
+  value_out: Assets,
   stage_out: t.Stage,
   owed: Amount,
   signature: Signature,
