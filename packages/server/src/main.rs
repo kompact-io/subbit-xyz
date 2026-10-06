@@ -198,39 +198,35 @@ const REQUEST_HEADER_NAME: &str = "subbit";
 /// Middleware: decodes the `Request` out of the header once, before either
 /// handler runs, and stashes it as a request extension. Missing/invalid
 /// header short-circuits with 400 and neither handler is called.
-async fn require_request(
-    headers: HeaderMap,
-    mut req: HttpRequest,
-    next: Next,
-) -> Result<AxumResponse, AxumResponse> {
-    let raw = headers
+async fn require_request(headers: HeaderMap, mut req: HttpRequest, next: Next) -> AxumResponse {
+    let Some(raw) = headers
         .get(REQUEST_HEADER_NAME)
         .and_then(|v| v.to_str().ok())
         .filter(|v| !v.is_empty())
-        .ok_or_else(|| {
-            tracing::warn!(
-                method = "require_request",
-                "missing {REQUEST_HEADER_NAME} header"
-            );
-            (
-                StatusCode::PAYMENT_REQUIRED,
-                format!("missing {REQUEST_HEADER_NAME} header"),
-            )
-                .into_response()
-        })?;
+    else {
+        tracing::warn!(
+            method = "require_request",
+            "missing {REQUEST_HEADER_NAME} header"
+        );
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            format!("missing {REQUEST_HEADER_NAME} header"),
+        )
+            .into_response();
+    };
     let Ok(request) = subbit_core::base64::from_base64::<Request>(raw) else {
         tracing::warn!(
             method = "require_request",
             "invalid {REQUEST_HEADER_NAME} header"
         );
-        return Err((
+        return (
             StatusCode::BAD_REQUEST,
             format!("invalid {REQUEST_HEADER_NAME} header"),
         )
-            .into_response());
+            .into_response();
     };
     req.extensions_mut().insert(request);
-    Ok(next.run(req).await)
+    next.run(req).await
 }
 
 const RESPONSE_HEADER_NAME: &str = "subbit";

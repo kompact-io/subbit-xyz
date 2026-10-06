@@ -11,7 +11,8 @@ pub fn drop_status(dropped: bool) -> &'static str {
 }
 
 pub fn parse_arg<T: std::str::FromStr>(raw: &str, what: &str) -> anyhow::Result<T> {
-    raw.parse().map_err(|_| anyhow!("couldn't parse {what} {raw:?}"))
+    raw.parse()
+        .map_err(|_| anyhow!("couldn't parse {what} {raw:?}"))
 }
 
 pub fn resolve_json_arg(arg: &str) -> anyhow::Result<String> {

@@ -48,8 +48,8 @@ blake3 = "1.8.6"
 cardano-connector = { git = "https://github.com/cardano-lightning/konduit", branch = "main" }
 cardano-connector-direct = { git = "https://github.com/cardano-lightning/konduit", branch = "main" }
 cardano-sdk = { git = "https://github.com/cardano-lightning/konduit.git", branch = "main" }
-cardano-session = { git = "https://github.com/cardano-lightning/konduit", branch = "main" , default-features = false}
-cardano-wallet = { git = "https://github.com/cardano-lightning/konduit", branch = "main" , default-features = false}
+cardano-session = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
+cardano-wallet = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
 clap = { version = "4.6.1", features = ["env", "derive"] }
 cryptoxide = "0.5.1"
 figment = "0.10"

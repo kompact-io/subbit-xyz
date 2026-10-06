@@ -42,9 +42,9 @@ impl Ctx {
         // config.limiter isn't consumed yet — see the `// Todo :: Handle
         // buckets!` marker below. Wire it in here once that lands.
 
-        for k in db.keys().unwrap().iter() {
-            tracing::info!("keys : {}", k);
-        }
+        // for k in db.keys().unwrap().iter() {
+        //     tracing::info!("keys : {}", k);
+        // }
 
         Ok(Self::new(db, mac, costings))
     }

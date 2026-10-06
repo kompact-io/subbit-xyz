@@ -42,10 +42,10 @@ render_want() {
   case "$kind" in
     add)    printf '{"Add":{"amount":%s}}' "$amount" ;;
     sub)    printf '{"Sub":{"iou":{"amount":%s,"signature":"%s"}}}' "$amount" "$signature" ;;
-    close)  printf '{"Close":{"upper":"%s"}}' "$duration" ;;
+    close)  printf '{"Close":{"upper":%s}}' "$duration" ;;
     settle) printf '{"Settle":{"iou":{"amount":%s,"signature":"%s"}}}' "$amount" "$signature" ;;
     end)    printf '"End"' ;;
-    elapse) printf '{"Elapse":{"lower":"%s"}}' "$duration" ;;
+    elapse) printf '{"Elapse":{"lower":%s}}' "$duration" ;;
     *) echo "unknown kind: $kind" >&2; exit 1 ;;
   esac
 }
