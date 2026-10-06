@@ -12,7 +12,7 @@ members = [
   "packages/cli",
   "packages/index",
   ######### CARDANO ############
-  "packages/cardano-session",
+  # "packages/cardano-session",
   ######### EXAMPLE ############
   "examples/echo/server",
   "examples/echo/proxy",
@@ -30,7 +30,7 @@ repository = "https://github.com/kompact-io/subbit-rs"
 homepage = "https://github.com/kompact-io/subbit-rs"
 license = "MPL-2.0"
 authors = ["@waalge"]
-rust-version = "1.97.1"
+rust-version = "1.98"
 
 [workspace.metadata.release]
 shared-version = true
@@ -48,6 +48,8 @@ blake3 = "1.8.6"
 cardano-connector = { git = "https://github.com/cardano-lightning/konduit", branch = "main" }
 cardano-connector-direct = { git = "https://github.com/cardano-lightning/konduit", branch = "main" }
 cardano-sdk = { git = "https://github.com/cardano-lightning/konduit.git", branch = "main" }
+cardano-session = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
+cardano-wallet = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
 clap = { version = "4.6.1", features = ["env", "derive"] }
 cryptoxide = "0.5.1"
 figment = "0.10"
@@ -76,7 +78,7 @@ wasm-bindgen = "0.2.127"
 js-sys = "0.3.104"
 ed25519-dalek = { version = "3.0.0", default-features = false }
 
-cardano-session = { path = "packages/cardano-session", default-features = false }
+# cardano-session = { path = "packages/cardano-session", default-features = false }
 
 subbit-build-info = { path = "packages/build-info", default-features = false }
 subbit-cli = { path = "packages/cli", default-features = false }

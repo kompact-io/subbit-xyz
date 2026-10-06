@@ -67,6 +67,7 @@
               pkgs.cargo-machete
               # PRE-COMMIT
               pkgs.prek
+              pkgs.jless
             ]
             ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
 

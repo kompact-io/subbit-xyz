@@ -1,9 +1,8 @@
-use anyhow::Result;
 use cardano_sdk::{Hash, SigningKey, VerificationKey};
 use clap::Subcommand;
 use serde::Serialize;
 
-use crate::ctx::Ctx;
+use crate::{ctx::Ctx, ui::args::hex32};
 
 pub fn hash(bytes: &[u8]) -> [u8; 32] {
     Hash::<32>::new(bytes).into()
@@ -45,18 +44,27 @@ pub enum Cmd {
     Generate { seed: String },
     /// List key hashes, verification keys, and labels.
     List,
+    /// Print each key as SHELL-safe env vars: LABEL_VK and LABEL_VKH,
+    /// suitable for `source`-ing or piping into envsubst.
+    Env,
 }
 
-fn hex32(s: &str) -> Result<[u8; 32], String> {
-    hex::decode(s)
-        .ok()
-        .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| "bad hex".into())
+fn shell_safe(label: &str) -> String {
+    label
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 /// Insert `key` (erroring if already present), tag it with `label`, persist,
 /// and return its record.
-fn insert(ctx: &mut Ctx, label: String, key: [u8; 32]) -> Result<Info> {
+fn insert(ctx: &mut Ctx, label: String, key: [u8; 32]) -> anyhow::Result<Info> {
     anyhow::ensure!(
         ctx.config.keyring.insert(label.clone(), key),
         "key already exists"
@@ -66,7 +74,7 @@ fn insert(ctx: &mut Ctx, label: String, key: [u8; 32]) -> Result<Info> {
 }
 
 impl Cmd {
-    pub fn run(self, mut ctx: Ctx) -> Result<()> {
+    pub fn run(self, mut ctx: Ctx) -> anyhow::Result<()> {
         let output = match self {
             Cmd::Add { key, label } => serde_json::to_string(&insert(&mut ctx, label, key)?)?,
             Cmd::Remove { key } => {
@@ -86,6 +94,15 @@ impl Cmd {
                     .map(|(label, key)| Info::new(label.clone(), key.into()))
                     .collect();
                 serde_json::to_string_pretty(&entries)?
+            }
+            Cmd::Env => {
+                for (label, key) in ctx.config.keyring.keys.iter() {
+                    let info = Info::new(label.clone(), key.into());
+                    let name = shell_safe(label);
+                    println!("{name}_VK={}", hex::encode(<[u8; 32]>::from(info.vk)));
+                    println!("{name}_VKH={}", hex::encode(<[u8; 28]>::from(info.vkh)));
+                }
+                return Ok(());
             }
         };
         println!("{output}");

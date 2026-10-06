@@ -1,21 +1,26 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use cardano_sdk::{Input, Output};
+use cardano_sdk::{Credential, Input, Output};
 use serde::{Deserialize, Serialize};
 use subbit_core::{Constants, Currency, Duration, Hash28, Stage};
 use subbit_tx::{Channel, Variables};
 use tracing::warn;
 use url::Url;
 
-use crate::wire::{Backing, Keytag, Row};
+use crate::{
+    cardano,
+    wire::{Backing, Keytag, Row},
+};
 
-/// Config for `naive` mode: connect a session, poll on an interval, and
+/// Config for `naive` mode: poll on an interval, and
 /// report every channel matching (provider, currency), with a close_period
 /// at least `close_period` and a tag no longer than `max_tag_len`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub session: subbit_session::session::Config,
+    pub cardano: cardano::Config,
+    // subbit validator addresses: credentials to track. FIXME :: unused
+    pub delegations: Vec<Credential>,
     pub endpoint: Url,
     pub provider: Hash28,
     pub currency: Currency,
@@ -39,10 +44,11 @@ pub enum Error {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            session: subbit_session::session::Config::default(),
+            cardano: Default::default(),
             endpoint: "http://127.0.0.1:7822/v1/a/backings"
                 .parse()
                 .expect("valid url"),
+            delegations: Default::default(),
             provider: Hash28::from([0; 28]),
             currency: Currency::Ada,
             close_period: Duration::from_millis(3_600_000),
@@ -69,10 +75,11 @@ fn keytag_of(constants: &Constants) -> Keytag {
     Keytag(bytes)
 }
 
-fn matches(constants: &Constants, cfg: &Config) -> bool {
-    constants.provider() == &cfg.provider
-        && constants.currency() == &cfg.currency
-        && constants.verify(cfg.max_tag_len, cfg.close_period.as_millis() as u64)
+fn is_backing(their: &Constants, my: &Config) -> bool {
+    their.provider() == &my.provider
+        && their.currency() == &my.currency
+        && their.tag().len() <= my.max_tag_len
+        && their.close_period().as_millis() >= my.close_period.as_millis()
 }
 
 /// Among a keytag's Opened variables, amount != 0 wins, tie-broken by
@@ -101,7 +108,7 @@ fn group_matching(
                 continue;
             }
         };
-        if matches(channel.constants(), cfg) {
+        if is_backing(channel.constants(), cfg) {
             groups
                 .entry(keytag_of(channel.constants()))
                 .or_default()

@@ -9,7 +9,7 @@ use cardano_sdk::{
 
 /// FIXME :: leakable signing key is unusable.
 /// Encapsulation is predominantly just to have hex serde.
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize,))]
 pub struct KeyHex(#[cfg_attr(feature = "serde", serde(with = "hex::serde"))] [u8; 32]);
 
@@ -31,27 +31,53 @@ impl From<[u8; 32]> for KeyHex {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize,))]
 pub struct Config {
-    pub keys: BTreeMap<KeyHex, String>,
+    pub keys: BTreeMap<String, KeyHex>,
 }
 
 impl Config {
     pub fn build(self) -> Keyring {
-        Keyring::new(self.keys.into_keys().map(|k| k.into()))
+        Keyring::new(self.keys.into_values().map(|k| k.into()))
     }
 
-    pub fn insert(&mut self, key: [u8; 32], label: String) -> bool {
-        self.keys.insert(key.into(), label).is_none()
+    pub fn insert(&mut self, label: String, key: [u8; 32]) -> bool {
+        self.keys.insert(label, key.into()).is_none()
     }
 
-    pub fn remove(&mut self, key: [u8; 32]) -> bool {
-        self.keys.remove(&key.into()).is_some()
+    pub fn remove_by_key(&mut self, _key: [u8; 32]) -> bool {
+        todo!();
+        //self.keys.remove(&key.into()).is_some()
     }
 
-    pub fn label(&self, key: &KeyHex) -> &str {
-        self.keys.get(key).map(String::as_str).unwrap_or("NONE")
+    pub fn flip(&self) -> BTreeMap<KeyHex, String> {
+        self.keys.clone().into_iter().map(|(k, v)| (v, k)).collect()
+    }
+
+    pub fn remove(&mut self, label: String) -> bool {
+        self.keys.remove(&label).is_some()
+    }
+
+    pub fn label(&self, key: &KeyHex) -> String {
+        self.flip().get(key).cloned().unwrap_or("NONE".to_string())
+    }
+
+    /// labels for verifying key and vkhs
+    pub fn labels(&self) -> BTreeMap<String, String> {
+        self.keys
+            .iter()
+            .map(|(l, k)| (SigningKey::from(k.clone()).to_verification_key(), l))
+            .flat_map(|(k, l)| {
+                [
+                    (l.clone(), hex::encode(k)),
+                    (
+                        format!("{}_vkh", l.clone()),
+                        hex::encode(Hash::<28>::new(k)),
+                    ),
+                ]
+            })
+            .collect()
     }
 }
 

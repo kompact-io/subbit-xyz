@@ -1,41 +1,24 @@
-use std::path::PathBuf;
-
 use clap::Parser;
 
-mod cache;
-mod cmd;
 mod config;
+pub use config::Config;
+
+mod cli;
+use cli::Cli;
+
 mod ctx;
+pub use ctx::Ctx;
+
+mod iou;
+mod keyring;
 mod session;
+mod tx;
 
-use cmd::Cmd;
-
-#[derive(Parser)]
-#[command(
-    name = "subbit-cli",
-    about = "Manage subbit sessions, keyrings, and staged transactions",
-    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"),
-)]
-struct Cli {
-    /// Path to the CLI's config file (connector/wallet settings, script
-    /// host, delegations, keyring, and where the tx cache lives).
-    #[arg(
-        long,
-        global = true,
-        env = "SUBBIT_CONFIG",
-        default_value = "subbit-cli-config.toml"
-    )]
-    config: PathBuf,
-
-    #[command(subcommand)]
-    cmd: Cmd,
-}
-
-impl Cli {
-    pub async fn run(self) -> anyhow::Result<()> {
-        self.cmd.run(self.config).await
-    }
-}
+mod cache;
+mod json_label;
+mod time;
+mod ui;
+pub use time::now;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

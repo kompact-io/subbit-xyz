@@ -35,11 +35,21 @@ impl Cache {
         self.spent = spent;
     }
 
+    pub fn set_spenable(&mut self, spendable: u64) {
+        if let Some(committed) = self.committed {
+            self.spent = committed.saturating_sub(spendable);
+        }
+    }
+
     pub fn set_committed(&mut self, committed: u64) {
         self.committed = Some(committed);
     }
 
     pub fn set_mac(&mut self, mac: Mac<Body>) {
         self.mac = Some(mac);
+    }
+
+    pub fn clear_mac(&mut self) {
+        self.mac = None;
     }
 }

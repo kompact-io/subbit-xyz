@@ -104,9 +104,9 @@ impl NativeUrlLookup {
     }
 
     pub fn respond(&mut self, envelope: &str) -> Result<(), Error> {
-        self.issuer.response(envelope)?;
+        let result = self.issuer.response(envelope);
         self.maybe_write_cache()?;
-        Ok(())
+        Ok(result?)
     }
 
     pub fn issuer(&self) -> &Issuer {
