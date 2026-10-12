@@ -11,7 +11,6 @@ use redb::{
     Database, Durability, ReadableDatabase, ReadableTable, TableDefinition, WriteTransaction,
 };
 use serde::{Deserialize, Serialize};
-use subbit_core::envelope;
 
 use crate::{Channel, Keytag, channel};
 
@@ -47,16 +46,6 @@ pub enum Error {
     Channel(channel::Error),
 }
 
-impl From<Error> for envelope::Error {
-    fn from(value: Error) -> Self {
-        match value {
-            Error::Backend(_) => Self::Other,
-            Error::NotFound => Self::NoChannel,
-            Error::Channel(error) => error.into(),
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -87,7 +76,7 @@ pub struct ExposureConfig {
     /// Single-write exposure at or under this is never accumulated.
     #[n(1)]
     pub single_write_threshold: u64,
-    /// Max staleness before a checkpoint is forced. NOT self-enforcing —
+    /// Max staleness before a checkpoint is forced. Not self-enforcing,
     /// see `checkpoint()`.
     #[n(2)]
     pub max_checkpoint_interval: Duration,
@@ -176,7 +165,7 @@ impl Db {
         Ok(())
     }
 
-    /// Empty `Immediate` commit — flushes all pending `None` writes.
+    /// Empty `Immediate` commit, flushes all pending `None` writes.
     /// Counters reset only on success, so a failed checkpoint leaves
     /// state such that the next write will retry it.
     fn force_checkpoint(&self) -> Result<(), BackendError> {
@@ -281,7 +270,7 @@ impl Db {
         Ok(removed)
     }
 
-    /// Requires `key` to exist — use `upsert` to create.
+    /// Requires `key` to exist, use `upsert` to create.
     pub fn update<F>(&self, key: &Keytag, f: F) -> Result<Channel, Error>
     where
         F: FnOnce(Channel) -> Result<Channel, channel::Error>,
@@ -304,7 +293,7 @@ impl Db {
 
     /// The one write path with exposure. `f` returns the new state and
     /// the amount at risk for this specific change (e.g. an applied
-    /// `Iou`) — `Db` doesn't infer it from the value itself. Requires
+    /// `Iou`), `Db` doesn't infer it from the value itself. Requires
     /// `key` to exist.
     pub fn update_exposed<F>(&self, key: &Keytag, f: F) -> Result<Channel, Error>
     where

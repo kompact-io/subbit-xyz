@@ -6,10 +6,17 @@ pub use keytag::Keytag;
 pub mod config;
 pub use config::Config;
 
-pub mod costings;
+pub mod catalog;
 
 pub mod ctx;
 pub use ctx::Ctx;
+
+pub mod mutual;
+pub use mutual::{MutualError, MutualService};
+
+pub mod dialect;
+
+pub mod wire;
 
 pub mod crypto;
 
@@ -25,8 +32,6 @@ pub mod channel_ops;
 
 pub mod db;
 pub use db::Db;
-
-pub mod iou;
 
 pub mod time;
 pub use time::now;

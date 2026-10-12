@@ -4,7 +4,7 @@ use subbit/types as t
 /// These are just to have them exposed at top level
 /// of plutus.json, and thus picked up by blueprint tooling. 
 validator currency {
-  mint(_0: t.Currency, _1: Data, _2: data) {
+  mint(_0: t.Asset, _1: Data, _2: data) {
     False
   }
 

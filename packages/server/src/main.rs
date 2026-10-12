@@ -3,16 +3,14 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use axum::{
     Router,
     body::Bytes,
-    extract::{Extension, Path, Request as HttpRequest, State},
-    http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header},
-    middleware::{self, Next},
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response as AxumResponse},
     routing::{get, post},
 };
 use clap::{Parser, Subcommand};
-use subbit_core::envelope::{Request, Response};
 
-use subbit_server::{Backing, Config, Ctx, Keytag};
+use subbit_server::{Backing, Config, Ctx, Keytag, wire::Wire};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -58,7 +56,7 @@ impl Command {
     fn init(base: &std::path::Path, force: bool) -> anyhow::Result<()> {
         if base.exists() && !force {
             anyhow::bail!(
-                "{} already exists — pass --force to overwrite",
+                "{} already exists, pass --force to overwrite",
                 base.display()
             );
         }
@@ -69,7 +67,7 @@ impl Command {
 
     async fn serve(config: Config, listen: SocketAddr) -> anyhow::Result<()> {
         let ctx = Arc::new(Ctx::from_config(config)?);
-        let app = router(ctx);
+        let app = router(AppState { ctx });
         let listener = tokio::net::TcpListener::bind(listen).await?;
         tracing::info!(%listen, "Starting");
         axum::serve(listener, app).await?;
@@ -96,41 +94,79 @@ async fn main() -> anyhow::Result<()> {
     cli.command.run(sources).await
 }
 
-fn router(ctx: Arc<Ctx>) -> Router {
-    // Executive
-    let x = Router::<Arc<Ctx>>::new()
-        .route("/spend/{*path}", get(handle_spend))
-        .route("/refund/{*path}", get(handle_refund))
-        .layer(middleware::from_fn(require_request));
-
-    // Open
-    let o = Router::<Arc<Ctx>>::new();
-
-    // Admin
-    let a = Router::<Arc<Ctx>>::new()
-        .route("/backings", post(handle_backings))
-        .route("/ious", get(handle_ious));
-
-    let v1 = Router::<Arc<Ctx>>::new()
-        .nest("/x", x)
-        .nest("/o", o)
-        .nest("/a", a);
-
-    Router::<Arc<Ctx>>::new().nest("/v1", v1).with_state(ctx)
+/// This boundary's whole job: axum extractors in, `Ctx`'s dialect-
+/// agnostic business logic (`Ctx::handle_spend`/`Ctx::handle_refund`)
+/// does everything else, and `into_axum_response` turns what it
+/// returns back into a real HTTP response. Dialect selection, catalog/
+/// cost lookups, and wire framing all live on `Ctx` and
+/// `subbit_server::dialect`, not here.
+#[derive(Clone)]
+struct AppState {
+    ctx: Arc<Ctx>,
 }
 
-async fn handle_backings(State(ctx): State<Arc<Ctx>>, body: Bytes) -> AxumResponse {
+/// One shared resource-guard path per verb, not a route tree per
+/// dialect: `Ctx::handle_spend`/`Ctx::handle_refund` each select a
+/// dialect from headers themselves. Admin routes are dialect-
+/// independent and always mounted.
+fn router(state: AppState) -> Router {
+    let v1 = Router::<AppState>::new()
+        .route("/spend/{*path}", get(handle_spend))
+        .route("/refund/{*path}", get(handle_refund))
+        .nest(
+            "/a",
+            Router::<AppState>::new()
+                .route("/backings", post(handle_backings))
+                .route("/ious", get(handle_ious)),
+        );
+
+    Router::<AppState>::new().nest("/v1", v1).with_state(state)
+}
+
+/// Both handlers below hand the whole `HeaderMap` to `Ctx` as-is, not
+/// a fixed set of fields read out of it first: which headers matter
+/// (`Content-Length` for `ByEgress`, `SUBBIT_COST` for `ByClaim`, ...)
+/// is a cost-model concern, decided by `Catalog` (see
+/// `Catalog::actual_cost`), not something this boundary pins down.
+/// That's what keeps this signature stable as cost models change.
+async fn handle_spend(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> AxumResponse {
+    into_axum_response(state.ctx.handle_spend(&headers, &path))
+}
+
+async fn handle_refund(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> AxumResponse {
+    into_axum_response(state.ctx.handle_refund(&headers, &path))
+}
+
+/// The one place a dialect-agnostic `Wire` becomes a real axum
+/// response. Mechanical: nothing here decides *what* the response is.
+fn into_axum_response(wire: Wire) -> AxumResponse {
+    let mut response = (wire.status, wire.body).into_response();
+    for (name, value) in wire.headers {
+        response.headers_mut().insert(name, value);
+    }
+    response
+}
+
+async fn handle_backings(State(state): State<AppState>, body: Bytes) -> AxumResponse {
     match minicbor::decode::<BTreeMap<Keytag, Option<Backing>>>(&body) {
         Err(e) => (StatusCode::BAD_REQUEST, format!("err: {}", e)).into_response(),
-        Ok(backings) => match ctx.apply_backings(backings) {
+        Ok(backings) => match state.ctx.apply_backings(backings) {
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("err: {}", e)).into_response(),
             Ok(_) => StatusCode::OK.into_response(),
         },
     }
 }
 
-async fn handle_ious(State(ctx): State<Arc<Ctx>>) -> AxumResponse {
-    let Ok(ious) = ctx.ious() else {
+async fn handle_ious(State(state): State<AppState>) -> AxumResponse {
+    let Ok(ious) = state.ctx.ious() else {
         return (StatusCode::INTERNAL_SERVER_ERROR, "db error".to_string()).into_response();
     };
     let Ok(body) = minicbor::to_vec(ious) else {
@@ -147,89 +183,6 @@ async fn handle_ious(State(ctx): State<Arc<Ctx>>) -> AxumResponse {
     )
         .into_response()
 }
-
-#[axum::debug_handler]
-async fn handle_spend(
-    State(ctx): State<Arc<Ctx>>,
-    Path(path): Path<String>,
-    Extension(req): Extension<Request>,
-) -> AxumResponse {
-    tracing::info!(method = "spend", path, "request in");
-    respond("spend", &path, ctx.spend(req, &path))
-}
-
-#[axum::debug_handler]
-async fn handle_refund(
-    State(ctx): State<Arc<Ctx>>,
-    Path(path): Path<String>,
-    Extension(req): Extension<Request>,
-) -> AxumResponse {
-    tracing::info!(method = "refund", path, "request in");
-    respond("refund", &path, ctx.refund(req, &path))
-}
-
-fn respond(method: &str, path: &str, result: Response) -> AxumResponse {
-    let Ok(header_value) = HeaderValue::from_str(&subbit_core::base64::to_base64(&result)) else {
-        tracing::error!(method, path, "failed to encode response envelope");
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    };
-    let status_code = match result {
-        Ok(status) => status.status_code(),
-        Err(err) => {
-            tracing::warn!(method, path, error = ?err, "request failed");
-            err.status_code()
-        }
-    };
-    tracing::info!(
-        method,
-        path,
-        status = status_code.as_u16(),
-        "response given"
-    );
-    let mut response = status_code.into_response();
-    response
-        .headers_mut()
-        .insert(HeaderName::from_static(RESPONSE_HEADER_NAME), header_value);
-    response
-}
-
-const REQUEST_HEADER_NAME: &str = "subbit";
-
-/// Middleware: decodes the `Request` out of the header once, before either
-/// handler runs, and stashes it as a request extension. Missing/invalid
-/// header short-circuits with 400 and neither handler is called.
-async fn require_request(headers: HeaderMap, mut req: HttpRequest, next: Next) -> AxumResponse {
-    let Some(raw) = headers
-        .get(REQUEST_HEADER_NAME)
-        .and_then(|v| v.to_str().ok())
-        .filter(|v| !v.is_empty())
-    else {
-        tracing::warn!(
-            method = "require_request",
-            "missing {REQUEST_HEADER_NAME} header"
-        );
-        return (
-            StatusCode::PAYMENT_REQUIRED,
-            format!("missing {REQUEST_HEADER_NAME} header"),
-        )
-            .into_response();
-    };
-    let Ok(request) = subbit_core::base64::from_base64::<Request>(raw) else {
-        tracing::warn!(
-            method = "require_request",
-            "invalid {REQUEST_HEADER_NAME} header"
-        );
-        return (
-            StatusCode::BAD_REQUEST,
-            format!("invalid {REQUEST_HEADER_NAME} header"),
-        )
-            .into_response();
-    };
-    req.extensions_mut().insert(request);
-    next.run(req).await
-}
-
-const RESPONSE_HEADER_NAME: &str = "subbit";
 
 // Config io
 fn write_config(path: &std::path::Path) -> anyhow::Result<()> {

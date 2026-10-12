@@ -22,3 +22,4 @@ proptest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 subbit-core = { workspace = true, features = ["test-utils"] }
+subbit-l1-dto = { workspace = true, features = ["test-utils"] }

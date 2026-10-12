@@ -1,0 +1,24 @@
+[package]
+name = "subbit-l1-dto"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std", "test-utils", "serde"]
+std = ["subbit-core/std"]
+serde = ["dep:serde", "subbit-core/serde"]
+test-utils = ["dep:proptest", "dep:proptest-derive", "subbit-core/test-utils"]
+
+[dependencies]
+subbit-core.workspace = true
+serde = { workspace = true, optional = true }
+minicbor = { workspace = true, features = ["alloc", "derive"] }
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }

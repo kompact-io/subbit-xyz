@@ -1,5 +1,6 @@
 use minicbor::{Decode, Encode};
-use subbit_core::{Duration, Stage};
+use subbit_core::Duration;
+use subbit_l1_dto::Stage;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

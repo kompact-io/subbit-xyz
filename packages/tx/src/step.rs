@@ -1,5 +1,6 @@
 use minicbor::{Decode, Encode};
-use subbit_core::{Constants, Cont, Duration, Eol, Hash28, Iou, Step};
+use subbit_core::{Duration, Hash28, Iou};
+use subbit_l1_dto::{Constants, Cont, Eol, Step};
 
 use crate::{Bounds, channel::Channel, iou, variables};
 

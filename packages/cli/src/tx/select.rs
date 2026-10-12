@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Result, anyhow};
 use cardano_sdk::Input;
 use inquire::Select;
-use subbit_core::Stage;
+use subbit_l1_dto::Stage;
 use subbit_tx::{Channel, tx::Tx};
 
 use crate::{now, ui::prompt::label_or_hex};

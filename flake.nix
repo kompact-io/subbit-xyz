@@ -79,7 +79,18 @@
 
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
+        aikenNix = import ./nix/aiken.nix {
+          inherit lib pkgs;
+          aikenBin = inputs'.aiken.packages.aiken;
+          projectDir = ./aiken;
+          lockFile = ./aiken/aiken.lock;
+        };
       in {
+        checks = {
+          aiken-lock-is-nix-compatible = aikenNix.lockIsNixCompatible;
+          aiken-check = aikenNix.check;
+          aiken-plutus-json-is-up-to-date = aikenNix.plutusJsonIsUpToDate;
+        };
         rust-project = {
           src = lib.fileset.toSource {
             root = ./.;

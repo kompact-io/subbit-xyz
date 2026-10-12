@@ -103,6 +103,8 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: build workspace docs
         run: nix develop --command cargo doc --workspace --no-deps --locked
+      - name: build docs landing page
+        run: .github/scripts/build-docs-index.sh target/doc
       - uses: actions/upload-pages-artifact@v3
         with:
           path: target/doc

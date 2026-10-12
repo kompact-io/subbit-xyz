@@ -19,18 +19,6 @@ pub enum Error {
     Unspendable,
 }
 
-impl From<Error> for subbit_core::envelope::Error {
-    fn from(value: Error) -> Self {
-        match value {
-            Error::Other => Self::Other,
-            Error::Inactive => Self::Inactive,
-            Error::OldIou => Self::OldIou,
-            Error::InvalidIou => Self::InvalidIou,
-            Error::Unspendable => Self::Unspendable,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode, PartialEq)]
 pub struct Backing {
     #[n(0)]
@@ -49,11 +37,11 @@ impl Backing {
     }
 }
 
-/// The mutable state of a channel — everything except its identity.
+/// The mutable state of a channel, everything except its identity.
 ///
 /// A channel is identified externally by a `Keytag` (`VerifyingKey` + `Tag`),
 /// which is *not* stored here: it's the db key this value lives under.
-/// Nothing on `Channel` needs it — signature verification (`verify_iou`) is
+/// Nothing on `Channel` needs it, signature verification (`verify_iou`) is
 /// the caller's job, done before `apply_iou` is called.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct Channel {
@@ -158,7 +146,7 @@ impl Channel {
     }
 
     /// Apply an already-verified `Iou`, replacing the current one if it's
-    /// newer. Callers must have called `verify_iou` first — this doesn't
+    /// newer. Callers must have called `verify_iou` first, this doesn't
     /// check the signature itself.
     pub fn apply_iou(&mut self, iou: Iou) -> Result<u64, Error> {
         self.try_active()?;

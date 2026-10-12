@@ -1,0 +1,32 @@
+[package]
+name = "subbit-l2-dto"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["vanilla", "x402"]
+# Native: CBOR, no scheme/network/asset vocabulary, no challenge step.
+vanilla = []
+# x402: JSON, the `batch-settlement` scheme on Cardano. Always needs
+# `serde`, unconditionally, for its own types (not merely optional the
+# way vanilla's types can take-or-leave serde).
+x402 = ["serde", "dep:serde_json"]
+# Optional serde support for vanilla's/the shared types, independent of
+# x402 (e.g. a consumer that wants vanilla's wire types JSON-loggable
+# without pulling in the whole x402 scheme).
+serde = ["dep:serde", "subbit-core/serde"]
+
+[dependencies]
+subbit-core = { workspace = true }
+minicbor = { workspace = true, features = ["alloc", "derive"] }
+thiserror = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+hex = { workspace = true }

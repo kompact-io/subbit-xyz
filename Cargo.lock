@@ -4658,6 +4658,7 @@ dependencies = [
  "serde_json",
  "subbit-build-info",
  "subbit-core",
+ "subbit-l1-dto",
  "subbit-session",
  "subbit-tx",
  "tokio",
@@ -4670,6 +4671,7 @@ name = "subbit-client"
 version = "0.0.0"
 dependencies = [
  "reqwest",
+ "subbit-l2-dto",
 ]
 
 [[package]]
@@ -4694,6 +4696,7 @@ dependencies = [
  "serde",
  "serde_json",
  "subbit-core",
+ "subbit-l1-dto",
 ]
 
 [[package]]
@@ -4701,13 +4704,35 @@ name = "subbit-core"
 version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
+ "cryptoxide 0.5.3",
  "hex",
- "http",
  "minicbor 2.3.0",
  "proptest",
  "proptest-derive",
  "serde",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "subbit-e2e"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "cryptoxide 0.5.3",
+ "minicbor 2.3.0",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "subbit-client",
+ "subbit-core",
+ "subbit-index",
+ "subbit-l2-dto",
+ "subbit-server",
+ "tempfile",
+ "tokio",
+ "toml 1.1.5+spec-1.1.0",
+ "url",
 ]
 
 [[package]]
@@ -4735,6 +4760,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bytes",
  "clap",
  "pingora",
  "serde",
@@ -4775,6 +4801,7 @@ dependencies = [
  "subbit-build-info",
  "subbit-config",
  "subbit-core",
+ "subbit-l1-dto",
  "subbit-tx",
  "thiserror 2.0.20",
  "tokio",
@@ -4790,6 +4817,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "clap",
  "ed25519-dalek",
  "hex",
@@ -4803,9 +4831,33 @@ dependencies = [
  "subbit-build-info",
  "subbit-config",
  "subbit-core",
+ "subbit-l2-dto",
  "thiserror 2.0.20",
  "toml 1.1.5+spec-1.1.0",
  "web-time",
+]
+
+[[package]]
+name = "subbit-l1-dto"
+version = "0.0.0"
+dependencies = [
+ "minicbor 2.3.0",
+ "proptest",
+ "proptest-derive",
+ "serde",
+ "subbit-core",
+]
+
+[[package]]
+name = "subbit-l2-dto"
+version = "0.0.0"
+dependencies = [
+ "hex",
+ "minicbor 2.3.0",
+ "serde",
+ "serde_json",
+ "subbit-core",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -4814,19 +4866,23 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "blake3",
  "clap",
  "criterion",
  "cryptoxide 0.5.3",
  "hex",
+ "http",
  "matchit 0.9.2",
  "minicbor 2.3.0",
  "postcard",
  "redb",
  "serde",
+ "serde_json",
  "subbit-build-info",
  "subbit-config",
  "subbit-core",
+ "subbit-l2-dto",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -4862,6 +4918,7 @@ dependencies = [
  "serde",
  "serde_json",
  "subbit-core",
+ "subbit-l1-dto",
  "thiserror 2.0.20",
  "web-time",
 ]

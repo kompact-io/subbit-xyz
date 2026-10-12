@@ -10,7 +10,7 @@ mod bucket;
 pub use bucket::Bucket;
 
 /// Ties a Config and a clock function together to gate actions against a
-/// Bucket. Doesn't own bucket state — callers own the Bucket (e.g. loaded
+/// Bucket. Doesn't own bucket state, callers own the Bucket (e.g. loaded
 /// from redb inside a write txn) and pass it in per call.
 pub struct Limiter {
     capacity: u64,
@@ -40,13 +40,13 @@ impl Limiter {
         self.actions.cost(action)
     }
 
-    /// Mirrors Bucket::add — attempt `action` against `bucket` at the
+    /// Mirrors Bucket::add, attempt `action` against `bucket` at the
     /// current time. Returns true if admitted.
     pub fn add(&self, bucket: &mut Bucket, action: Action) -> bool {
         bucket.add(self.cost(action), self.now())
     }
 
-    /// Mirrors Bucket::sub — credit back `action`'s cost (e.g. on a
+    /// Mirrors Bucket::sub, credit back `action`'s cost (e.g. on a
     /// successful, revenue-generating verification).
     pub fn sub(&self, bucket: &mut Bucket, action: Action) {
         bucket.sub(self.cost(action), self.now())

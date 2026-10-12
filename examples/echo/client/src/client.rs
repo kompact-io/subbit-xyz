@@ -13,7 +13,7 @@ use reqwest_middleware::{
 };
 use subbit_issuer::cost::url_lookup::UrlLookup;
 use subbit_issuer::native_url_lookup;
-use subbit_issuer::reqwest::issuer::Issuer as IssuerMiddleware;
+use subbit_issuer::reqwest::vanilla::Issuer as IssuerMiddleware;
 
 use crate::config::Config;
 

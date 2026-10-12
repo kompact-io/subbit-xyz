@@ -6,7 +6,13 @@ pub static HEADER: &str = "subbit";
 
 pub enum Outcome {
     Ok(Option<String>),
-    Ko { status: u16, header: Option<String> },
+    /// `body` is the response's raw bytes: on failure the server puts the
+    /// envelope there, not in the `subbit` header (see `subbit-server`'s
+    /// `respond`).
+    Ko {
+        status: u16,
+        body: Option<Vec<u8>>,
+    },
 }
 
 #[derive(Clone)]
@@ -33,7 +39,7 @@ impl Client {
 
     async fn call(&self, action: &str, path: &str, subbit_header: &str) -> Outcome {
         let path = path.strip_prefix('/').unwrap_or(path);
-        let url = format!("http://{}/v1/x/{action}/{path}", self.addr);
+        let url = format!("http://{}/v1/{action}/{path}", self.addr);
         match self
             .http
             .get(&url)
@@ -41,21 +47,28 @@ impl Client {
             .send()
             .await
         {
-            Ok(resp) => Self::interpret(resp),
+            Ok(resp) => Self::interpret(resp).await,
             Err(_err) => Outcome::Ko {
                 status: 502,
-                header: None,
+                body: None,
             },
         }
     }
 
-    // 2xx -> Ok(header); 4xx -> Ko with that status + header; anything else -> Ko 502, header dropped (out-of-spec response isn't trusted).
-    fn interpret(resp: reqwest::Response) -> Outcome {
+    // 2xx -> Ok(header); 4xx -> Ko with that status + body; anything else -> Ko 502, body dropped (out-of-spec response isn't trusted).
+    async fn interpret(resp: reqwest::Response) -> Outcome {
         let status = resp.status();
         if !status.is_success() && !status.is_client_error() {
             return Outcome::Ko {
                 status: 502,
-                header: None,
+                body: None,
+            };
+        }
+        if status.is_client_error() {
+            let body = resp.bytes().await.ok().map(|b| b.to_vec());
+            return Outcome::Ko {
+                status: status.as_u16(),
+                body,
             };
         }
         let header = resp
@@ -63,12 +76,6 @@ impl Client {
             .get(HEADER)
             .and_then(|v| v.to_str().ok())
             .map(str::to_string);
-        if status.is_client_error() {
-            return Outcome::Ko {
-                status: status.as_u16(),
-                header,
-            };
-        }
         Outcome::Ok(header)
     }
 }

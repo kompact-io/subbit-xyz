@@ -84,13 +84,16 @@ mod with_subbit {
                     ctx.subbit_header = header;
                     Ok(false)
                 }
-                subbit::Outcome::Ko { status, header } => {
-                    let mut resp = ResponseHeader::build(status, None)?;
-                    if let Some(v) = header {
-                        resp.insert_header(subbit::HEADER, v)?;
-                    }
+                subbit::Outcome::Ko { status, body } => {
+                    let resp = ResponseHeader::build(status, None)?;
                     session.set_keepalive(None);
-                    session.write_response_header(Box::new(resp), true).await?;
+                    let send_body = body.map(bytes::Bytes::from);
+                    session
+                        .write_response_header(Box::new(resp), send_body.is_none())
+                        .await?;
+                    if let Some(body) = send_body {
+                        session.write_response_body(Some(body), true).await?;
+                    }
                     Ok(true)
                 }
             }

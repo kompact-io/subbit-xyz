@@ -2,7 +2,7 @@ use anyhow::Context;
 use inquire::{Confirm, CustomType};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use subbit_core::Stage;
+use subbit_l1_dto::Stage;
 use subbit_tx::Channel;
 
 use crate::{
@@ -85,7 +85,7 @@ fn channel(ctx: &Ctx) -> anyhow::Result<Value> {
 fn constants(ctx: &Ctx) -> anyhow::Result<Value> {
     Ok(json!({
         "tag": prompt_hex_field("tag")?,
-        "currency": currency()?,
+        "asset": asset()?,
         "iou_key": prompt_key_field(ctx, "iou_key", false)?,
         "consumer": prompt_key_field(ctx, "consumer", true)?,
         "provider": prompt_key_field(ctx, "provider", true)?,
@@ -100,12 +100,12 @@ fn variables() -> anyhow::Result<Value> {
     }))
 }
 
-fn currency() -> anyhow::Result<Value> {
+fn asset() -> anyhow::Result<Value> {
     variant_prompt(
-        "Currency:",
+        "Asset:",
         &[
-            ("Ada", || Ok(None)),
-            ("Asset", || {
+            ("Lovelace", || Ok(None)),
+            ("Native", || {
                 Ok(Some(
                     json!({"hash": prompt_hex_field("hash")?, "name": prompt_hex_field("name")?}),
                 ))

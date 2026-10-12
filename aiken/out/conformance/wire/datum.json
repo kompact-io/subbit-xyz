@@ -60,41 +60,17 @@
       "title": "Timestamp",
       "dataType": "integer"
     },
-    "subbit/types/Constants": {
-      "title": "Constants",
-      "dataType": "list",
-      "items": [
-        {
-          "$ref": "#/definitions/subbit~1types~1Tag"
-        },
-        {
-          "$ref": "#/definitions/subbit~1types~1Currency"
-        },
-        {
-          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
-        },
-        {
-          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
-        },
-        {
-          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
-        },
-        {
-          "$ref": "#/definitions/Int"
-        }
-      ]
-    },
-    "subbit/types/Currency": {
-      "title": "Currency",
+    "subbit/types/Asset": {
+      "title": "Asset",
       "anyOf": [
         {
-          "title": "Ada",
+          "title": "Lovelace",
           "dataType": "constructor",
           "index": 0,
           "fields": []
         },
         {
-          "title": "Asset",
+          "title": "Native",
           "dataType": "constructor",
           "index": 1,
           "fields": [
@@ -107,6 +83,30 @@
               "$ref": "#/definitions/ByteArray"
             }
           ]
+        }
+      ]
+    },
+    "subbit/types/Constants": {
+      "title": "Constants",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/subbit~1types~1Tag"
+        },
+        {
+          "$ref": "#/definitions/subbit~1types~1Asset"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+        },
+        {
+          "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+        },
+        {
+          "$ref": "#/definitions/Int"
         }
       ]
     },

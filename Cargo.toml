@@ -3,6 +3,8 @@ members = [
   "packages/build-info",
   "packages/config",
   "packages/core",
+  "packages/l1-dto",
+  "packages/l2-dto",
   "packages/conformance",
   "packages/tx",
   "packages/server",
@@ -11,6 +13,7 @@ members = [
   "packages/session",
   "packages/cli",
   "packages/index",
+  "packages/e2e",
   ######### CARDANO ############
   # "packages/cardano-session",
   ######### EXAMPLE ############
@@ -42,6 +45,7 @@ url = { version = "2.5.8", features = ["serde"] }
 amaru-uplc = "0.3.0"
 anyhow = "1.0.102"
 async-trait = "0.1.92"
+bytes = "1"
 axum = { version = "0.8.9" }
 base64 = "0.22.1"
 blake3 = "1.8.6"
@@ -85,6 +89,9 @@ subbit-cli = { path = "packages/cli", default-features = false }
 subbit-client = { path = "packages/client", default-features = false }
 subbit-config = { path = "packages/config", default-features = false }
 subbit-core = { path = "packages/core", default-features = false }
+subbit-e2e = { path = "packages/e2e", default-features = false }
+subbit-l1-dto = { path = "packages/l1-dto", default-features = false }
+subbit-l2-dto = { path = "packages/l2-dto", default-features = false }
 subbit-index = { path = "packages/index", default-features = false }
 subbit-issuer = { path = "packages/issuer", default-features = false }
 subbit-server = { path = "packages/server", default-features = false }

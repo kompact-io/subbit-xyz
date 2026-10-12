@@ -17,9 +17,9 @@ std = []
 serde = ["dep:serde"]
 test-utils = ["dep:proptest", "dep:proptest-derive", "hex/alloc"]
 conformance = ["test-utils"]
-# crypto     = ["dep:ed25519-dalek"]
 
 [dependencies]
+cryptoxide.workspace = true
 hex = { workspace = true, features = ["alloc"] }
 serde = { workspace = true, optional = true }
 minicbor = { workspace = true, features = ["alloc", "derive"] }
@@ -27,4 +27,3 @@ proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 base64.workspace = true
 thiserror.workspace = true
-http = "1.5.0"

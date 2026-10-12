@@ -10,5 +10,13 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["vanilla", "x402"]
+# Inherit dialect support straight from `subbit-l2-dto`: the features
+# have the same names and the same meaning here as there, on purpose.
+vanilla = ["subbit-l2-dto/vanilla", "subbit-l2-dto/serde"]
+x402 = ["subbit-l2-dto/x402"]
+
 [dependencies]
 reqwest.workspace = true
+subbit-l2-dto = { workspace = true, default-features = false }

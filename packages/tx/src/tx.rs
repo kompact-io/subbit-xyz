@@ -6,7 +6,8 @@ use cardano_sdk::{
 };
 
 use subbit_core::Duration;
-use subbit_core::{Hash28, Redeemer, Step};
+use subbit_core::Hash28;
+use subbit_l1_dto::{Redeemer, Step};
 
 use crate::{Bounds, Open, validator};
 use crate::{

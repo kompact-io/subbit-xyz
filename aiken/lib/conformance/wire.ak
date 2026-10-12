@@ -7,10 +7,10 @@ fn x(y: ByteArray) {
 }
 
 pub fn constants(constants: t.Constants) -> Bool {
-  let (tag, currency_, iou_key, consumer, provider, close_period) = constants
+  let (tag, asset_, iou_key, consumer, provider, close_period) = constants
   trace @"constants:tag": tag
   x(tag)
-  expect currency(currency_)
+  expect asset(asset_)
   trace @"constants:iou_key": iou_key
   x(iou_key)
   trace @"constants:consumer": consumer
@@ -21,16 +21,16 @@ pub fn constants(constants: t.Constants) -> Bool {
   close_period >= 0
 }
 
-pub fn currency(currency: t.Currency) -> Bool {
-  when currency is {
-    t.Ada -> {
-      trace @"currency:Ada"
+pub fn asset(asset: t.Asset) -> Bool {
+  when asset is {
+    t.Lovelace -> {
+      trace @"asset:Lovelace"
       True
     }
-    t.Asset { hash, name } -> {
-      trace @"currency:Asset:hash": hash
+    t.Native { hash, name } -> {
+      trace @"asset:Native:hash": hash
       x(hash)
-      trace @"currency:Asset:name": name
+      trace @"asset:Native:name": name
       x(name)
       True
     }

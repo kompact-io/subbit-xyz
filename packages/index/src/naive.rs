@@ -3,7 +3,8 @@ use std::path::Path;
 
 use cardano_sdk::{Credential, Input, Output};
 use serde::{Deserialize, Serialize};
-use subbit_core::{Constants, Currency, Duration, Hash28, Stage};
+use subbit_core::{Duration, Hash28};
+use subbit_l1_dto::{Asset, Constants, Stage};
 use subbit_tx::{Channel, Variables};
 use tracing::warn;
 use url::Url;
@@ -14,7 +15,7 @@ use crate::{
 };
 
 /// Config for `naive` mode: poll on an interval, and
-/// report every channel matching (provider, currency), with a close_period
+/// report every channel matching (provider, asset), with a close_period
 /// at least `close_period` and a tag no longer than `max_tag_len`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -23,7 +24,7 @@ pub struct Config {
     pub delegations: Vec<Credential>,
     pub endpoint: Url,
     pub provider: Hash28,
-    pub currency: Currency,
+    pub asset: Asset,
     /// Minimum close_period a channel must have to match.
     pub close_period: Duration,
     /// Maximum tag length (bytes) a channel's tag may have to match.
@@ -50,7 +51,7 @@ impl Default for Config {
                 .expect("valid url"),
             delegations: Default::default(),
             provider: Hash28::from([0; 28]),
-            currency: Currency::Ada,
+            asset: Asset::Lovelace,
             close_period: Duration::from_millis(3_600_000),
             max_tag_len: 32,
             poll_interval_secs: 30,
@@ -77,7 +78,7 @@ fn keytag_of(constants: &Constants) -> Keytag {
 
 fn is_backing(their: &Constants, my: &Config) -> bool {
     their.provider() == &my.provider
-        && their.currency() == &my.currency
+        && their.asset() == &my.asset
         && their.tag().len() <= my.max_tag_len
         && their.close_period().as_millis() >= my.close_period.as_millis()
 }

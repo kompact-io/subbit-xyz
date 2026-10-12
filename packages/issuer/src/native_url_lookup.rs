@@ -1,4 +1,4 @@
-//! `Config::build` resolves config into a live `Issuer`/cost pair — shared
+//! `Config::build` resolves config into a live `Issuer`/cost pair, shared
 //! by `NativeUrlLookup` below and by other consumers (e.g. the reqwest
 //! middleware) that wire the pieces up differently.
 //!
@@ -7,11 +7,10 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use subbit_core::Auth;
-use subbit_core::envelope::Body;
 
 use crate::cost::url_lookup::{self, UrlLookup};
-use crate::{Cache, Issuer};
+use crate::dialect::vanilla;
+use crate::{Auth, Cache, Issuer};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -22,7 +21,7 @@ pub enum Error {
     #[error("bad cost table")]
     Cost(#[from] url_lookup::Error),
     #[error(transparent)]
-    Response(#[from] crate::issuer::ResponseError),
+    Response(#[from] vanilla::Error),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +33,7 @@ pub struct Config {
 }
 
 impl Default for Config {
-    /// Placeholder identity — edit before real use.
+    /// Placeholder identity, edit before real use.
     fn default() -> Self {
         let account = crate::account::Config {
             signing_key: [0; 32],
@@ -74,11 +73,11 @@ pub fn write_cache(path: &Path, cache: &Cache) -> Result<(), Error> {
 pub struct Status {
     pub spent: u64,
     pub committed: Option<u64>,
-    pub auth: Auth<Body, Body>,
+    pub auth: Auth,
 }
 
 /// No-network driver: builds/applies envelopes directly, auto-persisting
-/// the issuer's cache after each — see `auto_write`.
+/// the issuer's cache after each, see `auto_write`.
 pub struct NativeUrlLookup {
     cache_path: PathBuf,
     issuer: Issuer,
@@ -98,13 +97,19 @@ impl NativeUrlLookup {
     }
 
     pub fn request(&mut self, path: &str) -> Result<String, Error> {
-        let envelope = self.issuer.request(self.cost.lookup(path));
+        let envelope = vanilla::request(&mut self.issuer, self.cost.lookup(path));
         self.maybe_write_cache()?;
         Ok(envelope)
     }
 
     pub fn respond(&mut self, envelope: &str) -> Result<(), Error> {
-        let result = self.issuer.response(envelope);
+        let result = vanilla::response(&mut self.issuer, envelope);
+        self.maybe_write_cache()?;
+        Ok(result?)
+    }
+
+    pub fn respond_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        let result = vanilla::response_bytes(&mut self.issuer, bytes);
         self.maybe_write_cache()?;
         Ok(result?)
     }

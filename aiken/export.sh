@@ -5,7 +5,7 @@ OUTPUT_DIR="${1:-out}"
 
 TARGETS=(
     "conformance/wire::constants"
-    "conformance/wire::currency"
+    "conformance/wire::asset"
     "conformance/wire::datum"
     "conformance/wire::redeemer"
     "conformance/wire::stage"

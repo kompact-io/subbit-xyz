@@ -1,6 +1,7 @@
 use cardano_sdk::{Hash, Output, Value, cbor::ToCbor};
 use minicbor::{Decode, Encode};
-use subbit_core::{Constants, Currency, Datum, Hash28, Iou, Stage};
+use subbit_core::{Hash28, Iou};
+use subbit_l1_dto::{Asset, Constants, Datum, Stage};
 
 use crate::{
     MIN_ADA_BUFFER, VALIDATOR, Variables, iou,
@@ -69,9 +70,9 @@ impl TryFrom<&Output> for Channel {
             return Err(FromOutputError::OwnHash);
         }
         let value = output.value();
-        let amount = match constants.currency() {
-            Currency::Ada => value.lovelace().saturating_sub(MIN_ADA_BUFFER),
-            Currency::Asset { hash, name } => value
+        let amount = match constants.asset() {
+            Asset::Lovelace => value.lovelace().saturating_sub(MIN_ADA_BUFFER),
+            Asset::Native { hash, name } => value
                 .assets()
                 .get(&Hash::<28>::from(*hash))
                 .and_then(|t| t.get(name))
@@ -110,7 +111,7 @@ impl Channel {
     /// `amount` is near `u64::MAX`.
     pub fn buffered_value(&self) -> Value<u64> {
         let amount = self.variables().amount();
-        if let Currency::Asset { hash, name } = self.constants().currency() {
+        if let Asset::Native { hash, name } = self.constants().asset() {
             Value::new(MIN_ADA_BUFFER).with_assets([((*hash).into(), [(name.clone(), amount)])])
         } else {
             Value::new(amount.saturating_add(MIN_ADA_BUFFER))
@@ -163,7 +164,11 @@ impl Channel {
     }
 
     fn try_verify(&self, iou: &Iou) -> Result<(), iou::Error> {
-        iou::verify(self.constants.iou_key(), self.constants.tag(), iou)
+        if subbit_core::crypto::verify_iou(self.constants.iou_key(), self.constants.tag(), iou) {
+            Ok(())
+        } else {
+            Err(iou::Error)
+        }
     }
 
     /// Boxes `self` up with `err`, converting `err` into `step::Error`
