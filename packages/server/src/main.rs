@@ -113,6 +113,7 @@ fn router(state: AppState) -> Router {
     let v1 = Router::<AppState>::new()
         .route("/spend/{*path}", get(handle_spend))
         .route("/refund/{*path}", get(handle_refund))
+        .route("/terms", get(handle_terms))
         .nest(
             "/a",
             Router::<AppState>::new()
@@ -120,7 +121,13 @@ fn router(state: AppState) -> Router {
                 .route("/ious", get(handle_ious)),
         );
 
-    Router::<AppState>::new().nest("/v1", v1).with_state(state)
+    Router::<AppState>::new()
+        .nest("/v1", v1)
+        // Same handler as `/v1/terms`, under the conventional
+        // discovery path too, so a consumer can hit either without
+        // a proxy translating between them.
+        .route("/.well-known/subbit", get(handle_terms))
+        .with_state(state)
 }
 
 /// Both handlers below hand the whole `HeaderMap` to `Ctx` as-is, not
@@ -143,6 +150,12 @@ async fn handle_refund(
     headers: HeaderMap,
 ) -> AxumResponse {
     into_axum_response(state.ctx.handle_refund(&headers, &path))
+}
+
+/// Plain JSON `Terms`, no headers required, no envelope: a consumer
+/// needs this before it can even address a resource.
+async fn handle_terms(State(state): State<AppState>) -> AxumResponse {
+    axum::Json(state.ctx.terms().clone()).into_response()
 }
 
 /// The one place a dialect-agnostic `Wire` becomes a real axum

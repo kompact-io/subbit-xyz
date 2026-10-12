@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use subbit_core::Duration;
-use subbit_l2_dto::{ChannelStatus, Commit, MacTtl, PopMacTtl, Request};
+use subbit_l2_dto::{Catalog, ChannelStatus, Commit, MacTtl, PopMacTtl, Request};
 
 use crate::{Account, Cache, account, now};
 
@@ -95,6 +95,14 @@ impl Issuer {
 
     pub fn set_committed(&mut self, committed: u64) {
         self.cache.set_committed(committed);
+    }
+
+    pub fn catalog(&self) -> Option<&Catalog> {
+        self.cache.catalog()
+    }
+
+    pub fn set_catalog(&mut self, catalog: Catalog) {
+        self.cache.set_catalog(catalog);
     }
 
     fn now(&self) -> Duration {

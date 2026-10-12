@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use clap::{Parser, Subcommand};
-use subbit_issuer::native_url_lookup::{Config, NativeUrlLookup};
+use subbit_issuer::local::{Config, Local};
 
 #[derive(Parser)]
 #[command(
@@ -56,14 +56,14 @@ fn main() {
     match cli.cmd {
         Cmd::Init => unreachable!(),
         Cmd::Status => {
-            let spender = NativeUrlLookup::build(&config).expect("build issuer");
+            let spender = Local::build(&config).expect("build issuer");
             println!(
                 "{}",
                 serde_json::to_string_pretty(&spender.status()).expect("serialize status")
             );
         }
         Cmd::Request { path, json } => {
-            let mut spender = NativeUrlLookup::build(&config).expect("build issuer");
+            let mut spender = Local::build(&config).expect("build issuer");
             let envelope = spender.request(&path).expect("request envelope");
             if json {
                 todo!("Not yet implemented")
@@ -73,7 +73,7 @@ fn main() {
             }
         }
         Cmd::Response { body } => {
-            let mut spender = NativeUrlLookup::build(&config).expect("build issuer");
+            let mut spender = Local::build(&config).expect("build issuer");
             match spender.respond(&body) {
                 Ok(()) => println!("()"),
                 Err(e) => eprintln!("error: {e}"),

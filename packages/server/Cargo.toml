@@ -20,6 +20,7 @@ main = [
   "dep:toml",
   "dep:tracing-subscriber",
   "dep:subbit-config",
+  "subbit-l2-dto/serde",
 ]
 # Inherit dialect support straight from `subbit-l2-dto`: the features
 # have the same names and the same meaning here as there, on purpose.
@@ -37,7 +38,6 @@ blake3.workspace = true
 cryptoxide.workspace = true
 hex.workspace = true
 minicbor.workspace = true
-matchit.workspace = true
 postcard.workspace = true
 redb.workspace = true
 serde.workspace = true

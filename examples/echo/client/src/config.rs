@@ -1,22 +1,34 @@
 //! Config for the echo client.
 use serde::{Deserialize, Serialize};
-use subbit_issuer::native_url_lookup;
+use subbit_issuer::local;
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Dialect {
+    #[default]
+    Vanilla,
+    X402,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub base_url: String,
+    /// Which wire dialect to meter requests under. Only read when
+    /// `subbit` is present.
+    pub dialect: Dialect,
     /// Present => requests are metered through the issuer middleware.
     /// Absent => plain requests.
-    pub subbit: Option<native_url_lookup::Config>,
+    pub subbit: Option<local::Config>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             base_url: "http://127.0.0.1:3246".into(),
+            dialect: Dialect::default(),
             // Included (rather than omitted) so `init` shows the shape of
             // it. Delete the section, or set signing_key/tag, to go plain.
-            subbit: Some(native_url_lookup::Config::default()),
+            subbit: Some(local::Config::default()),
         }
     }
 }

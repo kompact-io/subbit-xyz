@@ -21,6 +21,7 @@
       inputs.rust-overlay.follows = "rust-overlay";
     };
     aiken.url = "github:aiken-lang/aiken";
+    process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
   };
 
   outputs = inputs @ {
@@ -35,6 +36,7 @@
         inputs.treefmt-nix.flakeModule
         inputs.rust-flake.flakeModules.default
         inputs.rust-flake.flakeModules.nixpkgs
+        inputs.process-compose-flake.flakeModule
       ];
       systems = ["x86_64-linux" "aarch64-darwin"];
       perSystem = {
@@ -65,9 +67,11 @@
               config.rust-project.toolchain
               clang-unwrapped
               pkgs.cargo-machete
+              pkgs.wasm-pack
               # PRE-COMMIT
               pkgs.prek
               pkgs.jless
+              pkgs.process-compose
             ]
             ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
 
@@ -91,6 +95,39 @@
           aiken-check = aikenNix.check;
           aiken-plutus-json-is-up-to-date = aikenNix.plutusJsonIsUpToDate;
         };
+        process-compose."echo-stack" = {
+          settings.processes = {
+            # Fresh config each run: `subbit-server`'s and `echo-proxy`'s
+            # own `init` defaults are enough for this demo, no secrets
+            # needed (`subbit-server`'s `Config::default` has no account
+            # key of its own to overlay).
+            setup = {
+              command = ''
+                rm -rf .echo-stack-run && mkdir -p .echo-stack-run
+                ${config.packages.subbit-server}/bin/subbit-server \
+                  --config .echo-stack-run/subbit-server.toml init
+                ${config.packages.subbit-examples-echo-proxy}/bin/echo-proxy \
+                  --config .echo-stack-run/echo-proxy.toml init
+              '';
+            };
+            subbit-server = {
+              command = "${config.packages.subbit-server}/bin/subbit-server --config .echo-stack-run/subbit-server.toml serve --listen 0.0.0.0:7822";
+              depends_on.setup.condition = "process_completed_successfully";
+            };
+            echo-server = {
+              command = "${config.packages.subbit-examples-echo-server}/bin/echo-server --port 3246";
+              depends_on.setup.condition = "process_completed_successfully";
+            };
+            echo-proxy = {
+              command = "${config.packages.subbit-examples-echo-proxy}/bin/echo-proxy --config .echo-stack-run/echo-proxy.toml run";
+              depends_on = {
+                setup.condition = "process_completed_successfully";
+                subbit-server.condition = "process_started";
+                echo-server.condition = "process_started";
+              };
+            };
+          };
+        };
         rust-project = {
           src = lib.fileset.toSource {
             root = ./.;
@@ -98,6 +135,7 @@
               (config.rust-project.crane-lib.fileset.commonCargoSources ./.)
               ./aiken/plutus.json
               ./packages/tx/plutus.json
+              ./examples/echo/www
             ];
           };
           defaults.perCrate.crane.args = {

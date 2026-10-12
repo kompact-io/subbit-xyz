@@ -177,8 +177,26 @@ proptest! {
         alt_tag_bytes: Vec<u8>,
         alt_sig_bytes: [u8; SIGNATURE_LENGTH],
     ) {
-        let corrupted = sign_iou.to_verify()
-            .corrupt_field(field, alt_seed, alt_tag_bytes, alt_sig_bytes);
+        let verify = sign_iou.to_verify();
+        // Each alt value is independently generated, so it can land on
+        // the original by chance (most visibly for `Vec<u8>`/`Tag`,
+        // which both shrink toward empty). Reject those: this test is
+        // about corruption actually changing the field, not about the
+        // odds of a random collision.
+        match field {
+            Field::Key => prop_assume!(
+                subbit_core::VerifyingKey::from(ed25519::keypair(&alt_seed).1) != verify.key
+            ),
+            Field::Tag => prop_assume!(
+                subbit_core::Tag::from(alt_tag_bytes.clone()) != verify.tag
+            ),
+            Field::Signature => prop_assume!(
+                subbit_core::Signature::from(alt_sig_bytes) != verify.signature
+            ),
+            // `wrapping_add(1)` always differs from the original.
+            Field::Amount => {}
+        }
+        let corrupted = verify.corrupt_field(field, alt_seed, alt_tag_bytes, alt_sig_bytes);
         prop_assert!(iou_verify_fn().eval_false(&corrupted));
     }
 }

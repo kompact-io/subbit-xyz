@@ -10,6 +10,7 @@
 
 pub mod harness;
 pub mod indexer;
+pub mod issuer;
 pub mod vanilla;
 pub mod wallet;
 pub mod x402;

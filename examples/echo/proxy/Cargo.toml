@@ -19,6 +19,8 @@ anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 clap.workspace = true
+http = { workspace = true, optional = true }
+include_dir.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 pingora = { version = "0.8", features = ["openssl", "proxy"] }
@@ -26,7 +28,8 @@ serde = { workspace = true }
 toml = { workspace = true }
 subbit-client = { workspace = true, optional = true }
 subbit-config = { workspace = true, features = ["clap"] }
+subbit-l2-dto = { workspace = true, default-features = false, optional = true }
 
 [features]
-default = ["subbit"]           # nothing interesting happens without subbit.
-subbit = ["dep:subbit-client"]
+default = ["subbit"]                                            # nothing interesting happens without subbit.
+subbit = ["dep:subbit-client", "dep:http", "dep:subbit-l2-dto"]

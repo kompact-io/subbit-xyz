@@ -3,6 +3,7 @@ use clap::Parser;
 mod cli;
 mod config;
 mod proxy;
+mod static_assets;
 
 #[cfg(feature = "subbit")]
 mod subbit;

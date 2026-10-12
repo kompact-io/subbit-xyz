@@ -9,11 +9,14 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use http::{HeaderMap, HeaderValue};
 use subbit_client::{Client, Outcome};
 use subbit_core::base64::{from_base64, to_base64};
 use subbit_l2_dto::Request;
 
 pub type Response = subbit_l2_dto::dialect::vanilla::Response;
+
+const HEADER: &str = "subbit";
 
 pub struct VanillaClient {
     client: Client,
@@ -27,26 +30,37 @@ impl VanillaClient {
     }
 
     pub async fn spend(&self, path: &str, payload: &Request) -> anyhow::Result<Response> {
-        let header = to_base64(payload);
-        decode(self.client.spend(path, &header).await)
+        decode(self.client.spend(path, &envelope_header(payload)).await)
     }
 
     pub async fn refund(&self, path: &str, payload: &Request) -> anyhow::Result<Response> {
-        let header = to_base64(payload);
-        decode(self.client.refund(path, &header).await)
+        decode(self.client.refund(path, &envelope_header(payload)).await)
     }
+}
+
+fn envelope_header(payload: &Request) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(HEADER, HeaderValue::from_str(&to_base64(payload)).unwrap());
+    headers
 }
 
 fn decode(outcome: Outcome) -> anyhow::Result<Response> {
     match outcome {
-        Outcome::Ok(Some(raw)) => from_base64::<Response>(&raw)
-            .map_err(|e| anyhow::anyhow!("decoding subbit header: {e}")),
-        Outcome::Ok(None) => anyhow::bail!("2xx response carried no subbit header"),
+        Outcome::Ok(headers) => {
+            let raw = headers
+                .get(HEADER)
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| anyhow::anyhow!("2xx response carried no subbit header"))?;
+            from_base64::<Response>(raw).map_err(|e| anyhow::anyhow!("decoding subbit header: {e}"))
+        }
         Outcome::Ko {
             status,
             body: Some(bytes),
+            ..
         } => minicbor::decode::<Response>(&bytes)
             .map_err(|e| anyhow::anyhow!("decoding error body (status {status}): {e}")),
-        Outcome::Ko { status, body: None } => anyhow::bail!("status {status} with no body"),
+        Outcome::Ko {
+            status, body: None, ..
+        } => anyhow::bail!("status {status} with no body"),
     }
 }

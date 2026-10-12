@@ -23,11 +23,15 @@
 //!   `Terms.reference_script`, respectively.
 //! - `Catalog`/`ResourceInfo`/`ResourceInfoOverride`: `Terms.catalog`,
 //!   what a provider charges and presents, resolved per path.
+//!   `CatalogIndex` compiles a `Catalog` into a router for repeated
+//!   lookups, shared by provider and consumer alike.
 //! - `dialect::vanilla`, `dialect::x402`: each dialect's own wire
 //!   shapes, see their own module doc comments.
 
 mod catalog;
-pub use catalog::{Catalog, ResourceInfo, ResourceInfoOverride};
+pub use catalog::{
+    Catalog, CatalogError, CatalogIndex, ResourceInfo, ResourceInfoOverride, normalize,
+};
 
 mod channel_id;
 pub use channel_id::ChannelId;

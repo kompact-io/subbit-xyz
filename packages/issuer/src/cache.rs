@@ -1,5 +1,5 @@
 use minicbor::{Decode, Encode};
-use subbit_l2_dto::MacTtl as Mac;
+use subbit_l2_dto::{Catalog, MacTtl as Mac};
 
 /// Server-observed state, everything a caller needs to persist/restore to
 /// resume a session across a restart (e.g. the CLI, where `spend` and
@@ -12,6 +12,8 @@ pub struct Cache {
     committed: Option<u64>,
     #[n(2)]
     mac: Option<Mac>,
+    #[n(3)]
+    catalog: Option<Catalog>,
 }
 
 impl Cache {
@@ -29,6 +31,10 @@ impl Cache {
 
     pub fn mac(&self) -> Option<&Mac> {
         self.mac.as_ref()
+    }
+
+    pub fn catalog(&self) -> Option<&Catalog> {
+        self.catalog.as_ref()
     }
 
     pub fn set_spent(&mut self, spent: u64) {
@@ -51,6 +57,10 @@ impl Cache {
 
     pub fn clear_mac(&mut self) {
         self.mac = None;
+    }
+
+    pub fn set_catalog(&mut self, catalog: Catalog) {
+        self.catalog = Some(catalog);
     }
 }
 
@@ -110,5 +120,28 @@ mod tests {
         assert!(cache.mac().is_some());
         cache.clear_mac();
         assert!(cache.mac().is_none());
+    }
+
+    fn catalog() -> Catalog {
+        Catalog {
+            default: subbit_l2_dto::ResourceInfo {
+                cost: subbit_l2_dto::Cost::ByRequest(10),
+                description: "Access to a metered resource".to_string(),
+                mime_type: "application/octet-stream".to_string(),
+                max_timeout_seconds: 60,
+                service_name: None,
+                tags: None,
+                icon_url: None,
+            },
+            resources: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn set_catalog_caches_it() {
+        let mut cache = Cache::new();
+        assert!(cache.catalog().is_none());
+        cache.set_catalog(catalog());
+        assert!(cache.catalog().is_some());
     }
 }

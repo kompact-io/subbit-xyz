@@ -37,6 +37,26 @@ pub struct CostByEgress {
     pub max_bytes: u64,
 }
 
+impl CostByEgress {
+    /// The charge for `bytes` of content, clamped to `max_bytes`
+    /// before applying `base`/`per_kib`.
+    pub fn cost(&self, bytes: u64) -> u64 {
+        self.base + self.per_kib * bytes.min(self.max_bytes).div_ceil(1024)
+    }
+}
+
+impl Cost {
+    /// The most a request under this cost could ever be charged,
+    /// billed in full upfront.
+    pub fn quote(&self) -> u64 {
+        match self {
+            Cost::ByRequest(amount) => *amount,
+            Cost::ByEgress(rule) => rule.cost(rule.max_bytes),
+            Cost::ByClaim(amount) => *amount,
+        }
+    }
+}
+
 /// `ByClaim`'s own header names, application to proxy to
 /// `subbit-server` and back, unchanged at every hop: fixed, not
 /// provider-configurable, so every hop agrees on them without being
@@ -74,5 +94,25 @@ mod tests {
     fn by_claim_roundtrips() {
         let cost = Cost::ByClaim(1_000);
         assert_eq!(cost, roundtrip(&cost));
+    }
+
+    #[test]
+    fn by_request_quote_is_the_flat_amount() {
+        assert_eq!(Cost::ByRequest(10).quote(), 10);
+    }
+
+    #[test]
+    fn by_egress_quote_is_the_formula_at_max_bytes() {
+        let cost = Cost::ByEgress(CostByEgress {
+            base: 5,
+            per_kib: 2,
+            max_bytes: 10_240,
+        });
+        assert_eq!(cost.quote(), 25);
+    }
+
+    #[test]
+    fn by_claim_quote_is_the_cap() {
+        assert_eq!(Cost::ByClaim(42).quote(), 42);
     }
 }

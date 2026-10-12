@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Echo demo (subbit, browser)</title>
+    <style>
+      body {
+        font-family: monospace;
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      section {
+        border: 1px solid #888;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.5rem;
+      }
+      input,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      pre {
+        background: #eee;
+        padding: 0.5rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      button {
+        margin-top: 0.5rem;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      #log div {
+        border-bottom: 1px solid #ccc;
+        padding: 0.25rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Echo demo (subbit, browser)</h1>
+    <p>
+      A browser client for the <code>examples/echo</code> demo. No wallet/chain
+      connection: the signing key below is typed in directly.
+    </p>
+
+    <section>
+      <h2>1. Provider</h2>
+      <label
+        >Base URL
+        <input id="base-url" value="http://127.0.0.1:3246" />
+      </label>
+      <label
+        >Terms route
+        <select id="terms-path">
+          <option value="/.well-known/subbit">/.well-known/subbit</option>
+          <option value="/v1/terms">/v1/terms</option>
+        </select>
+      </label>
+      <button id="fetch-terms">Fetch terms</button>
+      <pre id="terms-out">(not fetched)</pre>
+    </section>
+
+    <section>
+      <h2>2. Identity (manual, no chain)</h2>
+      <label
+        >Signing key (32 bytes, hex)
+        <input
+          id="signing-key"
+          value="0000000000000000000000000000000000000000000000000000000000000000"
+        />
+      </label>
+      <label
+        >Tag (hex)
+        <input id="tag" value="74" />
+      </label>
+      <label
+        >Pop TTL (seconds)
+        <input id="ttl" value="3600" />
+      </label>
+      <button id="create-issuer">Create issuer</button>
+      <pre id="issuer-out">(no issuer yet)</pre>
+    </section>
+
+    <section>
+      <h2>3. Catalog</h2>
+      <button id="show-catalog">Show cached catalog</button>
+      <pre id="catalog-out">(none cached)</pre>
+    </section>
+
+    <section>
+      <h2>4. Request</h2>
+      <label
+        >Path
+        <select id="path">
+          <option value="/echo">/echo (ByRequest)</option>
+          <option value="/echo/egress">/echo/egress (ByEgress)</option>
+          <option value="/echo/claim">/echo/claim (ByClaim)</option>
+        </select>
+      </label>
+      <label
+        >Cost (u64, overrides the catalog quote when set)
+        <input
+          id="cost"
+          value=""
+          placeholder="leave blank to quote from the catalog"
+        />
+      </label>
+      <button id="send-request" disabled>Send request</button>
+      <pre id="request-out">(nothing sent yet)</pre>
+    </section>
+
+    <section>
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+
+    <script type="module">
+      import init, { JsIssuer } from "./pkg/subbit_issuer.js";
+
+      await init();
+
+      let issuer = null;
+      let cachedCatalog = null;
+
+      const STORAGE_KEYS = ["base-url", "signing-key", "tag"];
+      for (const id of STORAGE_KEYS) {
+        const saved = localStorage.getItem(`echo-demo.${id}`);
+        if (saved !== null) document.getElementById(id).value = saved;
+      }
+
+      function log(msg) {
+        const div = document.createElement("div");
+        div.textContent = `[${new Date().toISOString()}] ${msg}`;
+        document.getElementById("log").prepend(div);
+      }
+
+      function hexToBytes(hex) {
+        hex = hex.trim();
+        if (hex.length % 2 !== 0)
+          throw new Error("hex string must have an even length");
+        const bytes = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < bytes.length; i++) {
+          bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+        }
+        return bytes;
+      }
+
+      /// The quote for `path` under `catalog`: its own override's cost if
+      /// one is set, else the catalog default's, matching
+      /// `CatalogIndex::cost` (exact-match only here, no `matchit` router).
+      function quoteCost(catalog, path) {
+        const override = (catalog.resources ?? []).find(
+          ([pattern]) => pattern === path,
+        );
+        const cost = override?.[1]?.cost ?? catalog.default.cost;
+        if (cost.ByRequest !== undefined) return BigInt(cost.ByRequest);
+        if (cost.ByClaim !== undefined) return BigInt(cost.ByClaim);
+        if (cost.ByEgress !== undefined) {
+          const { base, per_kib, max_bytes } = cost.ByEgress;
+          const kibs = BigInt(Math.ceil(max_bytes / 1024));
+          return BigInt(base) + BigInt(per_kib) * kibs;
+        }
+        throw new Error(`unrecognized cost shape: ${JSON.stringify(cost)}`);
+      }
+
+      document
+        .getElementById("fetch-terms")
+        .addEventListener("click", async () => {
+          const base = document
+            .getElementById("base-url")
+            .value.replace(/\/$/, "");
+          try {
+            const termsPath = document.getElementById("terms-path").value;
+            const resp = await fetch(`${base}${termsPath}`);
+            const text = await resp.text();
+            document.getElementById("terms-out").textContent = text;
+            if (!resp.ok) {
+              log(`fetch terms: server returned ${resp.status}`);
+              return;
+            }
+            const terms = JSON.parse(text);
+            cachedCatalog = terms.catalog;
+            if (issuer) {
+              issuer.setCatalog(JSON.stringify(cachedCatalog));
+              log("fetch terms: ok, catalog cached into issuer");
+            } else {
+              log("fetch terms: ok, catalog held pending issuer creation");
+            }
+          } catch (e) {
+            log(`fetch terms failed: ${e}`);
+          }
+        });
+
+      document.getElementById("create-issuer").addEventListener("click", () => {
+        try {
+          const signingKeyHex = document.getElementById("signing-key").value;
+          const tagHex = document.getElementById("tag").value;
+          const baseUrl = document.getElementById("base-url").value;
+          const signingKey = hexToBytes(signingKeyHex);
+          const tag = hexToBytes(tagHex);
+          const ttl = BigInt(document.getElementById("ttl").value);
+          issuer = new JsIssuer(signingKey, tag, ttl);
+          if (cachedCatalog) {
+            issuer.setCatalog(JSON.stringify(cachedCatalog));
+          }
+          localStorage.setItem("echo-demo.base-url", baseUrl);
+          localStorage.setItem("echo-demo.signing-key", signingKeyHex);
+          localStorage.setItem("echo-demo.tag", tagHex);
+          document.getElementById("issuer-out").textContent =
+            `created, balance = ${issuer.balance()}`;
+          document.getElementById("send-request").disabled = false;
+          log("issuer created");
+        } catch (e) {
+          log(`create issuer failed: ${e}`);
+        }
+      });
+
+      document.getElementById("show-catalog").addEventListener("click", () => {
+        if (!issuer) {
+          log("show catalog: no issuer yet");
+          return;
+        }
+        const catalog = issuer.catalog();
+        document.getElementById("catalog-out").textContent =
+          catalog ?? "(none cached)";
+      });
+
+      document
+        .getElementById("send-request")
+        .addEventListener("click", async () => {
+          if (!issuer) {
+            log("send request: no issuer yet");
+            return;
+          }
+          const base = document
+            .getElementById("base-url")
+            .value.replace(/\/$/, "");
+          const path = document.getElementById("path").value;
+          const costInput = document.getElementById("cost").value.trim();
+          try {
+            let cost;
+            if (costInput !== "") {
+              cost = BigInt(costInput);
+            } else {
+              const catalogJson = issuer.catalog();
+              if (!catalogJson)
+                throw new Error(
+                  "no cost given and no catalog cached to quote from",
+                );
+              cost = quoteCost(JSON.parse(catalogJson), path);
+            }
+            const envelope = issuer.spend(cost);
+            const resp = await fetch(`${base}${path}`, {
+              headers: { subbit: envelope },
+            });
+            const bodyText = await resp.text();
+            const replyEnvelope = resp.headers.get("subbit");
+            document.getElementById("request-out").textContent =
+              `status: ${resp.status}\nsubbit header: ${replyEnvelope ?? "(none)"}\nbody: ${bodyText}`;
+            if (replyEnvelope) {
+              issuer.response(replyEnvelope);
+              log(`send request: ok, balance now ${issuer.balance()}`);
+            } else {
+              log(
+                `send request: status ${resp.status}, no subbit header to apply`,
+              );
+            }
+          } catch (e) {
+            log(`send request failed: ${e}`);
+          }
+        });
+
+      log("ready");
+    </script>
+  </body>
+</html>

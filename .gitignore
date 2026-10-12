@@ -16,6 +16,9 @@ result
 debug/
 target/
 
+# wasm-pack output
+examples/echo/www/pkg/
+
 # Envs
 .env
 .env.*

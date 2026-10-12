@@ -124,6 +124,10 @@ impl Ctx {
         out
     }
 
+    pub fn terms(&self) -> &Terms {
+        &self.terms
+    }
+
     pub fn new(
         db: Arc<Db>,
         mac: Arc<mac::Mac>,
@@ -274,7 +278,7 @@ impl Ctx {
     /// The per-resource info a dialect needs beyond cost itself
     /// (x402's `description`/`mimeType`/`maxTimeoutSeconds`).
     pub(crate) fn resource_info(&self, url: &str) -> ResourceInfo {
-        self.catalog.info(url)
+        self.catalog.resolve(url)
     }
 
     /// Cooperatively close the channel `keytag` names, using the
@@ -336,16 +340,14 @@ impl Ctx {
         self.catalog.cost(url)
     }
 
-    /// How much to give back on a refund against `url`. `Catalog`
-    /// reads whatever header its configured model needs straight off
-    /// `headers` (see `Catalog::actual_cost`); nothing relevant
-    /// present at all means nothing was served, refunding the full
-    /// quote, the same way `Flat`/`ByRoute` routes always have
-    /// (there's nothing partial to compute for them). Never refunds
-    /// more than the quote.
+    /// How much to give back on a refund against `url`.
+    /// `catalog::actual_cost` reads whatever header the resolved
+    /// model needs straight off `headers`; nothing relevant present
+    /// at all means nothing was served, refunding the full quote.
+    /// Never refunds more than the quote.
     pub(crate) fn refund_amount(&self, url: &str, headers: &HeaderMap) -> u64 {
         let quoted = self.catalog.cost(url);
-        match self.catalog.actual_cost(url, headers) {
+        match catalog::actual_cost(&self.catalog, url, headers) {
             None => quoted,
             Some(actual) => quoted.saturating_sub(actual.min(quoted)),
         }

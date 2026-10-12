@@ -6,8 +6,6 @@ pub use time::now;
 pub mod account;
 pub use account::Account;
 
-pub mod cost;
-
 pub mod cache;
 pub use cache::Cache;
 
@@ -19,5 +17,8 @@ pub mod dialect;
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
 
-#[cfg(feature = "native_url_lookup")]
-pub mod native_url_lookup;
+#[cfg(feature = "local")]
+pub mod local;
+
+#[cfg(feature = "wasm")]
+pub mod wasm;

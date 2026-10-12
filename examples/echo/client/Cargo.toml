@@ -28,7 +28,8 @@ toml.workspace = true
 http.workspace = true
 
 subbit-config = { workspace = true, features = ["clap"] }
-subbit-issuer = { workspace = true, features = [
-  "native_url_lookup",
-  "reqwest",
+subbit-issuer = { workspace = true, features = ["local", "reqwest", "x402"] }
+subbit-l2-dto = { workspace = true, default-features = false, features = [
+  "vanilla",
+  "x402",
 ] }

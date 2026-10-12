@@ -3,14 +3,11 @@
 //! middleware whenever the config has an `[issuer]` section, and are sent
 //! plain otherwise — same binary, no separate flag to remember.
 
-mod client;
-mod config;
-
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 
-use client::Client;
-use config::Config;
+use subbit_examples_echo_client::client::Client;
+use subbit_examples_echo_client::config::Config;
 
 static DEFAULT_CONFIG_PATH: &str = "echo-client-config.toml";
 
@@ -31,6 +28,9 @@ enum Command {
         /// data to send; use @file to read from a file
         #[arg(short = 'd', long = "data", default_value_t = default_data())]
         data: String,
+        /// path to send against, e.g. /echo, /echo/egress, /echo/claim
+        #[arg(short = 'p', long = "path", default_value = "/echo")]
+        path: String,
     },
 }
 
@@ -50,19 +50,19 @@ impl Cli {
 
         match self.command {
             Command::Init => unreachable!(),
-            Command::Send { data } => send(config, data).await,
+            Command::Send { data, path } => send(config, data, path).await,
         }
     }
 }
 
-async fn send(config: Config, data: String) -> anyhow::Result<()> {
+async fn send(config: Config, data: String, path: String) -> anyhow::Result<()> {
     let body: Vec<u8> = match data.strip_prefix('@') {
         Some(path) => std::fs::read(path)?,
         None => data.into_bytes(),
     };
     serde_json::from_slice::<serde_json::Value>(&body).context("--data is not valid JSON")?;
     let base_url = reqwest::Url::parse(&config.base_url).context("config base_url is invalid")?;
-    let resp = Client::build(&config)?.echo(&base_url, body).await?;
+    let resp = Client::build(&config)?.echo(&base_url, &path, body).await?;
     println!("{resp}");
     Ok(())
 }
