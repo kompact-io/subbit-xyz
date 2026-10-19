@@ -13,13 +13,15 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
+cryptoxide.workspace = true
+reqwest.workspace = true
 tempfile = "3"
 tokio.workspace = true
 toml.workspace = true
 
 subbit-core = { workspace = true, features = ["serde"] }
-subbit-e2e = { workspace = true }
 subbit-examples-echo-client = { workspace = true }
+subbit-index = { workspace = true }
 subbit-issuer = { workspace = true, features = ["local", "vanilla", "x402"] }
 subbit-l2-dto = { workspace = true, features = ["vanilla", "x402"] }
 subbit-server = { workspace = true, features = ["main", "vanilla", "x402"] }

@@ -13,7 +13,8 @@ members = [
   "packages/session",
   "packages/cli",
   "packages/index",
-  "packages/e2e",
+  "packages/claim",
+  "packages/canary",
   ######### CARDANO ############
   # "packages/cardano-session",
   ######### EXAMPLE ############
@@ -44,6 +45,8 @@ tag-name = "v{{version}}"
 csv = "1.4.0"
 url = { version = "2.5.8", features = ["serde"] }
 amaru-uplc = "0.3.0"
+amaru-plutus = "0.1.2"
+amaru-kernel = "0.1.2"
 anyhow = "1.0.102"
 async-trait = "0.1.92"
 bytes = "1"
@@ -57,6 +60,7 @@ cardano-session = { git = "https://github.com/cardano-lightning/konduit", branch
 cardano-wallet = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
 clap = { version = "4.6.1", features = ["env", "derive"] }
 cryptoxide = "0.5.1"
+dashmap = "6"
 figment = "0.10"
 http = "1.5.0"
 hex = { version = "0.4", default-features = false, features = ["serde"] }
@@ -80,18 +84,19 @@ toml = "1.1.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 web-time = "1.1.0"
-wasm-bindgen = "0.2.127"
+wasm-bindgen = "=0.2.127"                                                                                             # pinned to match nixpkgs' wasm-bindgen-cli exactly
 js-sys = "0.3.104"
 ed25519-dalek = { version = "3.0.0", default-features = false }
 
 # cardano-session = { path = "packages/cardano-session", default-features = false }
 
 subbit-build-info = { path = "packages/build-info", default-features = false }
+subbit-claim = { path = "packages/claim", default-features = false }
 subbit-cli = { path = "packages/cli", default-features = false }
 subbit-client = { path = "packages/client", default-features = false }
 subbit-config = { path = "packages/config", default-features = false }
+subbit-canary = { path = "packages/canary", default-features = false }
 subbit-core = { path = "packages/core", default-features = false }
-subbit-e2e = { path = "packages/e2e", default-features = false }
 subbit-l1-dto = { path = "packages/l1-dto", default-features = false }
 subbit-l2-dto = { path = "packages/l2-dto", default-features = false }
 subbit-index = { path = "packages/index", default-features = false }

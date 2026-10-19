@@ -1,7 +1,5 @@
 //! Spawns the full echo demo stack (`subbit-server`, `echo-server`,
-//! `echo-proxy`) plus runs the real `echo-client` binary against it,
-//! the same way `subbit_e2e::harness::Server` spawns `subbit-server`
-//! for the library-level e2e tests.
+//! `echo-proxy`) plus runs the real `echo-client` binary against it.
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -45,20 +43,60 @@ async fn wait_listening(addr: SocketAddr) {
     panic!("{addr} did not start listening in time");
 }
 
-pub struct SubbitServer(subbit_e2e::Server);
+/// Spawns the real `subbit-server` binary against a temp db and an
+/// ephemeral port, torn down on drop (`kill_on_drop`).
+pub struct SubbitServer {
+    _child: Child,
+    addr: SocketAddr,
+    _dir: tempfile::TempDir,
+}
 
 impl SubbitServer {
-    pub async fn spawn(config: subbit_server::Config) -> Self {
-        Self(
-            subbit_e2e::Server::spawn(&sibling_bin("subbit-server"), config)
-                .await
-                .expect("spawn subbit-server"),
-        )
+    pub async fn spawn(mut config: subbit_server::Config) -> Self {
+        let dir = tempfile::tempdir().expect("tempdir");
+        config.db.db_path = dir.path().join("db.redb").to_string_lossy().into_owned();
+
+        let config_path = dir.path().join("config.toml");
+        std::fs::write(&config_path, toml::to_string_pretty(&config).unwrap()).unwrap();
+
+        let addr = free_local_addr();
+        let child = Command::new(sibling_bin("subbit-server"))
+            .arg("--config")
+            .arg(&config_path)
+            .arg("serve")
+            .arg("--listen")
+            .arg(addr.to_string())
+            .kill_on_drop(true)
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("spawn subbit-server");
+
+        wait_ready(addr).await;
+
+        Self {
+            _child: child,
+            addr,
+            _dir: dir,
+        }
     }
 
     pub fn addr(&self) -> SocketAddr {
-        self.0.addr
+        self.addr
     }
+}
+
+/// Polls the server's admin route until it answers, or panics after ~5s.
+async fn wait_ready(addr: SocketAddr) {
+    let url = format!("http://{addr}/v1/a/ious");
+    let client = reqwest::Client::new();
+    for _ in 0..100 {
+        if client.get(&url).send().await.is_ok() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("server at {addr} did not become ready in time");
 }
 
 pub struct EchoServer {

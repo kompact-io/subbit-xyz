@@ -6,7 +6,7 @@ use std::time::Duration;
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use tempfile::NamedTempFile;
 
-use subbit_server::db::{self, Db, ExposureConfig};
+use subbit_server::db::{self, BufferConfig, Db, ExposureConfig};
 use subbit_server::{Aux, Backing, Bucket, Channel, Keytag};
 
 // ---------------------------------------------------------------------------
@@ -41,9 +41,23 @@ fn open_db(exposure: ExposureConfig) -> (NamedTempFile, Db) {
     let config = db::Config {
         db_path: file.path().to_str().unwrap().to_string(),
         exposure,
+        buffer: config_never_flushes_buffer(),
     };
     let db = Db::open(config).expect("open db");
     (file, db)
+}
+
+/// A buffer config whose thresholds are effectively unreachable within
+/// a single benchmark run -- these benches measure `update`/
+/// `update_exposed`'s own per-call cost, not the buffer's size/time
+/// flush trigger, so every call here still does its own flush via
+/// `note_exposed_write`/an explicit `checkpoint()`, exactly as before
+/// buffering existed.
+fn config_never_flushes_buffer() -> BufferConfig {
+    BufferConfig {
+        max_pending: u64::MAX,
+        max_buffer_interval: Duration::from_secs(3600),
+    }
 }
 
 /// A config whose thresholds are effectively unreachable within a single

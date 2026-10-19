@@ -68,6 +68,7 @@
               clang-unwrapped
               pkgs.cargo-machete
               pkgs.wasm-pack
+              pkgs.wasm-bindgen-cli
               # PRE-COMMIT
               pkgs.prek
               pkgs.jless
@@ -89,12 +90,20 @@
           projectDir = ./aiken;
           lockFile = ./aiken/aiken.lock;
         };
+        echoWwwNix = import ./nix/echo-www.nix {
+          inherit lib pkgs;
+          craneLib = config.rust-project.crane-lib;
+          src = config.rust-project.src;
+          wasmBindgenCli = pkgs.wasm-bindgen-cli;
+          ccWasm32 = lib.getExe' clang-unwrapped "clang";
+        };
       in {
         checks = {
           aiken-lock-is-nix-compatible = aikenNix.lockIsNixCompatible;
           aiken-check = aikenNix.check;
           aiken-plutus-json-is-up-to-date = aikenNix.plutusJsonIsUpToDate;
         };
+        packages.echo-www = echoWwwNix;
         process-compose."echo-stack" = {
           settings.processes = {
             # Fresh config each run: `subbit-server`'s and `echo-proxy`'s
@@ -149,6 +158,10 @@
                 pkgs.pkg-config
                 pkgs.perl
               ];
+              crane.args.prePatch = ''
+                mkdir -p examples/echo/www/pkg
+                cp -r ${echoWwwNix}/pkg/. examples/echo/www/pkg/
+              '';
             };
           };
         };

@@ -7,7 +7,7 @@ use subbit_l2_dto::{
 };
 
 use crate::{
-    Backing, Channel, Config, Db, Keytag,
+    Backing, Channel, ChannelSummary, Config, Db, Keytag,
     catalog::{self, ResourceInfo},
     channel,
     channel_ops::{apply_backing, apply_iou, apply_refund, apply_spend},
@@ -379,6 +379,17 @@ impl Ctx {
             .channels()?
             .into_iter()
             .map(|(k, v)| (k, v.iou().cloned()))
+            .collect())
+    }
+
+    /// Per-channel `{is_active, iou}`, for an external actor (e.g. a
+    /// provider tx service) deciding what to claim on-chain -- it never
+    /// writes `is_active` itself, only reads it.
+    pub fn channel_summaries(&self) -> Result<BTreeMap<Keytag, ChannelSummary>, CoreError> {
+        Ok(self
+            .channels()?
+            .into_iter()
+            .map(|(k, v)| (k, v.summary()))
             .collect())
     }
 

@@ -173,6 +173,24 @@ impl Channel {
     pub fn apply_refund(&mut self, amount: u64) {
         self.spent = self.spent.saturating_sub(amount);
     }
+
+    pub fn summary(&self) -> ChannelSummary {
+        ChannelSummary {
+            is_active: self.aux().is_active(),
+            iou: self.iou().cloned(),
+        }
+    }
+}
+
+/// A channel's state as seen by an external actor deciding whether to
+/// act on it (e.g. a provider tx service deciding to `Sub`/`Settle`) --
+/// just enough to decide, not the full `Channel`.
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode, PartialEq)]
+pub struct ChannelSummary {
+    #[n(0)]
+    pub is_active: bool,
+    #[n(1)]
+    pub iou: Option<Iou>,
 }
 
 // ---------------------------------------------------------------------------

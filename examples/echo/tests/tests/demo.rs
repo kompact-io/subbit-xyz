@@ -9,7 +9,6 @@ mod support;
 
 use std::net::SocketAddr;
 
-use subbit_e2e::{indexer, wallet::Wallet};
 use subbit_examples_echo_client::config::{Config as ClientConfig, Dialect};
 use subbit_issuer::local;
 use subbit_l2_dto::{Catalog, Cost, CostByEgress, ResourceInfo, ResourceInfoOverride};
@@ -88,9 +87,29 @@ fn client_config(
     }
 }
 
+/// `pubkey || tag`, the byte layout `subbit-server`'s own `Keytag` and
+/// `subbit-index`'s wire `Keytag` both use.
+fn keytag_bytes(seed: [u8; 32], tag: &[u8]) -> Vec<u8> {
+    let (_sk, pk) = cryptoxide::ed25519::keypair(&seed);
+    let mut buf = pk.to_vec();
+    buf.extend_from_slice(tag);
+    buf
+}
+
+/// Posts a fake backing straight to the server's `/v1/a/backings`, the
+/// same way the real `naive-index` binary (or `mock-index` for tests)
+/// would after seeing a confirmed on-chain deposit.
 async fn deposit(server_addr: SocketAddr, seed: [u8; 32], tag: &[u8]) {
-    let wallet = Wallet::new(seed, tag.to_vec());
-    indexer::push_backing(&format!("http://{server_addr}"), &wallet, BACKING, 0)
+    let row = subbit_index::wire::Row {
+        keytag: subbit_index::wire::Keytag(keytag_bytes(seed, tag)),
+        amount: Some(BACKING),
+        subbed: Some(0),
+    };
+    let endpoint = format!("http://{server_addr}/v1/a/backings")
+        .parse()
+        .unwrap();
+    subbit_index::client::Client::new(endpoint)
+        .send(vec![row])
         .await
         .expect("push backing");
 }

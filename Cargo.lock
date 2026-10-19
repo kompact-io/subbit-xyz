@@ -61,6 +61,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "amaru-kernel"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3986d330750dcb9dbfd3754685efb7703c8d3e19791707cfb069b92d4946c36"
+dependencies = [
+ "amaru-minicbor-extra",
+ "bech32 0.11.1",
+ "bytes",
+ "getrandom 0.3.4",
+ "hex",
+ "itertools 0.14.0",
+ "minicbor 0.25.1",
+ "num",
+ "pallas-addresses 0.34.0",
+ "pallas-codec 0.34.0",
+ "pallas-crypto 0.34.0",
+ "pallas-math",
+ "pallas-primitives 0.34.0",
+ "pallas-traverse 0.34.0",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "amaru-minicbor-extra"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dc9b5efaa736df819dae86db28a738dc20298785537f0b8bb762dc0989d884b"
+dependencies = [
+ "minicbor 0.25.1",
+]
+
+[[package]]
+name = "amaru-plutus"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbc63411dbae70563d58bd062eb6439c4c8b75966b751f1cdb974274d6bc9bb3"
+dependencies = [
+ "amaru-kernel",
+ "amaru-uplc-turbo",
+ "hex",
+ "itertools 0.14.0",
+ "num",
+ "pallas-codec 0.34.0",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "amaru-uplc"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -82,6 +132,29 @@ dependencies = [
  "secp256k1 0.30.0",
  "thiserror 1.0.69",
  "walkdir",
+]
+
+[[package]]
+name = "amaru-uplc-turbo"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5be84c377654d70899b2f3d55d4ed56f3fd09ffc8e7164ca12f2b9ba53d9b501"
+dependencies = [
+ "append-only-vec",
+ "blst",
+ "bumpalo",
+ "chumsky",
+ "cryptoxide 0.4.4",
+ "divan",
+ "hamming",
+ "hex",
+ "minicbor 0.25.1",
+ "num",
+ "num-bigint",
+ "num-integer",
+ "once_cell",
+ "secp256k1 0.30.0",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -371,6 +444,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
+name = "bech32"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -588,6 +667,9 @@ name = "bytes"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "cardano-connector"
@@ -620,7 +702,7 @@ version = "0.0.0"
 source = "git+https://github.com/cardano-lightning/konduit.git?branch=main#edf3f7cc88ca695e57466aef84eaaad2c9c78a46"
 dependencies = [
  "anyhow",
- "bech32",
+ "bech32 0.9.1",
  "env_logger",
  "getrandom 0.2.17",
  "hex",
@@ -629,10 +711,10 @@ dependencies = [
  "minicbor 0.25.1",
  "num",
  "num-bigint",
- "pallas-addresses",
- "pallas-codec",
- "pallas-crypto",
- "pallas-primitives",
+ "pallas-addresses 0.35.1",
+ "pallas-codec 0.35.1",
+ "pallas-crypto 0.35.1",
+ "pallas-primitives 0.35.1",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
@@ -1262,6 +1344,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "dashu-base"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993b95dc1b248e3f5747dcb017a41d6e75853a2e5ee4504f7d537c5b8dffdae4"
+
+[[package]]
+name = "dashu-int"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49c05a0d5cb0b39fcc87c46432fdac24b90dce239857c7f6b798be4ffc3c42c6"
+dependencies = [
+ "cfg-if",
+ "dashu-base",
+ "num-modular",
+ "num-order",
+ "rustversion",
+ "static_assertions",
+]
+
+[[package]]
 name = "defmt"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1828,9 +1944,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 5.3.0",
  "wasip2",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1931,6 +2049,12 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+
+[[package]]
+name = "hashbrown"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -2520,9 +2644,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.105"
+version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce57d20d1ea864ce2ac172ab472d409214f4fd359f0b2a2775abdf522e2af99e"
+checksum = "0e0c1080212aad755ea003d18543e8768dd432c48819efd73a7bf1e39b7a5a3a"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -2541,6 +2665,15 @@ dependencies = [
  "once_cell",
  "sha2 0.10.9",
  "signature 2.2.0",
+]
+
+[[package]]
+name = "keccak"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
+dependencies = [
+ "cpufeatures 0.2.17",
 ]
 
 [[package]]
@@ -2898,6 +3031,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-modular"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26ac76200f74e658124f95fa63e1a82b2fd2181c5b2fdde80b3d89d2d3f905e7"
+
+[[package]]
+name = "num-order"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "537b596b97c40fcf8056d153049eb22f481c17ebce72a513ec9286e4986d1bb6"
+dependencies = [
+ "num-modular",
+]
+
+[[package]]
 name = "num-rational"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3024,17 +3172,45 @@ dependencies = [
 
 [[package]]
 name = "pallas-addresses"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71602db077bd1ce3c716753daeb96a52d2f035ec8fdc64ebdb737a7b08c09c72"
+dependencies = [
+ "base58",
+ "bech32 0.9.1",
+ "crc",
+ "cryptoxide 0.4.4",
+ "hex",
+ "pallas-codec 0.34.0",
+ "pallas-crypto 0.34.0",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-addresses"
 version = "0.35.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b562be9b1f713ac8935bd61197c2d5f7b054574bb45081545866df99428d8176"
 dependencies = [
  "base58",
- "bech32",
+ "bech32 0.9.1",
  "crc",
  "cryptoxide 0.4.4",
  "hex",
- "pallas-codec",
- "pallas-crypto",
+ "pallas-codec 0.35.1",
+ "pallas-crypto 0.35.1",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-codec"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a73eb2a9b424239230a45e66f61a60b123e1cf50ca6da9bd1049e17b2b579ca"
+dependencies = [
+ "hex",
+ "minicbor 0.25.1",
+ "serde",
  "thiserror 1.0.69",
 ]
 
@@ -3053,17 +3229,60 @@ dependencies = [
 
 [[package]]
 name = "pallas-crypto"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f4c3dfc9286db9f1e54f35b2d8e7924dfdb17f480139ed2c113db6759578e48"
+dependencies = [
+ "cryptoxide 0.4.4",
+ "hex",
+ "pallas-codec 0.34.0",
+ "rand_core 0.6.4",
+ "serde",
+ "thiserror 1.0.69",
+ "zeroize",
+]
+
+[[package]]
+name = "pallas-crypto"
 version = "0.35.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89e25299b6992b179144464e410680cf096919f43cf97f9a6fea2f7be5e1cadd"
 dependencies = [
  "cryptoxide 0.4.4",
  "hex",
- "pallas-codec",
+ "pallas-codec 0.35.1",
  "rand_core 0.6.4",
  "serde",
  "thiserror 1.0.69",
  "zeroize",
+]
+
+[[package]]
+name = "pallas-math"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fbc7b7f24b39fd1f679680adcc80a5973d740540832dbc914cc241f87f25d7d"
+dependencies = [
+ "dashu-base",
+ "dashu-int",
+ "regex",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pallas-primitives"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b44e05db704a674d6a11a286d0ff8ac1fd22f4720b88b0deea5219ce46484d70"
+dependencies = [
+ "base58",
+ "bech32 0.9.1",
+ "hex",
+ "log",
+ "pallas-codec 0.34.0",
+ "pallas-crypto 0.34.0",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3073,13 +3292,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "857f6908501bcb6f794f2c81674eb0f69414e66399739bbd808aa178c17c2001"
 dependencies = [
  "base58",
- "bech32",
+ "bech32 0.9.1",
  "hex",
  "log",
- "pallas-codec",
- "pallas-crypto",
+ "pallas-codec 0.35.1",
+ "pallas-crypto 0.35.1",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "pallas-traverse"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27248fd22bc84b13b0ad44ec58b23dcb4aa52e1b19efbe5d4065833055b2d4da"
+dependencies = [
+ "hex",
+ "itertools 0.13.0",
+ "pallas-addresses 0.34.0",
+ "pallas-codec 0.34.0",
+ "pallas-crypto 0.34.0",
+ "pallas-primitives 0.34.0",
+ "paste",
+ "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3090,10 +3326,10 @@ checksum = "88753e28c456fe38c6a4d84ff8847a25bf564753c255a1d6d211d9fd6a42380e"
 dependencies = [
  "hex",
  "itertools 0.13.0",
- "pallas-addresses",
- "pallas-codec",
- "pallas-crypto",
- "pallas-primitives",
+ "pallas-addresses 0.35.1",
+ "pallas-codec 0.35.1",
+ "pallas-crypto 0.35.1",
+ "pallas-primitives 0.35.1",
  "paste",
  "serde",
  "thiserror 1.0.69",
@@ -4487,6 +4723,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha3"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77fd7028345d415a4034cf8777cd4f8ab1851274233b45f84e3d955502d93874"
+dependencies = [
+ "digest 0.10.7",
+ "keccak",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4628,6 +4874,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4658,6 +4910,74 @@ dependencies = [
 [[package]]
 name = "subbit-build-info"
 version = "0.0.0"
+
+[[package]]
+name = "subbit-canary"
+version = "0.0.0"
+dependencies = [
+ "amaru-kernel",
+ "amaru-plutus",
+ "amaru-uplc",
+ "anyhow",
+ "async-trait",
+ "blake3",
+ "cardano-connector",
+ "cardano-connector-direct",
+ "cardano-sdk",
+ "cardano-session",
+ "cardano-wallet",
+ "clap",
+ "cryptoxide 0.5.3",
+ "ed25519-dalek",
+ "hex",
+ "http",
+ "minicbor 2.3.0",
+ "rand 0.10.2",
+ "reqwest",
+ "reqwest-middleware",
+ "serde",
+ "subbit-claim",
+ "subbit-core",
+ "subbit-index",
+ "subbit-issuer",
+ "subbit-l1-dto",
+ "subbit-l2-dto",
+ "subbit-server",
+ "subbit-session",
+ "subbit-tx",
+ "tempfile",
+ "tokio",
+ "toml 1.1.5+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "subbit-claim"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "cardano-connector",
+ "cardano-connector-direct",
+ "cardano-sdk",
+ "cardano-wallet",
+ "clap",
+ "minicbor 2.3.0",
+ "reqwest",
+ "serde",
+ "subbit-build-info",
+ "subbit-config",
+ "subbit-core",
+ "subbit-l1-dto",
+ "subbit-session",
+ "subbit-tx",
+ "thiserror 2.0.20",
+ "tokio",
+ "toml 1.1.5+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
 
 [[package]]
 name = "subbit-cli"
@@ -4733,33 +5053,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subbit-e2e"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "cryptoxide 0.5.3",
- "ed25519-dalek",
- "http",
- "minicbor 2.3.0",
- "reqwest",
- "reqwest-middleware",
- "serde",
- "serde_json",
- "subbit-client",
- "subbit-core",
- "subbit-index",
- "subbit-issuer",
- "subbit-l2-dto",
- "subbit-server",
- "tempfile",
- "tokio",
- "toml 1.1.5+spec-1.1.0",
- "url",
-]
-
-[[package]]
 name = "subbit-examples-echo-client"
 version = "0.0.0"
 dependencies = [
@@ -4816,9 +5109,11 @@ name = "subbit-examples-echo-tests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cryptoxide 0.5.3",
+ "reqwest",
  "subbit-core",
- "subbit-e2e",
  "subbit-examples-echo-client",
+ "subbit-index",
  "subbit-issuer",
  "subbit-l2-dto",
  "subbit-server",
@@ -4917,16 +5212,21 @@ dependencies = [
  "clap",
  "criterion",
  "cryptoxide 0.5.3",
+ "dashmap",
+ "ed25519-dalek",
  "hex",
  "http",
  "minicbor 2.3.0",
  "postcard",
  "redb",
+ "reqwest",
+ "reqwest-middleware",
  "serde",
  "serde_json",
  "subbit-build-info",
  "subbit-config",
  "subbit-core",
+ "subbit-issuer",
  "subbit-l2-dto",
  "tempfile",
  "thiserror 2.0.20",
@@ -5596,11 +5896,11 @@ dependencies = [
  "num-integer",
  "num-traits",
  "once_cell",
- "pallas-addresses",
- "pallas-codec",
- "pallas-crypto",
- "pallas-primitives",
- "pallas-traverse",
+ "pallas-addresses 0.35.1",
+ "pallas-codec 0.35.1",
+ "pallas-crypto 0.35.1",
+ "pallas-primitives 0.35.1",
+ "pallas-traverse 0.35.1",
  "peg",
  "pretty",
  "secp256k1 0.26.0",
@@ -5698,9 +5998,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.128"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aecb87a33d3b0c5e3b7aa46336eaf486cffafbd281b195e4c8b80d50df2351bf"
+checksum = "1b70935747edd64d89de3efa29d73789b806c15798f8e7dca4d8ac356b50ce70"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -5711,9 +6011,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.78"
+version = "0.4.77"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ef4c5d3d2cdf5c54f4231181768f5510842e350db025faf1f7163b1030ed928"
+checksum = "6b7777d5cc23d0e91404e53ce2d5e8ec7acae3026b16233dba62cd3246457950"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -5721,9 +6021,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.128"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a690d511e3c1a8b3a55e33511e3c2c00c78415cd23650f32b808627f5696b9ed"
+checksum = "77775f8f3f7217702089053b94958f8f54061a3f663417df76e19cbdcca29bc1"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -5731,31 +6031,31 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.128"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "411e4887f0071ef2d2164a9d5fdf2d20efbef78fccd3a78b0c10a1dc5295e48a"
+checksum = "e11d33f857dc2fb11b8bc75aee111aa9cbeb12cd9f25efd3d4c2a3dd4e235284"
 dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 3.0.5",
+ "syn 2.0.119",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.128"
+version = "0.2.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81941cd78d0c92026c33e5e01312845a4cb1e9af3407f9134b100dd03144103e"
+checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "web-sys"
-version = "0.3.105"
+version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fbddc4a036f00ec4f18c83445bd3115cb306a91da554919a099d9222fe4a7f8"
+checksum = "c435338968042f4f59a557f690a253676d47ce13ceb55d70100e7facf6620a30"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

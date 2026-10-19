@@ -49,10 +49,20 @@ toml = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 subbit-config = { workspace = true, optional = true, features = ["clap"] }
 tracing = "0.1.44"
+dashmap.workspace = true
 
 [dev-dependencies]
 criterion = "0.5"
 tempfile = "3"
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware.workspace = true
+ed25519-dalek = { workspace = true, default-features = false, features = [
+  "rand_core",
+] }
+subbit-issuer = { workspace = true, default-features = false, features = [
+  "reqwest",
+  "vanilla",
+] }
 
 [[bin]]
 name = "subbit-server"
@@ -63,6 +73,25 @@ required-features = ["main"]
 [[bench]]
 name = "db_throughput"
 harness = false
+
+[[bench]]
+name = "l2_throughput"
+harness = false
+
+[[bench]]
+name = "worker_threads"
+harness = false
+required-features = ["main"]
+
+[[bench]]
+name = "firehose"
+harness = false
+required-features = ["main"]
+
+[[bench]]
+name = "issuer_overhead"
+harness = false
+required-features = ["main"]
 
 [build-dependencies]
 subbit-build-info.workspace = true

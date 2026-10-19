@@ -1,5 +1,8 @@
 mod hex_bytes;
 
+#[cfg(feature = "main")]
+pub mod app;
+
 pub mod keytag;
 pub use keytag::Keytag;
 
@@ -27,8 +30,10 @@ pub mod limiter;
 pub use limiter::{Bucket, Limiter};
 
 pub mod channel;
-pub use channel::{Backing, Channel};
+pub use channel::{Backing, Channel, ChannelSummary};
 pub mod channel_ops;
+
+mod buffer;
 
 pub mod db;
 pub use db::Db;
