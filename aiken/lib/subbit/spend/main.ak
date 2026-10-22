@@ -2,8 +2,10 @@ use aiken/collection/list
 use aiken/crypto.{VerificationKey, VerificationKeyHash}
 use aiken/interval.{Interval, IntervalBound}
 use cardano/address.{Address, Credential, Script}
-use cardano/transaction.{Input, Output, Transaction}
+use cardano/assets
+use cardano/transaction.{Input, Output, Transaction, placeholder}
 use extra/xlist.{foldl3}
+use subbit/fixtures as fx
 use subbit/io.{yield_in, yield_out}
 use subbit/prelude.{Timebound}
 use subbit/steps/add
@@ -70,4 +72,36 @@ fn mk_with(
       return(inputs, outputs, vkhs)
     }
   }
+}
+
+test main_single_add_step_succeeds() {
+  let stage = t.Opened { subbed: 0 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [fx.own_input(fx.oref(0), stage, assets.from_lovelace(100))],
+    outputs: [fx.own_output(stage, assets.from_lovelace(150))],
+    extra_signatories: [fx.consumer_vkh],
+  }
+  do(fx.datum(stage), [t.StepCont(t.Add)], tx)
+}
+
+test main_fails_when_signer_missing() fail {
+  let stage = t.Opened { subbed: 0 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [fx.own_input(fx.oref(0), stage, assets.from_lovelace(100))],
+    outputs: [fx.own_output(stage, assets.from_lovelace(150))],
+    extra_signatories: [],
+  }
+  expect _ok = do(fx.datum(stage), [t.StepCont(t.Add)], tx)
+  True
+}
+
+test main_rejects_unprocessed_channel_input() {
+  let stage = t.Opened { subbed: 0 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [fx.own_input(fx.oref(0), stage, assets.from_lovelace(100))],
+  }
+  !do(fx.datum(stage), [], tx)
 }
