@@ -1,0 +1,98 @@
+[package]
+name = "subbit-gate"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["main", "vanilla", "x402"]
+main = [
+  "dep:axum",
+  "dep:clap",
+  "dep:tokio",
+  "dep:anyhow",
+  "dep:toml",
+  "dep:tracing-subscriber",
+  "dep:subbit-config",
+  "subbit-l2-dto/serde",
+]
+# Inherit dialect support straight from `subbit-l2-dto`: the features
+# have the same names and the same meaning here as there, on purpose.
+vanilla = ["subbit-l2-dto/vanilla", "subbit-l2-dto/serde"]
+x402 = ["subbit-l2-dto/x402"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+axum = { workspace = true, optional = true, features = ["macros"] }
+base64.workspace = true
+clap = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+http.workspace = true
+blake3.workspace = true
+cryptoxide.workspace = true
+hex.workspace = true
+minicbor.workspace = true
+postcard.workspace = true
+redb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+subbit-core = { workspace = true, features = ["serde"] }
+subbit-index-dto = { workspace = true, features = ["std", "serde"] }
+subbit-l1-dto = { workspace = true, features = ["serde"] }
+subbit-l2-dto = { workspace = true, default-features = false }
+thiserror.workspace = true
+toml = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+subbit-config = { workspace = true, optional = true, features = ["clap"] }
+tracing = "0.1.44"
+dashmap.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+tempfile = "3"
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware.workspace = true
+ed25519-dalek = { workspace = true, default-features = false, features = [
+  "rand_core",
+] }
+subbit-stamp = { workspace = true, default-features = false, features = [
+  "reqwest",
+  "vanilla",
+] }
+
+[[bin]]
+name = "subbit-gate"
+path = "src/main.rs"
+required-features = ["main"]
+
+
+[[bench]]
+name = "db_throughput"
+harness = false
+
+[[bench]]
+name = "l2_throughput"
+harness = false
+
+[[bench]]
+name = "worker_threads"
+harness = false
+required-features = ["main"]
+
+[[bench]]
+name = "firehose"
+harness = false
+required-features = ["main"]
+
+[[bench]]
+name = "stamp_overhead"
+harness = false
+required-features = ["main"]
+
+[build-dependencies]
+subbit-build-info.workspace = true

@@ -80,7 +80,7 @@ mod with_subbit {
         /// The consumer's own dialect auth header(s) from the spend
         /// call, reused unchanged for this same request's refund.
         auth_headers: http::HeaderMap,
-        /// `subbit-server`'s own reply header(s) to the spend call,
+        /// `subbit-gate`'s own reply header(s) to the spend call,
         /// relayed onto the real response.
         relay_headers: http::HeaderMap,
     }

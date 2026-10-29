@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use cardano_sdk::{Credential, Input, Output};
+use floe_dto_http::query::Utxo;
 use serde::{Deserialize, Serialize};
 use subbit_core::{Duration, Hash28};
 use subbit_l1_dto::{Asset, Constants, Stage};
@@ -17,11 +17,15 @@ use crate::{
 /// Config for `naive` mode: poll on an interval, and
 /// report every channel matching (provider, asset), with a close_period
 /// at least `close_period` and a tag no longer than `max_tag_len`.
+///
+/// No per-delegation config: Floe's `SearchUtxos` matches by payment
+/// credential alone when `stake_hash` is omitted (any delegation, not
+/// "no delegation" -- see `floe-server`'s `AddressFilter::PayOnly`), so
+/// one query already covers every channel regardless of the
+/// consumer's own delegation choice.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub cardano: cardano::Config,
-    // subbit validator addresses: credentials to track. FIXME :: unused
-    pub delegations: Vec<Credential>,
     pub endpoint: Url,
     pub provider: Hash28,
     pub asset: Asset,
@@ -49,7 +53,6 @@ impl Default for Config {
             endpoint: "http://127.0.0.1:7822/v1/a/backings"
                 .parse()
                 .expect("valid url"),
-            delegations: Default::default(),
             provider: Hash28::from([0; 28]),
             asset: Asset::Lovelace,
             close_period: Duration::from_millis(3_600_000),
@@ -76,7 +79,7 @@ fn keytag_of(constants: &Constants) -> Keytag {
     Keytag(bytes)
 }
 
-fn is_backing(their: &Constants, my: &Config) -> bool {
+pub(crate) fn is_backing(their: &Constants, my: &Config) -> bool {
     their.provider() == &my.provider
         && their.asset() == &my.asset
         && their.tag().len() <= my.max_tag_len
@@ -94,21 +97,13 @@ fn opened_sort_key(v: &Variables) -> Option<(bool, u64)> {
     }
 }
 
-/// Groups channel outputs matching `cfg` by keytag. Outputs that aren't
-/// valid channels are logged and skipped.
+/// Groups `channels` matching `cfg` by keytag.
 fn group_matching(
-    channels: &BTreeMap<Input, Output>,
+    channels: impl IntoIterator<Item = Channel>,
     cfg: &Config,
 ) -> BTreeMap<Keytag, Vec<Variables>> {
     let mut groups: BTreeMap<Keytag, Vec<Variables>> = BTreeMap::new();
-    for output in channels.values() {
-        let channel = match Channel::try_from(output) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(error = %e, "skipping output: not a valid channel");
-                continue;
-            }
-        };
+    for channel in channels {
         if is_backing(channel.constants(), cfg) {
             groups
                 .entry(keytag_of(channel.constants()))
@@ -134,10 +129,11 @@ fn select_backing(vars: &[Variables]) -> Option<Backing> {
         })
 }
 
-/// Builds one `Row` per distinct keytag among channels matching `cfg`.
-/// Multiple UTXOs can share a keytag (no on-chain uniqueness enforced,
-/// though rare in practice); see `select_backing` for how ties resolve.
-pub fn rows_from_channels(channels: &BTreeMap<Input, Output>, cfg: &Config) -> Vec<Row> {
+/// Builds one `Row` per distinct keytag among `channels` matching
+/// `cfg`. Multiple channels can share a keytag (no on-chain uniqueness
+/// enforced, though rare in practice); see `select_backing` for how
+/// ties resolve.
+pub fn rows_from_channels(channels: impl IntoIterator<Item = Channel>, cfg: &Config) -> Vec<Row> {
     group_matching(channels, cfg)
         .into_iter()
         .map(|(keytag, vars)| {
@@ -149,4 +145,19 @@ pub fn rows_from_channels(channels: &BTreeMap<Input, Output>, cfg: &Config) -> V
             }
         })
         .collect()
+}
+
+/// `rows_from_channels`, parsing channels out of Floe `Utxo`s first.
+/// Utxos that aren't valid channels are logged and skipped.
+pub fn rows_from_utxos(utxos: &[Utxo], cfg: &Config) -> Vec<Row> {
+    let channels = utxos
+        .iter()
+        .filter_map(|utxo| match cardano::channel_from_utxo(utxo) {
+            Ok(channel) => Some(channel),
+            Err(e) => {
+                warn!(error = %e, "skipping utxo: not a valid channel");
+                None
+            }
+        });
+    rows_from_channels(channels, cfg)
 }

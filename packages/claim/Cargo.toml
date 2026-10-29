@@ -5,7 +5,6 @@ documentation.workspace = true
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
@@ -19,9 +18,12 @@ name = "subbit-claim"
 path = "src/main.rs"
 
 [dependencies]
+amaru-kernel.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
+hex.workspace = true
 minicbor = { workspace = true, features = ["alloc", "derive"] }
+minicbor_old = { package = "minicbor", version = "0.25" }
 reqwest.workspace = true
 serde.workspace = true
 thiserror.workspace = true
@@ -33,13 +35,14 @@ url.workspace = true
 
 subbit-config = { workspace = true, features = ["clap"] }
 subbit-core = { workspace = true }
+subbit-index-dto = { workspace = true }
 subbit-l1-dto = { workspace = true }
-subbit-session = { workspace = true, features = ["serde"] }
 subbit-tx = { workspace = true, features = ["serde"] }
 cardano-sdk.workspace = true
-cardano-connector.workspace = true
-cardano-connector-direct.workspace = true
-cardano-wallet.workspace = true
+floe-client = { workspace = true, default-features = false, features = [
+  "grpc",
+] }
+floe-dto-http.workspace = true
 
 [build-dependencies]
 subbit-build-info.workspace = true

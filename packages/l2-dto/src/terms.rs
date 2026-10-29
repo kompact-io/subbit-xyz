@@ -6,6 +6,13 @@ use subbit_core::{Duration, Hash28};
 
 use crate::{Asset, Catalog, OutputRef};
 
+/// The conventional discovery path a provider serves its own `Terms`
+/// from (`GET {base_url}{WELL_KNOWN_PATH}` -> JSON `Terms`), shared so
+/// a server mounting the route (`subbit-gate`'s own `app.rs`) and a
+/// client fetching it (`subbit-console`'s `ui::wasm::providers_fetch`)
+/// can't drift apart on the literal.
+pub const WELL_KNOWN_PATH: &str = "/.well-known/subbit";
+
 /// Provider terms of service.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

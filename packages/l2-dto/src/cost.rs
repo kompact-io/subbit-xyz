@@ -58,7 +58,7 @@ impl Cost {
 }
 
 /// `ByClaim`'s own header names, application to proxy to
-/// `subbit-server` and back, unchanged at every hop: fixed, not
+/// `subbit-gate` and back, unchanged at every hop: fixed, not
 /// provider-configurable, so every hop agrees on them without being
 /// told.
 /// TODO :: This is not for clients; its for the gated application.

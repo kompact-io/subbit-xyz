@@ -11,7 +11,7 @@ end in `examples/echo/tests` (`cargo test -p subbit-examples-echo-tests`).
 
 `examples/echo/www/index.html` is a no-build-tool browser client against
 `echo-server`'s `/echo`, `/echo/egress`, `/echo/claim` and the proxy's
-terms relay, driving the vanilla dialect only (via `subbit-issuer`'s `wasm`
+terms relay, driving the vanilla dialect only (via `subbit-stamp`'s `wasm`
 feature). No wallet needed: paste a 32-byte hex signing key into the UI.
 
 Build its wasm bundle once (needs `wasm-pack`, already in the Nix dev

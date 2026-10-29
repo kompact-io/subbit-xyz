@@ -56,7 +56,7 @@ pub(crate) fn plan_roster(
 
     let personas: Vec<&persona::Persona> = roster
         .iter()
-        .flat_map(|entry| std::iter::repeat(&entry.persona).take(entry.count))
+        .flat_map(|entry| std::iter::repeat_n(&entry.persona, entry.count))
         .collect();
 
     let mut rng = rng_from_seed(l2_seed);

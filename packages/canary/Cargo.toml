@@ -5,7 +5,6 @@ documentation.workspace = true
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
@@ -19,13 +18,11 @@ anyhow.workspace = true
 async-trait.workspace = true
 blake3.workspace = true
 clap = { workspace = true, features = ["derive"] }
-cryptoxide.workspace = true
 ed25519-dalek = { workspace = true, default-features = false, features = [
   "rand_core",
 ] }
 hex.workspace = true
 http.workspace = true
-minicbor = { workspace = true, features = ["alloc"] }
 rand.workspace = true
 reqwest.workspace = true
 reqwest-middleware.workspace = true
@@ -38,7 +35,6 @@ tokio = { workspace = true, features = [
   "time",
 ] }
 toml.workspace = true
-tracing.workspace = true
 tracing-subscriber.workspace = true
 
 amaru-uplc.workspace = true
@@ -46,15 +42,17 @@ amaru-plutus.workspace = true
 amaru-kernel.workspace = true
 
 cardano-connector.workspace = true
-cardano-connector-direct.workspace = true
 cardano-sdk = { workspace = true, features = ["serde"] }
 cardano-wallet.workspace = true
 cardano-session.workspace = true
+floe-client = { workspace = true, default-features = false, features = [
+  "grpc",
+] }
 
 subbit-claim = { workspace = true }
 subbit-core = { workspace = true, features = ["serde"] }
-subbit-index = { workspace = true }
-subbit-issuer = { workspace = true, features = [
+subbit-index = { workspace = true, features = ["native"] }
+subbit-stamp = { workspace = true, features = [
   "reqwest",
   "local",
   "vanilla",
@@ -62,6 +60,6 @@ subbit-issuer = { workspace = true, features = [
 ] }
 subbit-l1-dto = { workspace = true, features = ["serde"] }
 subbit-l2-dto = { workspace = true, features = ["vanilla", "x402", "serde"] }
-subbit-server = { workspace = true, features = ["main", "vanilla", "x402"] }
+subbit-gate = { workspace = true, features = ["main", "vanilla", "x402"] }
 subbit-session = { workspace = true, features = ["serde"] }
 subbit-tx = { workspace = true, features = ["serde"] }

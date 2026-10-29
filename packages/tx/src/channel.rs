@@ -74,7 +74,7 @@ impl TryFrom<&Output> for Channel {
             Asset::Lovelace => value.lovelace().saturating_sub(MIN_ADA_BUFFER),
             Asset::Native { hash, name } => value
                 .assets()
-                .get(&Hash::<28>::from(*hash))
+                .get(&Hash::<28>::from(<[u8; 28]>::from(*hash)))
                 .and_then(|t| t.get(name))
                 .copied()
                 .unwrap_or(0),
@@ -112,7 +112,10 @@ impl Channel {
     pub fn buffered_value(&self) -> Value<u64> {
         let amount = self.variables().amount();
         if let Asset::Native { hash, name } = self.constants().asset() {
-            Value::new(MIN_ADA_BUFFER).with_assets([((*hash).into(), [(name.clone(), amount)])])
+            Value::new(MIN_ADA_BUFFER).with_assets([(
+                Hash::<28>::from(<[u8; 28]>::from(*hash)),
+                [(name.clone(), amount)],
+            )])
         } else {
             Value::new(amount.saturating_add(MIN_ADA_BUFFER))
         }

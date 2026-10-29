@@ -1,21 +1,18 @@
 # Index
 
-Roles and responsibilities
+```sample
+| cardano data source | <--> | index | --> | subbit-gate |
+```
 
-The service reports Channel **lineage**.
-From this, the server chooses a Backing for the Channel,
-and also records the _safe to settle_ Utxos.
+The index service pulls data from a cardano data source and reports Channel **lineage** to the subbit gate.
+From this, the gate chooses a Backing for the Channel, and also records the _safe to settle_ Utxos.
 
 ## Design assumptions
 
-Index service is treated as stateless, although may cache data as an optimization.
-
-The data source:
-
-- Sees all relevant txs
-- Fully resolves txs
-
-Thus from a tx we can establish "continuing" output from input-output ordering.
+- Index service is treated as stateless, although may cache data as an optimization.
+- The data source: Sees all relevant txs; Fully resolves txs.
+  Thus from a tx we can establish "continuing" output from input-output ordering.
+- The index service is polling data a cadence much higher than the close period.
 
 ## Design considerations
 
@@ -26,10 +23,10 @@ There are two ways the index report can be wrong about a Backing:
 
 The former is very bad - Provider is exposed to losing funds.
 The latter is bad - Consumer does not receive service, but no funds at risk.
-Thus the on any failure, the index should report `NoBacking` and require
-intervention, not silent stall.
 
-Likewise the server should cease serving if it has not heard from the index service.
+Therefore on failure the index should report `NoBacking` and require intervention, not silent stall.
+
+Moreover the gate should cease serving if it has not heard from the index service.
 
 ## Lineage
 
@@ -44,6 +41,8 @@ Each transition is a Tx.
 Txs can step many channels.
 
 ## Validation
+
+From the set of inputs or outputs.
 
 For each tx:
 
@@ -67,14 +66,31 @@ This is a safty fallback.
 - Verify well-formedness of continuing Outputs
 - New outputs may be ill-formed, but ignore.
 
-Each tx is:
+## Data
 
-- `[ (input, option<output>) ]` - spends
-- `[ output ]` - new
+### Ingestion
 
-- `{ keytag : [ lineage ] }`
-- `lineage = { constants, stake_credential, inner}`
-- `inner =  [ { block_height, stage, amount } ]`
+- We are targeting `floe` as our backend.
+- In future we may migrate to speaking `n2n` directly.
+
+Floe speaks a variant of utxo-rpc, and supports grpc, http-json, http-cbor.
+Floe racks the last chunk of the chain: this the tip, and some amount of depth.
+
+It provides a query `SearchUtxos` by payment credential.
+Really, its TxOs rather than UTxOs because it can return spent as well as unspent.
+Subbit index service requires to some amount of depth to reconstruct lineage reliably.
+Assumption: depth provided is greater than that which is considered "settled" (ie unrollbackable).
+
+The default query is TxOs at payment credential equal to the subbit validator.
+
+### Process
+
+Under normal operation, partition by `(constants, stake_key)` will be sufficient to construct lineage.
+
+Additional work is required to distinguish mimics:
+
+1. Partition on transitive relation induced by `spent_by`.
+2. Tie break by ordering.
 
 The service verifies that a TxO is well-formed.
 
@@ -86,58 +102,65 @@ The service verifies that a TxO is well-formed.
   - stage: well formed
 - no script
 
-Index hands over lineage: Server decides which to choose.
-All other lines are "safe to settle".
+If a line contains a TxO that violates this, then it implies that this cannot be
+the output of a (normally) validated tx.
+We infer that this is either a "bad" open or a "bad" mutual.
+The violating item, and its parents are dropped from the line.
 
-For
+### Output
 
-Cases we must accommodate:
+We should output in two modes:
 
-- spends on a UTxO
-- rollbacks
-- mimics
+- Snapshot: Update all. Keytags missing implies terminated.
+- Partial: Update some. Keytags missing does not imply terminated.
 
-What happens if the service reports:
+For now we implement only Snapshot mode.
 
-- a safe to settle,
-- then there is a rollback
+```rust
+struct Output {
+    tip : Point,
+    channels : Vec<Channel>, stake_credential , [lines],
+}
 
-Either the Tx appears again or it does not. On the former case, it will be safe to settle.
-In the latter it is unsettle-able.
+/// Validator enforces that under a normal (non-mutual) spend, then the following
+/// are equal between an input and its continuing output
+struct ConstantsExt {
+    constants: Constants,
+    delegation: Option<Credential>,
+}
 
-A notion of continuity in the case of a mutual
+struct Channel {
+    constants_ext : ConstantsExt,
+    lines : Vec<Line>,
+}
 
-Service should report : Current backing, and identify Output References that are _safe to
-settle_.
-A TxO is _safe to settle_ if it is not on the lineage of the current Backing.
+struct Line(Vec<Item>)
 
-Payload = { <keytag> : { backing , safe_to_settle : [ txo_ref ] } }
-backing = { reserve, subbed }
+struct Item {
+    created_at : Point,
+    txo_ref : OutputReference,
 
-What does safe to settle mean? And what can go wrong?
+}
 
-Under normal operation, there is a tx consuming the channel, and outputing a Closed UTxO.
-The correspondence is unambiguous.
+/// A variant of channel stage relevant to Backing.
+enum Stagish {
+    // Potential Channel backing
+    Opened { amount : u64, subbed : u64 },
+    // Channel (line) closed.
+    Closed,
+    // Channel (line) terminated in way other than close (ie mutual or data corruption/ assumption violation).
+    Terminated,
+}
+```
 
-A tx creates relationships between Inputs and Outputs.
-A parent (input) and child (output) relationship is established by:
+### Downstream
 
-_"Did the validator identify the child as the continuing output of the parent?"_
+An empty line is then treated as if `Terminated`.
+A channel with no lines is treated as `Terminated`.
+Re-activation will require intervention.
 
-A lineage is a sequence of parent-child relationships of TxOs.
+Gate chooses open line (ie not closed or terminated), item of settled depth for backing,
+with greatest redeemable funds.
+If there are none, then backing is `None`.
 
-What is a transparent and robust way to establish relationships?
-Rerunning the validator code?
-
-For each keytag, there is a vec of lineages.
-In normal operation, this vec has one element,
-but we must accommodate the case of more than one.
-
-If a lineage has an element in closed stage, then it is closed.
-Otherwise is is open.
-
-TxO is **settled** if it is beyond a certain blocked depth `D`.
-The depth `D` is at providers discression.
-The backing of lineage is decided by
-
-t PLACEHOLDER : u8 = 0;
+All closed `txo_ref` are recorded as `safe_to_settle`. Their lines are excluded as backing.

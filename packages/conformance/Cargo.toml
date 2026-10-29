@@ -5,7 +5,6 @@ documentation.workspace = true
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
@@ -13,13 +12,16 @@ rust-version.workspace = true
 [features]
 
 [dependencies]
+amaru-kernel.workspace = true
 amaru-uplc.workspace = true
-cryptoxide.workspace = true
 # ed25519-dalek   = { version = "2", default-features = false, optional = true }
 hex.workspace = true
-minicbor.workspace = true
-proptest.workspace = true
+minicbor = { workspace = true, features = ["alloc"] }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+cryptoxide.workspace = true
+proptest.workspace = true
 subbit-core = { workspace = true, features = ["test-utils"] }
 subbit-l1-dto = { workspace = true, features = ["test-utils"] }

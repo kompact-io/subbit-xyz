@@ -1,5 +1,4 @@
-mod asset;
-pub use asset::Asset;
+pub use subbit_core::Asset;
 
 mod constants;
 pub use constants::Constants;

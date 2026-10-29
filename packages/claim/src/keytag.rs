@@ -1,10 +1,11 @@
-//! Wire-compatible with `subbit_server::Keytag` (same raw-bytes-as-CBOR-
+//! Wire-compatible with `subbit_gate::Keytag` (same raw-bytes-as-CBOR-
 //! bytestring shape: `iou_key` bytes ++ `tag` bytes) -- this crate keeps
-//! its own copy rather than depending on `subbit-server` itself, the
+//! its own copy rather than depending on `subbit-gate` itself, the
 //! same way `subbit_index::naive::keytag_of` already does.
 
 use subbit_l1_dto::Constants;
-use subbit_session::Keyring;
+
+use crate::keyring::Keyring;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, minicbor::Decode)]
 #[cbor(transparent)]

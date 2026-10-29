@@ -1,6 +1,6 @@
 //! Echo client. `init` writes a starter config; `send` posts data to
-//! `{base_url}/echo`. Requests go through `subbit_issuer`'s metering
-//! middleware whenever the config has an `[issuer]` section, and are sent
+//! `{base_url}/echo`. Requests go through `subbit_stamp`'s metering
+//! middleware whenever the config has an `[stamp]` section, and are sent
 //! plain otherwise — same binary, no separate flag to remember.
 
 use anyhow::Context;

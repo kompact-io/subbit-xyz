@@ -84,8 +84,8 @@
         >Pop TTL (seconds)
         <input id="ttl" value="3600" />
       </label>
-      <button id="create-issuer">Create issuer</button>
-      <pre id="issuer-out">(no issuer yet)</pre>
+      <button id="create-stamp">Create stamp</button>
+      <pre id="stamp-out">(no stamp yet)</pre>
     </section>
 
     <section>
@@ -122,11 +122,11 @@
     </section>
 
     <script type="module">
-      import init, { JsIssuer } from "./pkg/subbit_issuer.js";
+      import init, { JsStamp } from "./pkg/subbit_stamp.js";
 
       await init();
 
-      let issuer = null;
+      let stamp = null;
       let cachedCatalog = null;
 
       const STORAGE_KEYS = ["base-url", "signing-key", "tag"];
@@ -187,18 +187,18 @@
             }
             const terms = JSON.parse(text);
             cachedCatalog = terms.catalog;
-            if (issuer) {
-              issuer.setCatalog(JSON.stringify(cachedCatalog));
-              log("fetch terms: ok, catalog cached into issuer");
+            if (stamp) {
+              stamp.setCatalog(JSON.stringify(cachedCatalog));
+              log("fetch terms: ok, catalog cached into stamp");
             } else {
-              log("fetch terms: ok, catalog held pending issuer creation");
+              log("fetch terms: ok, catalog held pending stamp creation");
             }
           } catch (e) {
             log(`fetch terms failed: ${e}`);
           }
         });
 
-      document.getElementById("create-issuer").addEventListener("click", () => {
+      document.getElementById("create-stamp").addEventListener("click", () => {
         try {
           const signingKeyHex = document.getElementById("signing-key").value;
           const tagHex = document.getElementById("tag").value;
@@ -206,28 +206,28 @@
           const signingKey = hexToBytes(signingKeyHex);
           const tag = hexToBytes(tagHex);
           const ttl = BigInt(document.getElementById("ttl").value);
-          issuer = new JsIssuer(signingKey, tag, ttl);
+          stamp = new JsStamp(signingKey, tag, ttl);
           if (cachedCatalog) {
-            issuer.setCatalog(JSON.stringify(cachedCatalog));
+            stamp.setCatalog(JSON.stringify(cachedCatalog));
           }
           localStorage.setItem("echo-demo.base-url", baseUrl);
           localStorage.setItem("echo-demo.signing-key", signingKeyHex);
           localStorage.setItem("echo-demo.tag", tagHex);
-          document.getElementById("issuer-out").textContent =
-            `created, balance = ${issuer.balance()}`;
+          document.getElementById("stamp-out").textContent =
+            `created, balance = ${stamp.balance()}`;
           document.getElementById("send-request").disabled = false;
-          log("issuer created");
+          log("stamp created");
         } catch (e) {
-          log(`create issuer failed: ${e}`);
+          log(`create stamp failed: ${e}`);
         }
       });
 
       document.getElementById("show-catalog").addEventListener("click", () => {
-        if (!issuer) {
-          log("show catalog: no issuer yet");
+        if (!stamp) {
+          log("show catalog: no stamp yet");
           return;
         }
-        const catalog = issuer.catalog();
+        const catalog = stamp.catalog();
         document.getElementById("catalog-out").textContent =
           catalog ?? "(none cached)";
       });
@@ -235,8 +235,8 @@
       document
         .getElementById("send-request")
         .addEventListener("click", async () => {
-          if (!issuer) {
-            log("send request: no issuer yet");
+          if (!stamp) {
+            log("send request: no stamp yet");
             return;
           }
           const base = document
@@ -249,14 +249,14 @@
             if (costInput !== "") {
               cost = BigInt(costInput);
             } else {
-              const catalogJson = issuer.catalog();
+              const catalogJson = stamp.catalog();
               if (!catalogJson)
                 throw new Error(
                   "no cost given and no catalog cached to quote from",
                 );
               cost = quoteCost(JSON.parse(catalogJson), path);
             }
-            const envelope = issuer.spend(cost);
+            const envelope = stamp.spend(cost);
             const resp = await fetch(`${base}${path}`, {
               headers: { subbit: envelope },
             });
@@ -265,8 +265,8 @@
             document.getElementById("request-out").textContent =
               `status: ${resp.status}\nsubbit header: ${replyEnvelope ?? "(none)"}\nbody: ${bodyText}`;
             if (replyEnvelope) {
-              issuer.response(replyEnvelope);
-              log(`send request: ok, balance now ${issuer.balance()}`);
+              stamp.response(replyEnvelope);
+              log(`send request: ok, balance now ${stamp.balance()}`);
             } else {
               log(
                 `send request: status ${resp.status}, no subbit header to apply`,

@@ -1,8 +1,9 @@
+use amaru_kernel::{PROTOCOL_VERSION_11, PlutusVersion};
 use amaru_uplc::{
     arena::Arena,
     binder::{Binder, DeBruijn},
     data::PlutusData,
-    machine::{EvalResult, PlutusVersion},
+    machine::EvalResult,
     program::Program,
     term::Term,
 };
@@ -82,7 +83,9 @@ impl AikenFn {
     {
         let bytes = self.compiled_code_bytes();
         let flat_bytes = decode_cbor_bytestring(&bytes).expect("failed to unwrap code");
-        amaru_uplc::flat::decode::<V>(arena, &flat_bytes, PlutusVersion::V3, 1000).unwrap()
+        amaru_uplc::flat::decode::<V>(arena, &flat_bytes, PlutusVersion::V3, PROTOCOL_VERSION_11)
+            .unwrap()
+            .0
     }
 
     pub fn eval_with<T, F>(&self, value: &T, pred: F) -> bool
@@ -93,7 +96,7 @@ impl AikenFn {
         let arena = Arena::new();
         let program = self.program::<DeBruijn>(&arena);
         let arg = Term::data(&arena, try_into_plutus_data(&arena, value).unwrap());
-        let result = program.apply(&arena, arg).eval(&arena);
+        let result = program.apply(&arena, arg).eval_default(&arena);
         println!("here {:?}", result.term);
         pred(&result)
     }

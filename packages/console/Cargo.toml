@@ -1,0 +1,108 @@
+[package]
+name = "subbit-console"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "subbit_console"
+crate-type = ["cdylib", "rlib"]
+
+# `getrandom` is a real, deliberate dependency (feature unification for
+# `rand::rngs::OsRng`'s wasm32 backend -- see its own Cargo.toml comment
+# above), never named directly from source, so cargo-machete can't see it.
+[package.metadata.cargo-machete]
+ignored = ["getrandom"]
+
+[[bin]]
+name = "subbit-console"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+# Native test-driving bin -- "native build for testing / test-driving",
+# not the shipped frontend. Mirrors `subbit-stamp`'s own `cli` feature.
+cli = ["dep:clap"]
+
+[dependencies]
+anyhow.workspace = true
+cardano-sdk = { workspace = true, features = ["serde"] }
+subbit-core = { workspace = true, features = ["serde"] }
+subbit-l1-dto = { workspace = true, features = ["serde"] }
+subbit-l2-dto = { workspace = true, features = ["serde"] }
+# Bare (no native/grpc/wasm feature): just `cardano::search_all`/
+# `search_history` (generic over `floe_client::Backend`, so
+# `floe_client::http::json::Client` works too) + `lineage::reconstruct`.
+subbit-index = { workspace = true, default-features = false }
+subbit-index-dto = { workspace = true, features = ["std", "serde"] }
+subbit-tx = { workspace = true, default-features = false, features = [
+  "serde",
+  "floe",
+] }
+floe-dto-http = { workspace = true, features = ["json"] }
+# Bare here (just the `Backend` trait + DTOs); the `[target.'cfg(
+# target_arch = "wasm32")'.dependencies]` entry below adds `http-json`
+# on top for wasm32 specifically, giving `floe_client::http::json::
+# Client` a real transport there (`gloo-net`) -- Cargo unions features
+# across a plain and a target-specific declaration of the same crate.
+floe-client = { workspace = true, default-features = false }
+# Wallet tab (plan-embedded-wallet.md): `subbit_wallet::Store` lives
+# inside `Ctx` itself (`src/ctx.rs` -- no separate `Store` type any
+# more); the `Embedded` backend itself is constructed in `ui::wasm`
+# where a live `Backend` already exists, never inside `Ctx` (which
+# stays I/O-free, same rule as everywhere else in this crate).
+subbit-wallet = { workspace = true, default-features = false, features = [
+  "serde",
+] }
+ed25519-dalek = { workspace = true, default-features = false, features = [
+  "rand_core",
+] }
+rand.workspace = true
+# `rand`'s own `getrandom` dependency doesn't request this feature;
+# without it, `rand::rngs::OsRng` has no wasm32 backend at all. Harmless
+# extra on native -- `wasm-bindgen`/`js-sys` only turn on under
+# `cfg(target_family = "wasm")` regardless of this feature flag (see
+# `getrandom`'s own `Cargo.toml`).
+getrandom = { version = "0.4", default-features = false, features = [
+  "wasm_js",
+] }
+hex.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+clap = { workspace = true, optional = true }
+
+# `packages/console/www`'s wasm-bindgen bundle (`src/ui/wasm.rs`) --
+# gated by target, not a Cargo feature: `ui::wasm`'s module declaration
+# is `#[cfg(target_arch = "wasm32")]` in `src/ui.rs`, so these are only
+# ever pulled in for that target in the first place, with nothing to
+# opt into/out of separately.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true }
+# Needed by `#[wasm_bindgen]`'s own macro expansion over `async fn`
+# (`fetchLiveTxos`/`fetchHistory`), not called directly ourselves.
+wasm-bindgen-futures = { workspace = true }
+# `providers_fetch`'s own `fetched_at` timestamp (`js_sys::Date::now()`)
+# -- *where* to get wall-clock time is a wasm-boundary concern, same
+# class as `web-sys`'s `localStorage` access right below, never `Ctx`'s.
+js-sys = { workspace = true }
+# `ui::wasm`'s own `localStorage` access (`load`/`save`).
+web-sys = { workspace = true, features = ["Window", "Storage"] }
+floe-client = { workspace = true, default-features = false, features = [
+  "http-json",
+] }
+# `ui::wasm::providers_fetch`'s plain GET against a provider's own
+# `.well-known/subbit` -- not a Floe server, so `floe_client::Backend`
+# doesn't apply here. Same crate/version `floe-client` itself already
+# uses for its own wasm32 transport (see that crate's `Cargo.toml`), not
+# a second, independent choice of wasm HTTP client for this workspace.
+gloo-net = { workspace = true, features = ["http"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

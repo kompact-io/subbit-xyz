@@ -1,6 +1,6 @@
 //! Config for the echo client.
 use serde::{Deserialize, Serialize};
-use subbit_issuer::local;
+use subbit_stamp::local;
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -16,7 +16,7 @@ pub struct Config {
     /// Which wire dialect to meter requests under. Only read when
     /// `subbit` is present.
     pub dialect: Dialect,
-    /// Present => requests are metered through the issuer middleware.
+    /// Present => requests are metered through the stamp middleware.
     /// Absent => plain requests.
     pub subbit: Option<local::Config>,
 }

@@ -9,6 +9,9 @@ macros::newtype_array!(Hash28, 28);
 macros::newtype_array!(Hash32, 32);
 macros::newtype_array!(MacSig, 20);
 
+mod asset;
+pub use asset::Asset;
+
 mod duration;
 pub use duration::Duration;
 

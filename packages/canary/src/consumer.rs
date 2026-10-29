@@ -1,8 +1,8 @@
 //! A logical Consumer: an ephemeral on-chain identity (for
 //! `Constants.consumer`/`.iou_key`, unrelated to the shared funding
-//! wallet `l1.rs` owns) plus a real `subbit_issuer::Issuer` driving real
+//! wallet `l1.rs` owns) plus a real `subbit_stamp::Stamp` driving real
 //! HTTP spend/refund against a Provider, in either wire dialect -- the
-//! same `Arc<Issuer<C>>` + forwarding-`Middleware` pattern
+//! same `Arc<Stamp<C>>` + forwarding-`Middleware` pattern
 //! `examples/echo/client` and the old `packages/e2e` harness used.
 //!
 //! `persona`/`roster` own everything about turning a `--persona` roster
@@ -25,9 +25,9 @@ use reqwest_middleware::{
     ClientBuilder, ClientWithMiddleware, Middleware, Next, Result as MwResult,
 };
 use subbit_core::{Duration, Tag, VerifyingKey};
-use subbit_issuer::reqwest::vanilla::Issuer as VanillaMiddleware;
-use subbit_issuer::reqwest::x402::Issuer as X402Middleware;
 use subbit_l2_dto::{Catalog, CatalogIndex, Terms};
+use subbit_stamp::reqwest::vanilla::Stamp as VanillaMiddleware;
+use subbit_stamp::reqwest::x402::Stamp as X402Middleware;
 use subbit_tx::step::{Can, Want};
 
 use crate::identity::hash28_from_seed;
@@ -52,16 +52,16 @@ pub struct Consumer {
     /// base URL, nothing resolved from it. `connect` fetches `/v1/terms`
     /// from here; `spend` hits `/v1/spend/echo` here.
     provider_base_url: String,
-    /// Set once by `flee`, never cleared: from then on `want` always
+    /// Set once by `tidy`, never cleared: from then on `want` always
     /// heads for the exit (`Close`, then `Elapse`) instead of consulting
     /// `add_amounts`/`spend_counts`. `AtomicBool` rather than `&mut
     /// self` since every other method here takes `&self` -- consumers
     /// are shared via `Arc` across concurrent spend tasks.
-    fleeing: AtomicBool,
-    /// Set by `flee_once_closed`: `want` only actually starts `flee`ing
+    tidying: AtomicBool,
+    /// Set by `tidy_once_closed`: `want` only actually starts `tidy`ing
     /// once this consumer's own `Close` lands, not before -- see its own
     /// doc comment.
-    flee_on_close: AtomicBool,
+    tidy_on_close: AtomicBool,
     pub tag: Vec<u8>,
     /// consumer's `Constants.consumer` identity.
     pub l1_key: subbit_core::Hash28,
@@ -149,8 +149,8 @@ impl Consumer {
             l1_key: hash28_from_seed(&seed),
             iou_key,
             provider_base_url: provider_base_url.into(),
-            fleeing: AtomicBool::new(false),
-            flee_on_close: AtomicBool::new(false),
+            tidying: AtomicBool::new(false),
+            tidy_on_close: AtomicBool::new(false),
             tag,
             dialect,
             driver: None,
@@ -187,20 +187,20 @@ impl Consumer {
 
     fn build_driver(&mut self, catalog: Catalog) -> anyhow::Result<()> {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&self.seed);
-        let account = subbit_issuer::Account::new(signing_key, Tag::from(self.tag.clone()));
-        let issuer = subbit_issuer::Issuer::new(account, Duration::from_secs(3600));
+        let account = subbit_stamp::Account::new(signing_key, Tag::from(self.tag.clone()));
+        let stamp = subbit_stamp::Stamp::new(account, Duration::from_secs(3600));
         let costing = CatalogIndex::new(catalog).context("indexing provider catalog")?;
 
         let (driver, client) = match self.dialect {
             Dialect::Vanilla => {
-                let middleware = Arc::new(VanillaMiddleware::new(issuer, costing));
+                let middleware = Arc::new(VanillaMiddleware::new(stamp, costing));
                 let client = ClientBuilder::new(reqwest::Client::new())
                     .with(ForwardVanilla(middleware.clone()))
                     .build();
                 (Driver::Vanilla(middleware), client)
             }
             Dialect::X402 => {
-                let middleware = Arc::new(X402Middleware::new(issuer, costing));
+                let middleware = Arc::new(X402Middleware::new(stamp, costing));
                 let client = ClientBuilder::new(reqwest::Client::new())
                     .with(ForwardX402(middleware.clone()))
                     .build();
@@ -217,7 +217,7 @@ impl Consumer {
     /// comes back as an `Err` from the middleware itself
     /// (`apply_required` always returns `Err`,
     /// even though it learns `accepted` as a side effect -- see
-    /// `subbit_issuer::dialect::x402::apply_required`'s own doc
+    /// `subbit_stamp::dialect::x402::apply_required`'s own doc
     /// comment): that's expected, not a real failure, so retry once now
     /// that terms are learned, the same way `examples/echo/client`
     /// does. Vanilla has no such dance, so it's a single request.
@@ -237,15 +237,15 @@ impl Consumer {
     }
 
     /// This consumer's own decision for `round`: `End` once `Settled`,
-    /// `flee_want` if fleeing, else an `Add` due this round, a `Close`
+    /// `tidy_want` if tidying, else an `Add` due this round, a `Close`
     /// on the last round, or nothing. States intent only -- `L1::want`
     /// decides if it's actually submittable yet.
     pub fn want(&self, round: usize, can: &[Can], close_upper: Duration) -> Option<Want> {
         if can.contains(&Can::End) {
             return Some(Want::End);
         }
-        if self.fleeing.load(Ordering::Relaxed) {
-            return self.flee_want(can, close_upper);
+        if self.tidying.load(Ordering::Relaxed) {
+            return self.tidy_want(can, close_upper);
         }
         if let Some(&amount) = self.add_amounts.get(round) {
             return can.contains(&Can::Add).then_some(Want::Add { amount });
@@ -254,12 +254,12 @@ impl Consumer {
             let want = can
                 .contains(&Can::Close)
                 .then_some(Want::Close { upper: close_upper });
-            // Flee from here on, once it lands -- same spend/Add
+            // tidy from here on, once it lands -- same spend/Add
             // schedule as any other consumer right up to this point, it
             // just skips the real provider's `subbit-claim` Settle
-            // afterward (see `flee_on_close`).
-            if want.is_some() && self.flee_on_close.load(Ordering::Relaxed) {
-                self.flee();
+            // afterward (see `tidy_on_close`).
+            if want.is_some() && self.tidy_on_close.load(Ordering::Relaxed) {
+                self.tidy();
             }
             return want;
         }
@@ -269,39 +269,45 @@ impl Consumer {
     /// From now on, `want` always heads for the exit: `Close` once
     /// `Opened`, `Elapse` once `Closed`. Skips `Settle` entirely --
     /// that's a live provider's own real claim decision
-    /// (`subbit-claim`), which a fleeing consumer doesn't wait around
+    /// (`subbit-claim`), which a tidying consumer doesn't wait around
     /// for (teardown has no provider at all).
-    pub fn flee(&self) {
-        self.fleeing.store(true, Ordering::Relaxed);
+    pub fn tidy(&self) {
+        self.tidying.store(true, Ordering::Relaxed);
     }
 
-    /// Marks this consumer to `flee` the moment its own `Close` lands --
+    /// Marks this consumer to `tidy` the moment its own `Close` lands --
     /// not immediately: a demo straggler still spends its full persona
     /// schedule like anyone else, it just skips the real provider's
     /// `Settle` once it's done, to demonstrate `Elapse` instead.
-    pub fn flee_once_closed(&self) {
-        self.flee_on_close.store(true, Ordering::Relaxed);
+    pub fn tidy_once_closed(&self) {
+        self.tidy_on_close.store(true, Ordering::Relaxed);
     }
 
-    pub fn is_fleeing(&self) -> bool {
-        self.fleeing.load(Ordering::Relaxed)
+    pub fn is_tidying(&self) -> bool {
+        self.tidying.load(Ordering::Relaxed)
     }
 
     /// `Close` while `Opened`; once `Closed`, `Elapse`. See `want`.
-    fn flee_want(&self, can: &[Can], close_upper: Duration) -> Option<Want> {
+    fn tidy_want(&self, can: &[Can], close_upper: Duration) -> Option<Want> {
         for c in can {
             match c {
                 Can::Close => return Some(Want::Close { upper: close_upper }),
-                // 1s margin measured too tight on real preprod: queued
-                // wants ahead of this one in the same batch delay
-                // actual submission past the readiness check in
-                // `L1::want`, and the chain's own slot can still be a
-                // few seconds behind `lower` by the time it lands
+                // 1s, then 20s, both measured too tight on real preprod
+                // (seen live: a submission still rejected 33 slots short
+                // of `lower` even with the 20s margin) -- queued wants
+                // ahead of this one in the same batch delay actual
+                // submission past the readiness check in `L1::want`, and
+                // preprod's own block production can stall well past
+                // either margin. 120s matches `close_upper`'s own
+                // established margin elsewhere in this module for the
+                // same reason (measured confirmation lag tops out around
+                // 70-80s) -- tidy/teardown has no urgency to shave this
+                // down, only to not fail.
                 // (hit live: `OutsideValidityIntervalUTxO`, 4 slots
                 // short).
                 Can::Elapse { after } => {
                     return Some(Want::Elapse {
-                        lower: *after + Duration::from_secs(20),
+                        lower: *after + Duration::from_secs(120),
                     });
                 }
                 _ => {}
@@ -322,7 +328,7 @@ impl Consumer {
     /// paced by `pace`. Stops at the first failure, returns how many
     /// landed. `burst` overrides this entirely (see `spend_burst`).
     pub async fn firehose_l2(&self, round: usize) -> usize {
-        if self.fleeing.load(Ordering::Relaxed) {
+        if self.tidying.load(Ordering::Relaxed) {
             return 0;
         }
         if let Some(stop) = self.burst {
@@ -359,12 +365,11 @@ impl Consumer {
                 break;
             }
             if std::time::Instant::now() >= deadline {
-                if self.committed().unwrap_or(0) < stop.commit_max {
-                    if let Ok(resp) = self.spend().await {
-                        if resp.status().is_success() {
-                            done += 1;
-                        }
-                    }
+                if self.committed().unwrap_or(0) < stop.commit_max
+                    && let Ok(resp) = self.spend().await
+                    && resp.status().is_success()
+                {
+                    done += 1;
                 }
                 break;
             }
@@ -377,7 +382,7 @@ impl Consumer {
     }
 
     /// The consumer's current off-chain view: cumulative spend and
-    /// committed balance, as tracked by its own `Issuer` cache. `None`
+    /// committed balance, as tracked by its own `Stamp` cache. `None`
     /// before `connect` (no cache to read yet).
     pub fn committed(&self) -> Option<u64> {
         self.cache()?.committed()
@@ -387,7 +392,7 @@ impl Consumer {
         self.cache().map_or(0, |c| c.spent())
     }
 
-    fn cache(&self) -> Option<subbit_issuer::Cache> {
+    fn cache(&self) -> Option<subbit_stamp::Cache> {
         Some(match self.driver.as_ref()? {
             Driver::Vanilla(m) => m.cache(),
             Driver::X402(m) => m.cache(),

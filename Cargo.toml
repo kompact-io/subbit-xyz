@@ -5,16 +5,19 @@ members = [
   "packages/core",
   "packages/l1-dto",
   "packages/l2-dto",
+  "packages/index-dto",
   "packages/conformance",
   "packages/tx",
-  "packages/server",
-  "packages/client",
-  "packages/issuer",
+  "packages/gate",
+  "packages/gate-client",
+  "packages/stamp",
   "packages/session",
   "packages/cli",
   "packages/index",
   "packages/claim",
   "packages/canary",
+  "packages/console",
+  "packages/wallet",
   ######### CARDANO ############
   # "packages/cardano-session",
   ######### EXAMPLE ############
@@ -32,7 +35,6 @@ documentation = "https://github.com/kompact-io/subbit-rs"
 version = "0.0.0"
 edition = "2024"
 repository = "https://github.com/kompact-io/subbit-rs"
-homepage = "https://github.com/kompact-io/subbit-rs"
 license = "MPL-2.0"
 authors = ["@waalge"]
 rust-version = "1.99"
@@ -44,9 +46,13 @@ tag-name = "v{{version}}"
 [workspace.dependencies]
 csv = "1.4.0"
 url = { version = "2.5.8", features = ["serde"] }
-amaru-uplc = "0.3.0"
-amaru-plutus = "0.1.2"
-amaru-kernel = "0.1.2"
+# Same git source (unpinned `nix-proper` branch) as `floe-client`'s own
+# `amaru-kernel` dependency -- a registry version here would give Cargo
+# two distinct `amaru-kernel` types (git vs. crates.io), even at the
+# same version number.
+amaru-uplc = { git = "https://github.com/kompact-io/amaru", branch = "nix-proper" }
+amaru-plutus = { git = "https://github.com/kompact-io/amaru", branch = "nix-proper" }
+amaru-kernel = { git = "https://github.com/kompact-io/amaru", branch = "nix-proper" }
 anyhow = "1.0.102"
 async-trait = "0.1.92"
 bytes = "1"
@@ -59,6 +65,8 @@ cardano-sdk = { git = "https://github.com/cardano-lightning/konduit.git", branch
 cardano-session = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
 cardano-wallet = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
 clap = { version = "4.6.1", features = ["env", "derive"] }
+floe-client = { git = "https://github.com/kompact-io/floe", branch = "main", default-features = false }
+floe-dto-http = { git = "https://github.com/kompact-io/floe", branch = "main", default-features = false }
 cryptoxide = "0.5.1"
 dashmap = "6"
 figment = "0.10"
@@ -77,34 +85,50 @@ reqwest = "0.13"
 reqwest-middleware = "0.5.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-serde_with = "3.21.0"
 thiserror = { version = "2.0.17", default-features = false }
 tokio = { version = "1.52.3", features = ["full"] }
 toml = "1.1.4"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 web-time = "1.1.0"
-wasm-bindgen = "=0.2.127"                                                                                             # pinned to match nixpkgs' wasm-bindgen-cli exactly
-js-sys = "0.3.104"
+wasm-bindgen = "=0.2.129"
+# `#[wasm_bindgen]`-exported `async fn`s (`subbit-console`'s
+# `fetchLiveTxos`/`fetchHistory`) expand to code naming this crate
+# directly, so it's a real dependency even though nothing calls into
+# it by name from our own source.
+wasm-bindgen-futures = "0.4.77"
+# `Ctx::export`/`import`'s wasm32 `localStorage` access (`packages/
+# console/src/ctx.rs`) -- no features here, each consumer requests its
+# own (console: `Window`, `Storage`).
+web-sys = "0.3"
+# `subbit-console`'s `providers_fetch` (`js_sys::Date::now()`).
+js-sys = "0.3"
+# `subbit-console`'s `providers_fetch` plain GET -- same crate/version
+# `floe-client` already pins for its own wasm32 transport.
+gloo-net = { version = "0.6", default-features = false }
 ed25519-dalek = { version = "3.0.0", default-features = false }
 
 # cardano-session = { path = "packages/cardano-session", default-features = false }
 
 subbit-build-info = { path = "packages/build-info", default-features = false }
 subbit-claim = { path = "packages/claim", default-features = false }
-subbit-cli = { path = "packages/cli", default-features = false }
-subbit-client = { path = "packages/client", default-features = false }
+subbit-gate-client = { path = "packages/gate-client", default-features = false }
 subbit-config = { path = "packages/config", default-features = false }
-subbit-canary = { path = "packages/canary", default-features = false }
 subbit-core = { path = "packages/core", default-features = false }
 subbit-l1-dto = { path = "packages/l1-dto", default-features = false }
 subbit-l2-dto = { path = "packages/l2-dto", default-features = false }
 subbit-index = { path = "packages/index", default-features = false }
-subbit-issuer = { path = "packages/issuer", default-features = false }
-subbit-server = { path = "packages/server", default-features = false }
+subbit-index-dto = { path = "packages/index-dto", default-features = false }
+subbit-stamp = { path = "packages/stamp", default-features = false }
+subbit-gate = { path = "packages/gate", default-features = false }
 subbit-session = { path = "packages/session", default-features = false }
 subbit-tx = { path = "packages/tx", default-features = false }
+# Self-contained embedded-wallet crate (plan-embedded-wallet.md) -- a
+# `Wallet` trait + an `Embedded` backend (keys supplied by the caller,
+# no storage of its own beyond its own `Store`). Deliberately has no
+# dependency on `subbit-console`/`subbit-tx` -- NOT the same thing as
+# the `cardano-wallet` entry above (that one is explicitly not to be
+# used as a dependency; this is our own port of its shape).
+subbit-wallet = { path = "packages/wallet", default-features = false }
 
 subbit-examples-echo-client = { path = "examples/echo/client" }
-subbit-examples-echo-proxy = { path = "examples/echo/proxy", default-features = false }
-subbit-examples-echo-server = { path = "examples/echo/server" }

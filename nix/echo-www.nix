@@ -18,14 +18,14 @@
 }: let
   wasmArgs = {
     inherit src;
-    pname = "subbit-issuer-wasm";
+    pname = "subbit-stamp-wasm";
     version = "0.0.0";
-    cargoExtraArgs = "-p subbit-issuer --no-default-features --features wasm --target wasm32-unknown-unknown";
+    cargoExtraArgs = "-p subbit-stamp --no-default-features --features wasm --target wasm32-unknown-unknown";
     doCheck = false;
     CC_wasm32_unknown_unknown = ccWasm32;
     installPhaseCommand = ''
       mkdir -p $out/lib
-      cp target/wasm32-unknown-unknown/release/subbit_issuer.wasm $out/lib/
+      cp target/wasm32-unknown-unknown/release/subbit_stamp.wasm $out/lib/
     '';
   };
   cargoArtifacts = craneLib.buildDepsOnly wasmArgs;
@@ -35,6 +35,6 @@ in
     nativeBuildInputs = [wasmBindgenCli];
   } ''
     mkdir -p $out/pkg
-    wasm-bindgen --target web --out-dir $out/pkg --out-name subbit_issuer \
-      ${wasmCrate}/lib/subbit_issuer.wasm
+    wasm-bindgen --target web --out-dir $out/pkg --out-name subbit_stamp \
+      ${wasmCrate}/lib/subbit_stamp.wasm
   ''

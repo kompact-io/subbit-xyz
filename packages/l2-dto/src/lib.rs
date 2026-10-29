@@ -63,10 +63,9 @@ pub use core_error::CoreError;
 mod network;
 pub use network::Network;
 
-mod asset;
-pub use asset::Asset;
+pub use subbit_core::Asset;
 
 mod terms;
-pub use terms::Terms;
+pub use terms::{Terms, WELL_KNOWN_PATH};
 
 pub mod dialect;

@@ -3,18 +3,18 @@ use std::net::SocketAddr;
 use http::{HeaderMap, HeaderName};
 use pingora::prelude::*;
 use serde::{Deserialize, Serialize};
-pub use subbit_client::{Client, Outcome};
+pub use subbit_gate_client::{Client, Outcome, TermsError};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
-    pub server: SocketAddr,
+    pub gate: SocketAddr,
     pub timeout_ms: u64,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            server: "0.0.0.0:7822".parse().unwrap(),
+            gate: "0.0.0.0:7822".parse().unwrap(),
             timeout_ms: 200,
         }
     }
@@ -22,11 +22,8 @@ impl Default for Config {
 
 impl Config {
     pub fn into_client(self) -> Client {
-        Client::new(
-            self.server,
-            std::time::Duration::from_millis(self.timeout_ms),
-        )
-        .expect("bad subbit client config")
+        Client::new(self.gate, std::time::Duration::from_millis(self.timeout_ms))
+            .expect("bad subbit gate-client config")
     }
 }
 
@@ -53,31 +50,31 @@ fn select(headers: &HeaderMap, names: &[&str]) -> HeaderMap {
 }
 
 /// The consumer's own dialect auth header(s), pulled off an incoming
-/// request: forwarded to `subbit-server` for a spend, and kept around
+/// request: forwarded to `subbit-gate` for a spend, and kept around
 /// to reuse unchanged for that same request's eventual refund.
 pub fn auth_headers(headers: &HeaderMap) -> HeaderMap {
     select(headers, REQUEST_HEADER_NAMES)
 }
 
-/// Whichever of `subbit-server`'s own reply headers are worth relaying
+/// Whichever of `subbit-gate`'s own reply headers are worth relaying
 /// back onto the real response to the consumer.
 pub fn relay_headers(headers: &HeaderMap) -> HeaderMap {
     select(headers, RESPONSE_HEADER_NAMES)
 }
 
-/// `subbit-server` answers `Terms` at both `/v1/terms` and the
+/// `subbit-gate` answers `Terms` at both `/v1/terms` and the
 /// conventional `/.well-known/subbit`; the proxy relays whichever one
 /// a consumer hits, verbatim, no metering check.
 pub fn is_terms_path(path: &str) -> bool {
     path == "/v1/terms" || path == "/.well-known/subbit"
 }
 
-pub async fn terms(client: &Client) -> Result<(u16, Vec<u8>), ()> {
+pub async fn terms(client: &Client) -> Result<(u16, Vec<u8>), TermsError> {
     client.terms().await
 }
 
 /// Reads the consumer's own auth header(s) + path off `session` and
-/// asks `subbit-server` to spend. Hands the auth headers back too,
+/// asks `subbit-gate` to spend. Hands the auth headers back too,
 /// alongside the outcome, so the caller can reuse them for the
 /// eventual refund without re-reading `session`.
 pub async fn check(client: &Client, session: &Session) -> (HeaderMap, Outcome) {

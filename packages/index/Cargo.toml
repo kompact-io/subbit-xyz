@@ -5,7 +5,6 @@ documentation.workspace = true
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
@@ -17,35 +16,68 @@ path = "src/lib.rs"
 [[bin]]
 name = "mock-index"
 path = "src/bin/mock.rs"
+required-features = ["native"]
 
 [[bin]]
 name = "naive-index"
 path = "src/bin/naive.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "lineage-index"
+path = "src/bin/lineage.rs"
+required-features = ["native"]
+
+[features]
+default = ["native"]
+# `cardano`'s own I/O (`search`/`search_all`/`search_history`) is
+# generic over `floe_client::Backend`, not tied to a transport -- this
+# picks which of `floe-client`'s own transport features backs it.
+# Deliberately NOT mirrored by a `wasm` feature forwarding to
+# `floe-client/wasm` itself: that feature pins an internal
+# `wasm-bindgen` version conflicting with ours. `subbit-console`
+# instead supplies its own `Backend` impl under our pin
+# (`wasm/transport.rs`) and calls `search_all`/`search_history` here
+# directly -- no JSON hand-off, no separate floe-client wasm bundle.
+grpc = ["floe-client/grpc"]
+# Everything the 3 bins + `client`'s gate-ingest HTTP POST need: a
+# native async runtime, a native HTTP stack, CLI parsing, logging. Not
+# needed by a pure read-and-reconstruct consumer (`cardano`/`lineage`
+# alone), which is exactly what makes those two reusable from wasm32.
+native = [
+  "grpc",
+  "dep:tokio",
+  "dep:reqwest",
+  "dep:clap",
+  "dep:tracing-subscriber",
+  "dep:csv",
+  "dep:subbit-config",
+]
 
 [dependencies]
+amaru-kernel.workspace = true
 anyhow.workspace = true
-clap.workspace = true
-tokio = { workspace = true, features = ["time"] }
-reqwest.workspace = true
+clap = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["time"], optional = true }
+reqwest = { workspace = true, optional = true }
 minicbor = { workspace = true, features = ["alloc", "derive"] }
 hex = { workspace = true, features = ["alloc", "serde"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
-csv.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
+csv = { workspace = true, optional = true }
 toml.workspace = true
 url.workspace = true
 
-subbit-config = { workspace = true, features = ["clap"] }
+subbit-config = { workspace = true, features = ["clap"], optional = true }
 subbit-core = { workspace = true, features = ["serde"] }
 subbit-l1-dto = { workspace = true, features = ["serde"] }
 subbit-tx = { workspace = true, features = ["serde"] }
-cardano-sdk.workspace = true
-cardano-connector-direct.workspace = true
-cardano-connector.workspace = true
-futures = "0.3.34"
+floe-client = { workspace = true, default-features = false }
+floe-dto-http = { workspace = true, features = ["json"] }
+subbit-index-dto = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 subbit-build-info.workspace = true

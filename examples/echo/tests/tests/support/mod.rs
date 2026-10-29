@@ -1,4 +1,4 @@
-//! Spawns the full echo demo stack (`subbit-server`, `echo-server`,
+//! Spawns the full echo demo stack (`subbit-gate`, `echo-server`,
 //! `echo-proxy`) plus runs the real `echo-client` binary against it.
 
 use std::net::SocketAddr;
@@ -9,15 +9,28 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 
 /// Every workspace binary lands in the same `target/<profile>/`
-/// directory regardless of which package defines it; locate `name`
-/// there relative to this test binary's own `current_exe()`, the same
-/// way `packages/e2e/tests/common/mod.rs` finds `subbit-server`.
+/// directory regardless of which package defines it. This test
+/// binary's own `current_exe()` isn't reliably a sibling of that
+/// directory, though -- depending on cargo's own version it can land
+/// directly there, under `deps/`, or (some newer cargo nightlies, see
+/// `rust-toolchain.toml`) nested under a per-unit `build/<pkg>-<hash>/
+/// out/` -- so instead locate the nearest `target/<profile>` ancestor
+/// in its own path and look there, which every workspace binary
+/// (including a plain `[[bin]]` like `subbit-gate`) is guaranteed to
+/// also land in directly.
 pub fn sibling_bin(name: &str) -> PathBuf {
-    let mut dir = std::env::current_exe().expect("current_exe");
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
+    let exe = std::env::current_exe().expect("current_exe");
+    let components: Vec<_> = exe.components().collect();
+    let target_idx = components
+        .iter()
+        .position(|c| c.as_os_str() == "target")
+        .expect("current_exe path has no `target` component");
+    // `components[..=target_idx + 1]` is `.../target/<profile>`.
+    let dir: PathBuf = components
+        .get(..=target_idx + 1)
+        .expect("current_exe path has no `<profile>` component after `target`")
+        .iter()
+        .collect();
     let bin = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     assert!(
         bin.exists(),
@@ -43,16 +56,16 @@ async fn wait_listening(addr: SocketAddr) {
     panic!("{addr} did not start listening in time");
 }
 
-/// Spawns the real `subbit-server` binary against a temp db and an
+/// Spawns the real `subbit-gate` binary against a temp db and an
 /// ephemeral port, torn down on drop (`kill_on_drop`).
-pub struct SubbitServer {
+pub struct SubbitGate {
     _child: Child,
     addr: SocketAddr,
     _dir: tempfile::TempDir,
 }
 
-impl SubbitServer {
-    pub async fn spawn(mut config: subbit_server::Config) -> Self {
+impl SubbitGate {
+    pub async fn spawn(mut config: subbit_gate::Config) -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
         config.db.db_path = dir.path().join("db.redb").to_string_lossy().into_owned();
 
@@ -60,7 +73,7 @@ impl SubbitServer {
         std::fs::write(&config_path, toml::to_string_pretty(&config).unwrap()).unwrap();
 
         let addr = free_local_addr();
-        let child = Command::new(sibling_bin("subbit-server"))
+        let child = Command::new(sibling_bin("subbit-gate"))
             .arg("--config")
             .arg(&config_path)
             .arg("serve")
@@ -70,7 +83,7 @@ impl SubbitServer {
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .spawn()
-            .expect("spawn subbit-server");
+            .expect("spawn subbit-gate");
 
         wait_ready(addr).await;
 
@@ -86,7 +99,7 @@ impl SubbitServer {
     }
 }
 
-/// Polls the server's admin route until it answers, or panics after ~5s.
+/// Polls the gate's admin route until it answers, or panics after ~5s.
 async fn wait_ready(addr: SocketAddr) {
     let url = format!("http://{addr}/v1/a/ious");
     let client = reqwest::Client::new();
@@ -96,7 +109,7 @@ async fn wait_ready(addr: SocketAddr) {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    panic!("server at {addr} did not become ready in time");
+    panic!("gate at {addr} did not become ready in time");
 }
 
 pub struct EchoServer {
@@ -136,10 +149,10 @@ pub struct EchoProxy {
 }
 
 impl EchoProxy {
-    pub async fn spawn(upstream: SocketAddr, subbit_server: SocketAddr) -> Self {
+    pub async fn spawn(upstream: SocketAddr, subbit_gate: SocketAddr) -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
         let addr = free_local_addr();
-        let config = subbit_examples_echo_proxy_config(addr, upstream, subbit_server);
+        let config = subbit_examples_echo_proxy_config(addr, upstream, subbit_gate);
         let config_path = dir.path().join("echo-proxy-config.toml");
         std::fs::write(&config_path, config).expect("write config");
 
@@ -172,10 +185,10 @@ impl EchoProxy {
 fn subbit_examples_echo_proxy_config(
     listen: SocketAddr,
     upstream: SocketAddr,
-    subbit_server: SocketAddr,
+    subbit_gate: SocketAddr,
 ) -> String {
     format!(
-        "listen = \"{listen}\"\nupstream = \"{upstream}\"\n\n[subbit]\nserver = \"{subbit_server}\"\ntimeout_ms = 2000\n"
+        "listen = \"{listen}\"\nupstream = \"{upstream}\"\n\n[subbit]\ngate = \"{subbit_gate}\"\ntimeout_ms = 2000\n"
     )
 }
 

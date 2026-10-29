@@ -18,6 +18,7 @@ target/
 
 # wasm-pack output
 examples/echo/www/pkg/
+packages/console/www/pkg/
 
 # Envs
 .env

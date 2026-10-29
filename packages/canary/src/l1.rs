@@ -4,23 +4,24 @@
 //! submits.
 //!
 //! Generic over `C: CardanoConnector` -- `MockChain` for `--mode mock`,
-//! `cardano_connector_direct::Blockfrost` for `--mode preprod`.
+//! `crate::floe_connector::FloeConnector` for `--mode preprod`.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Context;
 use cardano_connector::CardanoConnector;
-use cardano_connector_direct::Blockfrost;
-use cardano_sdk::{Hash, Input, Output, SigningKey, Value, cbor::ToCbor};
+use cardano_sdk::{Hash, Input, NetworkId, Output, SigningKey, Value, address::kind, cbor::ToCbor};
 use cardano_session::{Session as CardanoSession, SubmitVia, Waiter, waiter};
-use cardano_wallet::Embedded;
+use cardano_wallet::{Embedded, txs};
+use subbit_claim::keyring::Keyring;
 use subbit_core::{Duration, VerifyingKey};
 use subbit_l1_dto::{Constants, Stage};
-use subbit_session::{Keyring, Session};
+use subbit_session::Session;
 use subbit_tx::step::{Can, Want};
 use subbit_tx::{Channel, Open, Variables, tx::Tx};
 
+use crate::floe_connector::FloeConnector;
 use crate::mock_chain::MockChain;
 
 type ChainSession<C> = Session<C, Embedded<C>>;
@@ -69,12 +70,16 @@ impl L1<MockChain> {
     }
 }
 
-impl L1<Blockfrost> {
+impl L1<FloeConnector> {
     /// `signing_key` is the funding wallet's own raw ed25519 key -- an
     /// already-funded preprod wallet, supplied by the caller, not
-    /// generated here. `project_id` is a Blockfrost preprod project id.
-    pub async fn build_preprod(project_id: String, signing_key: [u8; 32]) -> anyhow::Result<Self> {
-        let connector = Arc::new(Blockfrost::new(project_id));
+    /// generated here. `floe_endpoint` is Floe's gRPC address (the
+    /// same endpoint used for indexing -- see `main.rs`).
+    pub async fn build_preprod(
+        floe_endpoint: String,
+        signing_key: [u8; 32],
+    ) -> anyhow::Result<Self> {
+        let connector = Arc::new(FloeConnector::connect(&floe_endpoint).await?);
         let wallet_config: cardano_wallet::Config =
             toml::from_str(&format!("key = \"{}\"", hex::encode(signing_key)))
                 .context("building wallet config from the supplied signing key")?;
@@ -148,46 +153,102 @@ impl<C: CardanoConnector> L1<C> {
         self.session.channels()
     }
 
-    /// Every channel matching `(iou_key, tag)`, with its current
-    /// options. 0 results means no channel yet; 1 is the expected case;
-    /// more than 1 isn't refused here (unlike a tag-only lookup would
-    /// have to) -- `can` just reports what's there, the caller decides
-    /// what a collision means.
-    pub fn can(&self, iou_key: &VerifyingKey, tag: &[u8]) -> Vec<(Input, Vec<Can>)> {
+    /// The main funding wallet's own address -- where
+    /// `upload_validator_if_missing` puts the subbit validator's
+    /// reference script, so a spawned `subbit-claim` process needs this
+    /// as its own `ref_script_host` (its own fee wallet, derived
+    /// separately, never hosts it).
+    pub fn change_address(&self) -> cardano_sdk::Address<kind::Shelley> {
+        self.session.cardano().change_address()
+    }
+
+    pub fn network_id(&self) -> NetworkId {
+        self.session.cardano().network_id()
+    }
+
+    /// One-off plain payment from the main funding wallet to `address`
+    /// -- used to seed a separately-derived wallet (e.g. a spawned
+    /// `subbit-claim` process's own fee wallet) without routing it
+    /// through `Keyring`/`Tx` at all: a plain payment has no required
+    /// signatories beyond the wallet's own witness, which
+    /// `sign_and_submit` already adds.
+    pub async fn fund_address(
+        &mut self,
+        address: cardano_sdk::Address<kind::Any>,
+        lovelace: u64,
+    ) -> anyhow::Result<Hash<32>> {
+        let cardano = self.session.cardano();
+        let tx = txs::send(
+            cardano.protocol_parameters(),
+            &cardano.fuel(),
+            vec![(address, Value::new(lovelace))],
+            cardano.change_address().into(),
+        )
+        .map_err(|e| anyhow::anyhow!("building funding tx: {e}"))?;
+        let id = self
+            .session
+            .sign_and_submit(tx)
+            .await
+            .map_err(|e| anyhow::anyhow!("signing/submitting funding tx: {e}"))?;
+        self.pending.push(id);
+        self.wait_til().await?;
+        Ok(id)
+    }
+
+    /// The one channel matching `(iou_key, tag, consumer)` exactly --
+    /// unlike a tag-only lookup, a `--mimic` decoy sharing this
+    /// consumer's `(iou_key, tag)` under a *different* identity can
+    /// never cause an ambiguous match here, since `consumer` (the L1
+    /// identity hash) always still tells them apart. `None` is an
+    /// expected outcome every caller here already handles (not found
+    /// yet, or wound down and gone), not an error; more than one match
+    /// for the *same* `(iou_key, tag, consumer)` triple still is -- see
+    /// `Err` below.
+    pub fn can_for_consumer(
+        &self,
+        iou_key: &VerifyingKey,
+        tag: &[u8],
+        consumer: &subbit_core::Hash28,
+    ) -> anyhow::Result<Option<(Input, Vec<Can>)>> {
+        let mut matches = self.channels_for_consumer(iou_key, tag, consumer);
+        match matches.len() {
+            0 => Ok(None),
+            1 => Ok(Some(matches.pop().unwrap())),
+            n => anyhow::bail!(
+                "{n} tracked channels share tag {tag:?} and consumer {consumer:?} -- refusing \
+                 to guess which one; likely an old channel from a previous run with the same \
+                 L2_SEED_HEX is still open on this chain (see `canary --tidy` to reclaim it \
+                 first)"
+            ),
+        }
+    }
+
+    /// Every tracked channel sharing `(iou_key, tag, consumer)` -- unlike
+    /// `can_for_consumer`, never refuses on more than one match. Tidy's
+    /// whole point is reclaiming whatever's on chain, including a genuine
+    /// duplicate (e.g. two decoys opened under the same `--mimic` run
+    /// across separate, interrupted attempts) -- as long as the caller
+    /// holds the right signing key, there's no actual ambiguity about
+    /// *how* to close any of them out, only about which one to call
+    /// "the" channel, a distinction tidy has no need to make.
+    pub fn channels_for_consumer(
+        &self,
+        iou_key: &VerifyingKey,
+        tag: &[u8],
+        consumer: &subbit_core::Hash28,
+    ) -> Vec<(Input, Vec<Can>)> {
         self.session
             .channels()
             .into_iter()
             .filter_map(|(input, output)| {
                 let channel = Channel::try_from(&output).ok()?;
                 let constants = channel.constants();
-                (constants.iou_key() == iou_key && constants.tag().as_ref() == tag)
+                (constants.iou_key() == iou_key
+                    && constants.tag().as_ref() == tag
+                    && constants.consumer() == consumer)
                     .then(|| (input, channel.can()))
             })
             .collect()
-    }
-
-    /// `can` resolved to at most the one expected match: refuses
-    /// outright on more than one (e.g. a stale channel from an earlier
-    /// run under the same `L2_SEED_HEX`) rather than guessing. Zero
-    /// matches is `Ok(None)`, not an error -- a live tracked channel
-    /// legitimately disappears once it's fully wound down (`Elapse`,
-    /// `End`), so "not found" is an expected outcome every caller here
-    /// already has to handle, not a failure.
-    pub fn at_most_one(
-        &self,
-        iou_key: &VerifyingKey,
-        tag: &[u8],
-    ) -> anyhow::Result<Option<(Input, Vec<Can>)>> {
-        let results = self.can(iou_key, tag);
-        match results.len() {
-            0 => Ok(None),
-            1 => Ok(Some(results.into_iter().next().unwrap())),
-            n => anyhow::bail!(
-                "{n} tracked channels share tag {tag:?} -- refusing to guess which one; \
-                 likely an old channel from a previous run with the same L2_SEED_HEX is \
-                 still open on this chain (see `canary --tidy` to reclaim it first)"
-            ),
-        }
     }
 
     /// Queues `want` against `input` for `flush`. Returns `false`
@@ -215,6 +276,7 @@ impl<C: CardanoConnector> L1<C> {
     pub async fn flush(&mut self) -> anyhow::Result<()> {
         while !self.wills.is_empty() {
             let mut attempt = self.wills.len();
+            let mut too_early_retries = 0u32;
             loop {
                 let batch = self.wills[..attempt].to_vec();
                 match self.submit_steps(batch).await {
@@ -225,12 +287,77 @@ impl<C: CardanoConnector> L1<C> {
                         self.wait_til().await?;
                         break;
                     }
+                    // `Elapse`'s own readiness gate (`L1::want`) already
+                    // refuses to queue a want whose `lower` this
+                    // client's own clock/slot-projection hasn't reached
+                    // yet -- seen live, that's not always enough:
+                    // amaru's own mempool-validation view of "current
+                    // slot" can still trail that projection by tens of
+                    // seconds (block-production gaps on preprod, most
+                    // likely). Reducing batch size (`back_off`'s own
+                    // job) does nothing for a timing rejection, so this
+                    // is checked first, regardless of `attempt`: wait
+                    // out exactly the reported shortfall (+5s buffer)
+                    // and retry the same batch, rather than giving up --
+                    // bounded, in case this guess about the rejection's
+                    // shape is ever wrong.
+                    // Only possible once a real `subbit-claim` process
+                    // (`--mimic`) is concurrently touching the same real
+                    // consumer's channel this loop also drives: amaru
+                    // names the exact stale input when one of this
+                    // batch's own wills already got spent by that other
+                    // process before this one landed (seen live, right
+                    // after a `too_early_wait` retry gave it a 40s
+                    // window). Whatever this want was trying to do is
+                    // moot now -- the other process already moved that
+                    // channel on -- so drop just this one input from
+                    // `self.wills` and let the outer `while` start a
+                    // fresh attempt with whatever's left, rather than
+                    // failing every other want in the batch over it.
+                    Err(e)
+                        if missing_input(&e)
+                            .is_some_and(|i| self.wills.iter().any(|(w, _)| *w == i)) =>
+                    {
+                        let stale = missing_input(&e).expect("guard just confirmed Some+present");
+                        self.wills.retain(|(input, _)| *input != stale);
+                        println!(
+                            "canary: batch of {attempt} want(s) rejected ({e:#}) -- {stale} was \
+                             already spent (likely the concurrently-running subbit-claim) -- \
+                             dropping it and retrying with the rest"
+                        );
+                        self.refresh()
+                            .await
+                            .context("refreshing after dropping a stale want")?;
+                        break;
+                    }
+                    Err(e) if too_early_retries < 10 && too_early_wait(&e).is_some() => {
+                        let wait = too_early_wait(&e).expect("guard just confirmed Some");
+                        too_early_retries += 1;
+                        println!(
+                            "canary: batch of {attempt} want(s) rejected as not yet valid \
+                             ({e:#}) -- waiting {wait:?} before retrying"
+                        );
+                        tokio::time::sleep(wait).await;
+                        // A wait this long gives the real, concurrently-
+                        // spawned `subbit-claim` process (--mimic) real
+                        // room to Sub/Settle the very channel this batch
+                        // is also building against, on its own 5s poll
+                        // interval -- resubmitting the same stale-built
+                        // tx after that lands fails differently ("unknown
+                        // ... transaction input", not a validity-interval
+                        // rejection), seen live. Refresh before retrying
+                        // so the next `submit_steps` rebuilds from
+                        // current state rather than the view from before
+                        // the wait.
+                        self.refresh().await.context("refreshing before retry")?;
+                    }
                     Err(e) if attempt > 1 => {
                         let next = back_off(attempt, &e);
                         println!(
                             "canary: batch of {attempt} want(s) rejected ({e:#}) -- retrying with {next}"
                         );
                         attempt = next;
+                        self.refresh().await.context("refreshing before retry")?;
                     }
                     Err(e) => return Err(e).context("a single-want batch was still rejected"),
                 }
@@ -264,7 +391,7 @@ impl<C: CardanoConnector> L1<C> {
     /// at `max_backoff`, up to `MAX_CONFIRM_RETRIES` whole windows (worst
     /// case: 4 x 5min inner windows plus ~3.5min of backoff, ~24min
     /// total). A single timed-out window isn't necessarily a dead tx --
-    /// Blockfrost indexing can lag behind the tip, or a run is competing
+    /// Floe's own indexing can lag behind the tip, or a run is competing
     /// with other preprod traffic -- so this gives a stuck confirmation
     /// real runway before surfacing the error, instead of the old
     /// behavior of giving up after one fixed 5min window.
@@ -375,7 +502,6 @@ impl<C: CardanoConnector> L1<C> {
     ) -> anyhow::Result<()> {
         let cfg = subbit_index::naive::Config {
             cardano: Default::default(),
-            delegations: Default::default(),
             endpoint: format!("{provider_base_url}/v1/a/backings").parse()?,
             provider: provider_identity,
             asset: subbit_l1_dto::Asset::Lovelace,
@@ -383,14 +509,48 @@ impl<C: CardanoConnector> L1<C> {
             max_tag_len: 64,
             poll_interval_secs: 30,
         };
-        let rows = subbit_index::naive::rows_from_channels(&self.session.channels(), &cfg);
+        let outputs = self.session.channels();
+        let channels = outputs
+            .values()
+            .filter_map(|output| subbit_tx::Channel::try_from(output).ok());
+        let rows = subbit_index::naive::rows_from_channels(channels, &cfg);
         subbit_index::client::Client::new(cfg.endpoint.clone())
             .send(rows)
             .await
             .context("posting backing rows")?;
         Ok(())
     }
+}
 
+/// `index`'s real-Floe sibling: instead of reading this run's own
+/// tracked channels in-process, drives the actual production
+/// pipeline (`lineage::build_output` + `client::Client::send_output`)
+/// against a live Floe instance, posting to `/v1/a/index` so the
+/// server does its own real "Downstream" choosing, including
+/// filtering down to its own provider/asset/close_period
+/// (`subbit_gate::index_output`) -- not the simpler, lineage-free
+/// `naive-index` path. `build_output` itself is provider-agnostic (no
+/// `provider_identity`/`close_period` needed here at all): Floe is the
+/// only data source, and which channels are "ours" is entirely the
+/// server's own call once it receives the `Output`.
+pub async fn index_via_floe(floe_endpoint: &str, provider_base_url: &str) -> anyhow::Result<()> {
+    let mut floe = subbit_index::cardano::Config {
+        endpoint: floe_endpoint.to_string(),
+    }
+    .connect()
+    .await
+    .context("connecting to Floe")?;
+    let output = subbit_index::lineage::build_output(&mut floe)
+        .await
+        .context("building lineage output from Floe")?;
+    subbit_index::client::Client::new(format!("{provider_base_url}/v1/a/index").parse()?)
+        .send_output(&output)
+        .await
+        .context("posting lineage output")?;
+    Ok(())
+}
+
+impl<C: CardanoConnector> L1<C> {
     /// `index`'s complement: pulls the provider's channel summaries and
     /// submits whatever real `subbit-claim::decide` logic says this
     /// run's channels need. `exclude` skips a channel on purpose (e.g.
@@ -456,14 +616,25 @@ async fn upload_validator_if_missing<C: CardanoConnector>(
         println!("canary: reusing an already-tracked reference script");
         return Ok(());
     }
-    session
+    println!("canary: uploading subbit validator as a reference script");
+    let id = session
         .upload()
         .await
         .context("uploading the subbit validator as a reference script")?;
+    // `upload`/`sign_and_submit` only broadcasts -- it doesn't wait for
+    // the tx to land. Without this, the immediately-following
+    // `ref_script()` lookup (via `refresh_all`'s cached tip) can run
+    // before Floe has indexed the upload at all, and fail "not tracked"
+    // even though the upload itself succeeded.
     session
-        .refresh_all()
+        .wait_til(&id)
         .await
-        .context("pulling the uploaded reference script into the session's tip cache")?;
+        .context("waiting for the reference-script upload to confirm")?;
+    anyhow::ensure!(
+        session.ref_script().is_ok(),
+        "reference script upload confirmed but still isn't recognized -- check VALIDATOR.hash \
+         matches what was actually uploaded"
+    );
     Ok(())
 }
 
@@ -477,12 +648,11 @@ async fn upload_validator_if_missing<C: CardanoConnector>(
 /// or an unrecognized rejection) falls back to halving.
 fn back_off(attempt: usize, err: &anyhow::Error) -> usize {
     let message = format!("{err:#}");
-    if let Some((supplied, expected)) = parse_max_tx_size_mismatch(&message) {
-        if expected < supplied {
-            let scaled =
-                (attempt as u128 * expected as u128 * 95 / (supplied as u128 * 100)) as usize;
-            return scaled.clamp(1, attempt.saturating_sub(1).max(1));
-        }
+    if let Some((supplied, expected)) = parse_max_tx_size_mismatch(&message)
+        && expected < supplied
+    {
+        let scaled = (attempt as u128 * expected as u128 * 95 / (supplied as u128 * 100)) as usize;
+        return scaled.clamp(1, attempt.saturating_sub(1).max(1));
     }
     (attempt / 2).max(1)
 }
@@ -500,4 +670,50 @@ fn parse_max_tx_size_mismatch(message: &str) -> Option<(u64, u64)> {
             .ok()
     };
     Some((parse_after("supplied: ")?, parse_after("expected: ")?))
+}
+
+/// How long to wait before `current slot` could possibly reach the
+/// tx's own lower bound -- parsed from amaru's own rejection message
+/// The exact `Input` amaru names as missing when a tx references an
+/// already-spent (or never-existed) input or reference input --
+/// parsed from "...transaction input or reference input: {64 hex
+/// chars}#{index}". `None` for any other rejection shape.
+fn missing_input(err: &anyhow::Error) -> Option<Input> {
+    let message = format!("{err:#}");
+    let needle = "transaction input or reference input: ";
+    let start = message.find(needle)? + needle.len();
+    let rest = message.get(start..)?;
+    let hash_hex = rest.get(..64)?;
+    let hash: [u8; 32] = hex::decode(hash_hex).ok()?.try_into().ok()?;
+    let index: u64 = rest
+        .get(64..)?
+        .strip_prefix('#')?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()?;
+    Some(Input::new(Hash::<32>::from(hash), index))
+}
+
+/// How long to wait before `current slot` could possibly reach the
+/// tx's own lower bound -- parsed from amaru's own rejection message
+/// ("current slot {current} not within transaction validity interval
+/// [{needed}, +∞)"), +5s buffer. `None` for any other rejection shape.
+fn too_early_wait(err: &anyhow::Error) -> Option<std::time::Duration> {
+    let message = format!("{err:#}");
+    let parse_after = |needle: &str| -> Option<u64> {
+        let start = message.find(needle)? + needle.len();
+        message[start..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse()
+            .ok()
+    };
+    let current = parse_after("current slot ")?;
+    let needed = parse_after("validity interval [")?;
+    Some(std::time::Duration::from_secs(
+        needed.saturating_sub(current) + 5,
+    ))
 }

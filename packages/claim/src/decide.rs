@@ -6,12 +6,20 @@ use std::collections::BTreeMap;
 
 use cardano_sdk::Input;
 use subbit_core::Duration;
+use subbit_index_dto::OutputReference;
 use subbit_l1_dto::Stage;
 use subbit_tx::Channel;
 use subbit_tx::step::Want;
 
 use crate::client::ChannelSummary;
 use crate::keytag::Keytag;
+
+fn output_ref(input: &Input) -> OutputReference {
+    OutputReference {
+        tx_hash: <[u8; 32]>::from(input.transaction_id()).into(),
+        index: input.output_index(),
+    }
+}
 
 pub struct DecisionConfig {
     /// Skip a tick's tx entirely unless the sum of its Sub/Settle
@@ -28,17 +36,20 @@ pub struct DecisionConfig {
 /// already be filtered to this service's own provider identity;
 /// `summaries` is keyed the same way (`Keytag::of`).
 ///
-/// `Closed` channels are the one subtle case: a channel only gets
-/// `Settle`d here once the server reports `is_active: false` (meaning
-/// nothing can commit further spend against it) **or** once less than
-/// `panic_settle` remains before its on-chain `elapse_at` -- whichever
-/// comes first. Nothing currently flips `is_active` to `false`
-/// server-side (that's a separate, deliberately-deferred fix), so
-/// `panic_settle` isn't an edge case here, it's the fallback that
-/// guarantees a `Closed` channel still gets settled before the
-/// counterparty could instead claim it via `Elapse` -- at the cost of a
-/// possibly-uncaptured last-moment spend inside that window, which is
-/// the deliberate trade.
+/// `Closed` channels are the one subtle case: settling early risks
+/// colliding with whatever UTxO the index/server's lineage currently
+/// treats as the live backing. A `Closed` input is confirmed safe to
+/// settle now when either the server reports no open-line backing at
+/// all for this keytag (`summary.backing: None` -- nothing else is
+/// contesting it) or this exact input's own txo ref is in
+/// `summary.safe_to_settle` (the server's lineage traced it to a
+/// legitimately closed line). Failing that, this still falls back to
+/// the older, less-informed rule: the server reports `is_active:
+/// false` (nothing can commit further spend), or less than
+/// `panic_settle` remains before the on-chain `elapse_at` -- the
+/// guarantee that a `Closed` channel still gets settled before the
+/// counterparty could instead claim it via `Elapse`, at the cost of a
+/// possibly-uncaptured last-moment spend inside that window.
 ///
 /// Never produces `Want::End`: `End`'s required signer is the
 /// *consumer* (`Will::signer` only treats `Sub`/`Settle` as provider-
@@ -72,8 +83,10 @@ pub fn decide(
             }
             Stage::Closed { subbed, elapse_at } => {
                 let delta = iou.amount().saturating_sub(*subbed);
+                let confirmed_safe = summary.backing.is_none()
+                    || summary.safe_to_settle.contains(&output_ref(input));
                 let past_panic = elapse_at.saturating_sub(*now) <= *cfg.panic_settle;
-                if delta >= cfg.min_single && (!summary.is_active || past_panic) {
+                if delta >= cfg.min_single && (confirmed_safe || !summary.is_active || past_panic) {
                     claims.push((input.clone(), Want::Settle { iou: iou.clone() }, delta));
                 }
             }
@@ -118,10 +131,21 @@ mod tests {
         Channel::new(constants, Variables::new(10_000_000, stage))
     }
 
+    /// `backing: Some(..)` (an unrelated placeholder value, not
+    /// `None`) and an empty `safe_to_settle`: this channel is neither
+    /// of the two new "confirmed safe" cases, so tests built on this
+    /// helper exercise only the older `is_active`/`panic_settle`
+    /// fallback -- see `confirmed_safe_from_no_backing_settles_a_closed_channel_immediately`
+    /// and its sibling below for the new rule itself.
     fn summary(is_active: bool, amount: u64) -> ChannelSummary {
         ChannelSummary {
             is_active,
             iou: Some(iou(amount)),
+            safe_to_settle: Vec::new(),
+            backing: Some(crate::client::Backing {
+                amount: 0,
+                subbed: 0,
+            }),
         }
     }
 
@@ -227,6 +251,58 @@ mod tests {
             }),
             summary(false, 1_000),
         );
+        let wants = decide(
+            &channels,
+            &summaries,
+            &cfg(0, 1, 60),
+            Duration::from_secs(0),
+        );
+        assert_eq!(wants.len(), 1);
+        assert!(matches!(wants[0].1, Want::Settle { .. }));
+    }
+
+    #[test]
+    fn confirmed_safe_from_no_backing_settles_a_closed_channel_immediately() {
+        // Active, plenty of time left -- the old rule alone would
+        // wait (see `closed_active_with_time_left_waits`). No backing
+        // on file for this keytag at all is, by itself, enough.
+        let elapse_at = Duration::from_secs(1_000);
+        let (channels, mut summaries) = channels_summaries(
+            channel(Stage::Closed {
+                subbed: 0,
+                elapse_at,
+            }),
+            summary(true, 1_000),
+        );
+        for summary in summaries.values_mut() {
+            summary.backing = None;
+        }
+        let wants = decide(
+            &channels,
+            &summaries,
+            &cfg(0, 1, 60),
+            Duration::from_secs(0),
+        );
+        assert_eq!(wants.len(), 1);
+        assert!(matches!(wants[0].1, Want::Settle { .. }));
+    }
+
+    #[test]
+    fn confirmed_safe_from_safe_to_settle_settles_a_closed_channel_immediately() {
+        // Same setup, but this time there *is* a backing on file
+        // (elsewhere) -- it's specifically this input's own txo ref
+        // showing up in `safe_to_settle` that makes it safe.
+        let elapse_at = Duration::from_secs(1_000);
+        let (channels, mut summaries) = channels_summaries(
+            channel(Stage::Closed {
+                subbed: 0,
+                elapse_at,
+            }),
+            summary(true, 1_000),
+        );
+        for summary in summaries.values_mut() {
+            summary.safe_to_settle = vec![output_ref(&input(9))];
+        }
         let wants = decide(
             &channels,
             &summaries,

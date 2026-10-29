@@ -97,6 +97,13 @@
           wasmBindgenCli = pkgs.wasm-bindgen-cli;
           ccWasm32 = lib.getExe' clang-unwrapped "clang";
         };
+        consoleWwwNix = import ./nix/console-www.nix {
+          inherit lib pkgs;
+          craneLib = config.rust-project.crane-lib;
+          src = config.rust-project.src;
+          wasmBindgenCli = pkgs.wasm-bindgen-cli;
+          ccWasm32 = lib.getExe' clang-unwrapped "clang";
+        };
       in {
         checks = {
           aiken-lock-is-nix-compatible = aikenNix.lockIsNixCompatible;
@@ -104,23 +111,25 @@
           aiken-plutus-json-is-up-to-date = aikenNix.plutusJsonIsUpToDate;
         };
         packages.echo-www = echoWwwNix;
+        packages.console-www = consoleWwwNix.combined;
+        packages.subbit-console-wasm = consoleWwwNix.consoleWasm;
         process-compose."echo-stack" = {
           settings.processes = {
-            # Fresh config each run: `subbit-server`'s and `echo-proxy`'s
+            # Fresh config each run: `subbit-gate`'s and `echo-proxy`'s
             # own `init` defaults are enough for this demo, no secrets
-            # needed (`subbit-server`'s `Config::default` has no account
+            # needed (`subbit-gate`'s `Config::default` has no account
             # key of its own to overlay).
             setup = {
               command = ''
                 rm -rf .echo-stack-run && mkdir -p .echo-stack-run
-                ${config.packages.subbit-server}/bin/subbit-server \
-                  --config .echo-stack-run/subbit-server.toml init
+                ${config.packages.subbit-gate}/bin/subbit-gate \
+                  --config .echo-stack-run/subbit-gate.toml init
                 ${config.packages.subbit-examples-echo-proxy}/bin/echo-proxy \
                   --config .echo-stack-run/echo-proxy.toml init
               '';
             };
-            subbit-server = {
-              command = "${config.packages.subbit-server}/bin/subbit-server --config .echo-stack-run/subbit-server.toml serve --listen 0.0.0.0:7822";
+            subbit-gate = {
+              command = "${config.packages.subbit-gate}/bin/subbit-gate --config .echo-stack-run/subbit-gate.toml serve --listen 0.0.0.0:7822";
               depends_on.setup.condition = "process_completed_successfully";
             };
             echo-server = {
@@ -131,7 +140,7 @@
               command = "${config.packages.subbit-examples-echo-proxy}/bin/echo-proxy --config .echo-stack-run/echo-proxy.toml run";
               depends_on = {
                 setup.condition = "process_completed_successfully";
-                subbit-server.condition = "process_started";
+                subbit-gate.condition = "process_started";
                 echo-server.condition = "process_started";
               };
             };

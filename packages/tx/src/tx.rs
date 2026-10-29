@@ -113,6 +113,13 @@ impl Tx {
         &self.channels
     }
 
+    /// Every staged intent against an existing channel -- what a basket
+    /// panel lists alongside `opens()`, keyed by the same `Input` as
+    /// `channels()`.
+    pub fn wills(&self) -> &BTreeMap<Input, Will> {
+        &self.wills
+    }
+
     /// Registers a `Want` for `input` against its parsed pre-step `Channel`.
     /// Overwrites any existing intent already cached for the same input.
     pub fn propose(&mut self, input: Input, want: Want) -> Result<(), Error> {

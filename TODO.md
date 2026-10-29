@@ -2,7 +2,7 @@
 
 Items with no other home.
 
-- [ ] `accepted_matches` (`packages/server/src/dialect/x402.rs`) only matches the canonical
+- [ ] `accepted_matches` (`packages/gate/src/dialect/x402.rs`) only matches the canonical
       CAIP-2 form (`Network::to_caip2`). The real x402 Cardano `exact` scheme spec requires a
       facilitator to also accept the CIP-34 numeric alias (`Network::to_cip34`) as equivalent when
       matching an echoed `accepted.network`.
@@ -18,7 +18,7 @@ Items with no other home.
 - [ ] Test: mutual support. Adapter-level tests once a real `MutualService` exists, plus growing
       `packages/conformance` to cover the mutual-spend path (`iou`/`wire` only today).
 
-- [ ] `subbit-client`/`examples/echo/proxy` body plumbing: carry a body through `Outcome`,
+- [ ] `subbit-gate-client`/`examples/echo/proxy` body plumbing: carry a body through `Outcome`,
       written back verbatim on a 402, so an x402 client can complete a real round trip through the
       proxy (today `Outcome` only carries a status code and an optional header).
 - [ ] Test: an x402 round trip through `examples/echo/proxy` itself, not just in-process against
@@ -36,7 +36,7 @@ Items with no other home.
       validator can state about itself) vs `packages/conformance`'s UPLC-eval approach ("does Rust's
       encoding agree with the validator").
 
-- [ ] Remaining zero-test crates: `subbit-cli`, `subbit-client`, `subbit-session`,
+- [ ] Remaining zero-test crates: `subbit-cli`, `subbit-gate-client`, `subbit-session`,
       `subbit-config`.
 
 - [ ] Preprod harness: a funded test wallet (public all-`abandon` mnemonic), a preprod

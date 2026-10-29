@@ -155,20 +155,20 @@ cardano run --bin subbit-cli -- iou
 
 to generate (valid) IOUs required for `sub` and `settle`.
 
-### subbit-server
+### subbit-gate
 
-Subbit server contains Provider's main L2 logic. It knows almost nothing about
+Subbit gate contains Provider's main L2 logic. It knows almost nothing about
 the L1 and relies on other services to liaise with the L1.
 
 It is agnostic as to the framework in which it can be embedded. Some use cases
 require tight coupling between the application and cost computation. Others can
-be loosely coupled. Subbit-server comes with an axum server wrapper to be run as
+be loosely coupled. Subbit-gate comes with an axum server wrapper to be run as
 an external service.
 
 As with other components, begin by generating an example config
 
 ```sh
-cardano run --bin subbit-server -- init
+cardano run --bin subbit-gate -- init
 ```
 
 Note that this uses `subbit-config` which provides an opinionated way to overlay
@@ -200,17 +200,17 @@ cargo run --bin naive-index -- run
 ```
 
 Transactions on channels will now result in changes in the state of
-subbit-server db.
+subbit-gate db.
 
-### subbit-issuer
+### subbit-stamp
 
-The issuer runs client side, ie Consumer runs the issuer. It provides their L2
+The stamp runs client side, ie Consumer runs the stamp. It provides their L2
 capabilities.
 
-Explore the issuer in the way now established.
+Explore the stamp in the way now established.
 
 ```sh
-cargo run --bin subbit-issuer -- --help
+cargo run --bin subbit-stamp -- --help
 ```
 
 Init and edit the config to align with the channel. This requires only the IOU
@@ -262,20 +262,20 @@ cargo run --bin echo-proxy -- init
 ```
 
 By default the proxy is listening on the port number of the echo server
-_reversed_. It will also be expecting subbit server to up.
+_reversed_. It will also be expecting the subbit gate to up.
 
 Delete the old echo-client config, init a new one. This time fill in the details
 with a valid, backed channel. Ensure that the client is now pointing at the
 echo-proxy (and _not_ echo-server).
 
-(TODO: in future, grab the cost from the subbit-server via the reverse proxy as
+(TODO: in future, grab the cost from the subbit-gate via the reverse proxy as
 part of initial handshake).
 
 Echo client is now adding a subbit header on each request, and expecting one on
 each response. These contain, amongst onther things IOUs, from the client.
 
-Echo proxy is forwarding these to the subbit server before the request reaches
-the echo server. If subbit-server deems the ious is good, the request proceeds,
+Echo proxy is forwarding these to the subbit gate before the request reaches
+the echo server. If subbit-gate deems the ious is good, the request proceeds,
 else the request fails.
 
 (TODO: automate the tx building for Provider to claim with IOUs)
@@ -284,7 +284,7 @@ else the request fails.
 
 - [x] rationalize configs (use figment)
 - [x] extend echo client to use issuer.
-- [ ] subbit server expose details required for pairing.
+- [ ] subbit gate expose details required for pairing.
 - [ ] have a naive tx submitter.
 - [ ] documentation outlining the stack.
 - [ ] rationalization of core.

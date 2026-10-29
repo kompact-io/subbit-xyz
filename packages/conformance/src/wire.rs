@@ -15,7 +15,7 @@ fn asset_lovelace_conforms() {
 #[test]
 fn asset_native_conforms() {
     assert!(asset_fn().eval_true(&Asset::Native {
-        hash: [1u8; 28],
+        hash: [1u8; 28].into(),
         name: vec![1, 2, 3]
     }));
 }

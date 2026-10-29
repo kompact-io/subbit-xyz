@@ -6,7 +6,6 @@ description.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
@@ -19,7 +18,12 @@ serde = [
   "subbit-l1-dto/serde",
 ]
 web = ["dep:web-time"]
-
+# Floe wire-DTO -> cardano_sdk conversion (`src/floe.rs`), duplicated from
+# (not shared with) `subbit-claim`'s own native-only `src/floe.rs` -- see
+# `plan-subbit-console.md` section B. Pulls in only `floe-dto-http`'s pure
+# DTOs (`json` feature), never `floe-client`'s transport/grpc machinery,
+# so this stays wasm32-buildable.
+floe = ["dep:floe-dto-http", "serde"]
 
 [dependencies]
 anyhow.workspace = true
@@ -33,3 +37,4 @@ minicbor_old.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }
+floe-dto-http = { workspace = true, optional = true, features = ["json"] }

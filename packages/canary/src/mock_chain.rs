@@ -16,12 +16,14 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use amaru_kernel::cbor::from_cbor;
-use amaru_kernel::{NetworkName, Slot, Transaction as KernelTx};
-use amaru_plutus::script_context::{TxInfo, Utxos as PlutusUtxos};
+use amaru_kernel::{
+    Hash, NetworkName, PROTOCOL_VERSION_10, PlutusVersion as UplcPlutusVersion, Slot,
+    Transaction as KernelTx, TransactionId, TxInfo, Utxos as PlutusUtxos,
+};
+use amaru_plutus::script_context::ToScriptArgs;
 use amaru_plutus::to_plutus_data::PlutusVersion as DataPlutusVersion;
 use amaru_uplc::arena::Arena;
 use amaru_uplc::binder::DeBruijn;
-use amaru_uplc::machine::PlutusVersion as UplcPlutusVersion;
 use amaru_uplc::term::Term;
 use anyhow::{Context, bail};
 use cardano_connector::CardanoConnector;
@@ -125,13 +127,18 @@ impl MockChain {
 
         let slot = Slot::from(self.current_slot());
         let network = NetworkName::Preprod;
-        let era_history = <&amaru_kernel::EraHistory>::from(network);
+        let era_history = network
+            .as_era_history()
+            .expect("preprod always has an era history");
+        let global_parameters = network
+            .as_global_parameters()
+            .expect("preprod always has global parameters");
         // Reuse `cardano_sdk`'s own tx-id computation (the same one
         // `apply_effects` uses to name this tx's new outputs) rather than
         // recomputing one through amaru's types, so the two stay
         // consistent with each other.
         let tx_id_bytes: [u8; 32] = tx.id().into();
-        let tx_id = amaru_kernel::TransactionId::from(tx_id_bytes);
+        let tx_id = TransactionId::new(Hash::from(tx_id_bytes));
 
         let tx_info = TxInfo::new(
             &kernel_tx.body,
@@ -139,9 +146,8 @@ impl MockChain {
             tx_id,
             &plutus_utxos,
             &slot,
-            network,
             era_history,
-            amaru_kernel::PROTOCOL_VERSION_10,
+            global_parameters,
         )
         .map_err(|e| {
             anyhow::anyhow!("translating submitted tx into a real ScriptContext: {e:?}")
@@ -162,14 +168,12 @@ impl MockChain {
             &arena,
             &script_bytes,
             UplcPlutusVersion::V3,
-            // Generous step-size budget: this is a step counter, not an
-            // actual execution-unit budget, so it just needs to be large
-            // enough not to be the limiting factor.
-            u32::MAX,
+            PROTOCOL_VERSION_10,
         )
-        .context("decoding the validator's flat-encoded UPLC program")?;
+        .context("decoding the validator's flat-encoded UPLC program")?
+        .0;
 
-        for (ctx, _script) in contexts {
+        for (_redeemer_key, ctx, _script) in contexts {
             // This mock chain only ever has the one `subbit` validator in
             // play, so every script context is evaluated against it
             // directly -- no need to dispatch on `_script`'s own hash.
@@ -191,7 +195,7 @@ impl MockChain {
                 let term = Term::data(&arena, data);
                 applied = applied.apply(&arena, term);
             }
-            let result = applied.eval(&arena);
+            let result = applied.eval_default(&arena);
             match result.term {
                 // Modern Aiken V3 validators are `expect`/`fail`-based and
                 // return `Void` (Unit) on success, not a `Bool` -- an

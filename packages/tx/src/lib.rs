@@ -28,6 +28,9 @@ pub use validator::{MIN_ADA_BUFFER, VALIDATOR};
 
 pub mod fuel;
 
+#[cfg(feature = "floe")]
+pub mod floe;
+
 pub type Lovelace = u64;
 
 pub const FEE_BUFFER: Lovelace = 3_000_000;

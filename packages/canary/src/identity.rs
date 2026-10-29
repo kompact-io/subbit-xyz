@@ -2,7 +2,7 @@
 //! every provider/consumer identity a run needs, plus their on-chain
 //! channel tags.
 
-use cardano_sdk::{Hash, SigningKey};
+use cardano_sdk::{Address, Credential, Hash, NetworkId, SigningKey, address::kind};
 use subbit_core::Hash28;
 
 /// One identity's L1 material, derived once from a seed: the public key
@@ -25,6 +25,24 @@ impl Identity {
 
     pub fn signing_key(&self) -> SigningKey {
         signing_key_from_seed(&self.seed)
+    }
+
+    /// The raw 32-byte seed -- same bytes a `SigningKey` or a
+    /// `subbit_claim::keyring::KeyHex` is built from (both are just this
+    /// seed under a different wrapper). Needed wherever a *spawned*
+    /// process (not this one) needs the key material handed to it as
+    /// config rather than as an in-process `SigningKey`.
+    pub fn seed(&self) -> [u8; 32] {
+        self.seed
+    }
+
+    /// This identity's own plain (no delegation) payment address on
+    /// `network_id` -- for a key-based wallet identity (e.g. a funding
+    /// wallet derived for a spawned process), not a channel participant.
+    pub fn address(&self, network_id: NetworkId) -> Address<kind::Shelley> {
+        let vk = self.signing_key().to_verification_key();
+        let credential = Credential::from_key(Hash::<28>::new(vk));
+        Address::new(network_id, credential)
     }
 }
 
@@ -59,6 +77,22 @@ pub fn provider_seed(l2_seed: &[u8; 32]) -> [u8; 32] {
 /// "consumer `i`" means under a given `l2_seed`.
 pub fn consumer_seed(l2_seed: &[u8; 32], i: usize) -> [u8; 32] {
     derive_seed(l2_seed, &format!("consumer-{i}"))
+}
+
+/// The `--mimic` scenario's decoy channel identity for real consumer
+/// `i`: shares that consumer's `(iou_key, tag)` but opens under this,
+/// different, `consumer` (l1_key) -- see `orchestrator::MimicScenario`.
+/// One decoy per real consumer, each independently derived.
+pub fn mimic_seed(l2_seed: &[u8; 32], i: usize) -> [u8; 32] {
+    derive_seed(l2_seed, &format!("mimic-{i}"))
+}
+
+/// A funding wallet derived just for the `--mimic` scenario's spawned
+/// `subbit-claim` process -- kept separate from the main `WALLET_SKEY`
+/// funding wallet `L1` itself drives Open/Close/etc. through, so the two
+/// processes never race to spend the same UTxOs.
+pub fn claim_fee_seed(l2_seed: &[u8; 32]) -> [u8; 32] {
+    derive_seed(l2_seed, "claim-fee-wallet")
 }
 
 /// Consumer `i`'s on-chain channel tag, namespaced by both `l2_seed` and

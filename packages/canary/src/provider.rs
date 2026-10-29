@@ -1,4 +1,4 @@
-//! Spawns the real `subbit-server` binary as a child process, the same
+//! Spawns the real `subbit-gate` binary as a child process, the same
 //! technique `examples/echo/tests`' `support::sibling_bin` and the old
 //! `packages/e2e::harness::Server` both used.
 
@@ -35,7 +35,7 @@ pub struct Provider {
 }
 
 impl Provider {
-    pub async fn spawn(mut config: subbit_server::Config) -> anyhow::Result<Self> {
+    pub async fn spawn(mut config: subbit_gate::Config) -> anyhow::Result<Self> {
         let dir = tempfile::tempdir().context("tempdir")?;
         config.db.db_path = dir.path().join("db.redb").to_string_lossy().into_owned();
 
@@ -43,7 +43,7 @@ impl Provider {
         std::fs::write(&config_path, toml::to_string_pretty(&config)?)?;
 
         let addr = free_local_addr()?;
-        let child = Command::new(sibling_bin("subbit-server")?)
+        let child = Command::new(sibling_bin("subbit-gate")?)
             .arg("--config")
             .arg(&config_path)
             .arg("serve")
@@ -64,7 +64,7 @@ impl Provider {
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .spawn()
-            .context("spawn subbit-server")?;
+            .context("spawn subbit-gate")?;
 
         wait_ready(addr).await?;
 
@@ -79,7 +79,7 @@ impl Provider {
         format!("http://{}", self.addr)
     }
 
-    /// Spawns a real `subbit-server` configured for this run's own demo
+    /// Spawns a real `subbit-gate` configured for this run's own demo
     /// `Terms`: `flat_cost` for every request, closing after
     /// `close_period`, validated against the real `subbit-tx` validator
     /// script. Consumers fetch the published catalog themselves (see
@@ -89,14 +89,16 @@ impl Provider {
         flat_cost: u64,
         provider_identity: Identity,
         close_period: subbit_core::Duration,
+        finality_depth: u64,
     ) -> anyhow::Result<Self> {
-        let mut config = subbit_server::Config::default();
+        let mut config = subbit_gate::Config::default();
         config.terms.provider = provider_identity.hash28;
         config.terms.asset = subbit_l2_dto::Asset::Lovelace;
         config.terms.close_period = close_period;
         config.terms.script =
             subbit_core::Hash28::from(<[u8; 28]>::from(subbit_tx::VALIDATOR.hash));
         config.terms.catalog = demo_catalog(flat_cost);
+        config.finality_depth = finality_depth;
         println!("canary: spawning provider");
         let provider = Self::spawn(config).await?;
         println!("canary: provider up at {}", provider.base_url());

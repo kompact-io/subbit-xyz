@@ -5,13 +5,12 @@ documentation.workspace = true
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 publish = false
 
-[dependencies]
+[dev-dependencies]
 anyhow.workspace = true
 cryptoxide.workspace = true
 reqwest.workspace = true
@@ -21,7 +20,7 @@ toml.workspace = true
 
 subbit-core = { workspace = true, features = ["serde"] }
 subbit-examples-echo-client = { workspace = true }
-subbit-index = { workspace = true }
-subbit-issuer = { workspace = true, features = ["local", "vanilla", "x402"] }
+subbit-index = { workspace = true, features = ["native"] }
+subbit-stamp = { workspace = true, features = ["local", "vanilla", "x402"] }
 subbit-l2-dto = { workspace = true, features = ["vanilla", "x402"] }
-subbit-server = { workspace = true, features = ["main", "vanilla", "x402"] }
+subbit-gate = { workspace = true, features = ["main", "vanilla", "x402"] }

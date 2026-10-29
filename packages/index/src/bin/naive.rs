@@ -1,16 +1,13 @@
-use std::iter;
 use std::path::Path;
 
-use cardano_connector::CardanoConnector;
-
 use clap::{Parser, Subcommand};
-use futures::future::try_join_all;
 use subbit_tx::VALIDATOR;
 use tokio::time::{Duration as TokioDuration, interval};
 use tracing::{info, warn};
 
+use subbit_index::cardano;
 use subbit_index::client::Client;
-use subbit_index::naive::{Config, rows_from_channels};
+use subbit_index::naive::{Config, rows_from_utxos};
 
 /// Naive client: polls chain state and posts every matching channel's
 /// current (keytag -> backing) every tick. Closed channels post as
@@ -50,26 +47,15 @@ impl Cli {
         }
 
         let config: Config = sources.load()?;
-        let cardano = config.cardano.clone().build();
+        let mut cardano = config.cardano.connect().await?;
         let client = Client::new(config.endpoint.clone());
-        let delegations = iter::once(None)
-            .chain(config.delegations.clone().into_iter().map(Some))
-            .collect::<Vec<_>>();
-        let subbit_cred = VALIDATOR.to_credential();
+        let pay_hash = <[u8; 28]>::from(VALIDATOR.hash);
         let mut ticker = interval(TokioDuration::from_secs(config.poll_interval_secs));
         loop {
             ticker.tick().await;
 
-            let utxos = try_join_all(
-                delegations
-                    .iter()
-                    .map(|d| cardano.utxos_at(&subbit_cred, d.as_ref())),
-            )
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
-            let rows = rows_from_channels(&utxos, &config);
+            let utxos = cardano::search_all(&mut cardano, pay_hash, None).await?;
+            let rows = rows_from_utxos(&utxos, &config);
             info!(count = rows.len(), "posting naive rows");
             match client.send(rows).await {
                 Ok(result) => info!(status = result.status, "posted"),
