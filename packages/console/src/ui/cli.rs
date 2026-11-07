@@ -8,7 +8,11 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 
+#[cfg(feature = "admin")]
+use cardano_sdk::Input;
 use cardano_sdk::{Credential, Hash, Network, NetworkId};
+#[cfg(feature = "admin")]
+use subbit_core::Signature;
 use subbit_core::{Hash28, Tag, VerifyingKey};
 
 use crate::{Ctx, Error, Level, Logs, ProviderEntry, SigningKeyHex};
@@ -148,6 +152,79 @@ enum BasketCmd {
     DropOpen { keytag: String },
     /// Every Open currently staged.
     List,
+    /// Stage a `Sub` want directly against exactly one channel
+    /// (ambiguous if `keytag` matches more than one -- pass `tx_oref`
+    /// to disambiguate). No stage auto-detection -- see `Ctx::sub`.
+    #[cfg(feature = "admin")]
+    Sub {
+        keytag: String,
+        #[arg(long)]
+        tx_oref: Option<Input>,
+        amount: u64,
+        signature: Signature,
+    },
+    /// Stage a `Settle` want directly against exactly one channel
+    /// (ambiguous if `keytag` matches more than one -- pass `tx_oref`
+    /// to disambiguate). No stage auto-detection -- see `Ctx::settle`.
+    #[cfg(feature = "admin")]
+    Settle {
+        keytag: String,
+        #[arg(long)]
+        tx_oref: Option<Input>,
+        amount: u64,
+        signature: Signature,
+    },
+    /// Stage whichever of `Sub`/`Settle` is actually legal, per
+    /// channel, for every channel matching `keytag` (or just
+    /// `tx_oref` directly). See `Ctx::claim`'s own doc for what this
+    /// does and doesn't do.
+    #[cfg(feature = "admin")]
+    Claim {
+        keytag: String,
+        /// Overrides the keytag lookup -- the only way to claim a
+        /// channel the basket doesn't locally know about yet.
+        #[arg(long)]
+        tx_oref: Option<Input>,
+        amount: u64,
+        signature: Signature,
+    },
+    /// `Claim`'s batch sibling: stage many claims from a file of
+    /// `keytag,tx_oref,amount,signature` lines (no header, no
+    /// quoting) -- leave `tx_oref` empty to resolve it from `keytag`.
+    #[cfg(feature = "admin")]
+    ClaimMany { file: PathBuf },
+}
+
+/// Logs one `ClaimOutcome`, or an error, the same way for
+/// `Sub`/`Settle`/`Claim`/`ClaimMany` -- makes clear this only
+/// *stages*: a `basket build` + submit is still needed to actually
+/// settle on-chain.
+#[cfg(feature = "admin")]
+fn log_outcome(logs: &mut Logs, keytag: &str, result: Result<crate::ClaimOutcome, Error>) {
+    match result {
+        Ok(outcome) => logs.info(format!(
+            "staged {} for keytag={} tx_oref={} -- still needs `basket build` + submit to actually settle",
+            outcome.step, outcome.keytag, outcome.tx_oref
+        )),
+        Err(e) => logs.error(format!("failed to stage claim for keytag={keytag}: {e}")),
+    }
+}
+
+/// `BasketCmd::Claim`/`ClaimMany`'s shared plumbing: calls `Ctx::claim`
+/// (which may stage more than one `Will`, e.g. across a reopened
+/// channel's lineage) and logs every outcome.
+#[cfg(feature = "admin")]
+fn claim(
+    ctx: &mut Ctx,
+    logs: &mut Logs,
+    keytag: &str,
+    tx_oref: Option<Input>,
+    amount: u64,
+    signature: Signature,
+) {
+    for result in ctx.claim(keytag, tx_oref, amount, signature) {
+        log_outcome(logs, keytag, result);
+    }
 }
 
 #[derive(Subcommand)]
@@ -307,6 +384,77 @@ pub fn run() -> Result<(), Error> {
                     "{}",
                     serde_json::to_string_pretty(ctx.basket_opens()).map_err(Error::from)?
                 );
+            }
+            #[cfg(feature = "admin")]
+            BasketCmd::Sub {
+                keytag,
+                tx_oref,
+                amount,
+                signature,
+            } => {
+                let result = ctx.sub(&keytag, tx_oref, amount, signature);
+                log_outcome(&mut logs, &keytag, result);
+                save(&ctx, &cli.path)?;
+            }
+            #[cfg(feature = "admin")]
+            BasketCmd::Settle {
+                keytag,
+                tx_oref,
+                amount,
+                signature,
+            } => {
+                let result = ctx.settle(&keytag, tx_oref, amount, signature);
+                log_outcome(&mut logs, &keytag, result);
+                save(&ctx, &cli.path)?;
+            }
+            #[cfg(feature = "admin")]
+            BasketCmd::Claim {
+                keytag,
+                tx_oref,
+                amount,
+                signature,
+            } => {
+                claim(&mut ctx, &mut logs, &keytag, tx_oref, amount, signature);
+                save(&ctx, &cli.path)?;
+            }
+            #[cfg(feature = "admin")]
+            BasketCmd::ClaimMany { file } => {
+                let text = std::fs::read_to_string(&file)?;
+                for (lineno, line) in text.lines().enumerate() {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        continue;
+                    }
+                    let fields: Vec<&str> = line.split(',').collect();
+                    let [keytag, tx_oref, amount, signature] = fields[..] else {
+                        logs.error(format!(
+                            "{file}:{}: expected `keytag,tx_oref,amount,signature`, got {line:?}",
+                            lineno + 1,
+                            file = file.display()
+                        ));
+                        continue;
+                    };
+                    let tx_oref = if tx_oref.is_empty() {
+                        Ok(None)
+                    } else {
+                        tx_oref.parse::<Input>().map(Some)
+                    };
+                    match (
+                        tx_oref,
+                        amount.parse::<u64>(),
+                        signature.parse::<Signature>(),
+                    ) {
+                        (Ok(tx_oref), Ok(amount), Ok(signature)) => {
+                            claim(&mut ctx, &mut logs, keytag, tx_oref, amount, signature)
+                        }
+                        _ => logs.error(format!(
+                            "{}:{}: couldn't parse `{line}` as keytag,tx_oref,amount,signature",
+                            file.display(),
+                            lineno + 1
+                        )),
+                    }
+                }
+                save(&ctx, &cli.path)?;
             }
         },
         Cmd::Wallet(cmd) => match cmd {

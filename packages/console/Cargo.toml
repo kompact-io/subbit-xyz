@@ -21,7 +21,7 @@ ignored = ["getrandom"]
 
 [[bin]]
 name = "subbit-console"
-path = "src/main.rs"
+path = "src/bin/cli.rs"
 required-features = ["cli"]
 
 [features]
@@ -29,9 +29,13 @@ default = ["cli"]
 # Native test-driving bin -- "native build for testing / test-driving",
 # not the shipped frontend. Mirrors `subbit-stamp`'s own `cli` feature.
 cli = ["dep:clap"]
+# Provider-admin actions (`src/admin.rs`) on top of the same `Ctx` --
+# off by default so a consumer-only build never links or exposes it.
+# Orthogonal to `cli`/wasm: each `ui` adapter wires its own admin-only
+# widgets behind this same flag, not a separate UI mode of its own.
+admin = []
 
 [dependencies]
-anyhow.workspace = true
 cardano-sdk = { workspace = true, features = ["serde"] }
 subbit-core = { workspace = true, features = ["serde"] }
 subbit-l1-dto = { workspace = true, features = ["serde"] }
@@ -122,3 +126,14 @@ gloo-net = { workspace = true, features = ["http"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
+# `admin`'s own tests: encode a `Channel`'s datum (`minicbor`) and
+# round-trip it into a `cardano_sdk::PlutusData` (`minicbor_old`) to
+# fabricate a real existing-channel `Output` -- the exact same
+# encode/decode pair `subbit_tx::tx::Tx::outputs` uses in production
+# for a continuing output, never used outside tests here.
+minicbor = { workspace = true, features = ["alloc"] }
+minicbor_old.workspace = true
+# Signs a real IOU for `admin`'s tests, so `try_verify` (real Ed25519)
+# actually passes -- same crate `subbit-core`'s own crypto tests sign
+# with directly.
+cryptoxide.workspace = true

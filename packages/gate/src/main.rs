@@ -74,7 +74,7 @@ impl Command {
 fn init_tracing() {
     #[cfg(feature = "console")]
     {
-        // Diagnostic only -- see `results.md`'s profiling section.
+        // Diagnostic only -- see `results-ii.md`.
         // Needs `RUSTFLAGS="--cfg tokio_unstable"` to actually emit the
         // task-level events tokio-console reads; without it this layer
         // is wired in but silent.

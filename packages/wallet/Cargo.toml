@@ -14,7 +14,6 @@ default = ["serde"]
 serde = ["dep:serde", "cardano-sdk/serde"]
 
 [dependencies]
-anyhow.workspace = true
 cardano-sdk = { workspace = true }
 floe-client = { workspace = true }
 floe-dto-http = { workspace = true, features = ["json"] }

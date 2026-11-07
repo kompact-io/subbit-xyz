@@ -1,3 +1,6 @@
+# defacto standard config
+subbit-*-config.toml
+
 _demo
 secrets/
 

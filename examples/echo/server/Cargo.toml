@@ -16,7 +16,7 @@ path = "src/main.rs"
 [dependencies]
 axum.workspace = true
 clap.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 subbit-l2-dto = { workspace = true, default-features = false }

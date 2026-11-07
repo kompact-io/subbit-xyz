@@ -88,6 +88,14 @@ pub trait Wallet {
 /// module's doc comment. A native-only caller (`subbit-canary`) can
 /// just pass `tokio::time::sleep` directly.
 ///
+#[derive(Debug, thiserror::Error)]
+pub enum WaitForLandingError<E: std::error::Error> {
+    #[error("polling for {1} to land: {0}")]
+    Utxos(E, Hash<32>),
+    #[error("tx {0} still hasn't landed after {1} polls -- giving up")]
+    TimedOut(Hash<32>, u32),
+}
+
 /// A `utxos` error here is a hard failure, not treated as "not landed
 /// yet": if the backend (Floe) can't answer the question right now,
 /// that's a real problem for the caller to see, not something to
@@ -98,7 +106,7 @@ pub async fn wait_for_landing<W, S, F>(
     wallet: &mut W,
     hash: Hash<32>,
     mut sleep: S,
-) -> anyhow::Result<()>
+) -> Result<(), WaitForLandingError<W::Error>>
 where
     W: Wallet,
     S: FnMut(std::time::Duration) -> F,
@@ -110,16 +118,15 @@ where
         let utxos = wallet
             .utxos(None)
             .await
-            .map_err(|e| anyhow::anyhow!("polling for {hash} to land: {e}"))?;
+            .map_err(|e| WaitForLandingError::Utxos(e, hash))?;
         if utxos.is_some_and(|utxos| utxos.keys().any(|input| input.transaction_id() == hash)) {
             return Ok(());
         }
-        anyhow::ensure!(
-            attempt + 1 < MAX_ATTEMPTS,
-            "tx {hash} still hasn't landed after {MAX_ATTEMPTS} polls -- giving up"
-        );
+        if attempt + 1 >= MAX_ATTEMPTS {
+            return Err(WaitForLandingError::TimedOut(hash, MAX_ATTEMPTS));
+        }
         sleep(wait).await;
         wait = (wait * 2).min(std::time::Duration::from_secs(30));
     }
-    unreachable!("loop above always returns or bails by its last iteration")
+    unreachable!("loop above always returns or errors by its last iteration")
 }

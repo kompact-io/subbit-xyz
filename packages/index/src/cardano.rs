@@ -23,8 +23,8 @@ impl Default for Config {
 
 #[cfg(feature = "grpc")]
 impl Config {
-    pub async fn connect(&self) -> anyhow::Result<grpc::Client> {
-        Ok(grpc::Client::connect(&self.endpoint).await?)
+    pub async fn connect(&self) -> floe_client::Result<grpc::Client> {
+        grpc::Client::connect(&self.endpoint).await
     }
 }
 
@@ -43,7 +43,7 @@ pub async fn search_all(
     client: &mut impl Backend,
     pay_hash: [u8; 28],
     stake_hash: Option<[u8; 28]>,
-) -> anyhow::Result<Vec<Utxo>> {
+) -> floe_client::Result<Vec<Utxo>> {
     let (items, _ledger_tip) = search(client, pay_hash, stake_hash, None).await?;
     Ok(items)
 }
@@ -56,7 +56,7 @@ pub async fn search_history(
     client: &mut impl Backend,
     pay_hash: [u8; 28],
     stake_hash: Option<[u8; 28]>,
-) -> anyhow::Result<(Vec<Utxo>, ChainPoint)> {
+) -> floe_client::Result<(Vec<Utxo>, ChainPoint)> {
     // `since_slot: Some(0)` is a permissive "slot > 0" filter (no
     // chain-validity check, see `SearchUtxosRequest::since_hash`'s own
     // doc) -- the cheapest way to ask for "every row, from genesis"
@@ -69,7 +69,7 @@ async fn search(
     pay_hash: [u8; 28],
     stake_hash: Option<[u8; 28]>,
     since_slot: Option<u64>,
-) -> anyhow::Result<(Vec<Utxo>, ChainPoint)> {
+) -> floe_client::Result<(Vec<Utxo>, ChainPoint)> {
     let mut items = Vec::new();
     let mut start_token = None;
     let ledger_tip = loop {

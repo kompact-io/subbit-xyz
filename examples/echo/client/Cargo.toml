@@ -21,7 +21,7 @@ reqwest-middleware.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing-subscriber.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 async-trait.workspace = true
 toml.workspace = true
 http.workspace = true

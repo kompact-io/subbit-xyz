@@ -8,6 +8,12 @@
 //! `Json` already covers the file case; `ui::wasm` builds a `JsError`
 //! directly for its own `localStorage` failures, since this crate's
 //! own `Error` doesn't need to know `localStorage` exists.
+//!
+//! No `anyhow` anywhere in this crate -- every fallible lib-side call
+//! site returns this typed `Error` (a foreign error gets
+//! `.to_string()`'d into whichever variant fits, same as
+//! `Wallet`/`Basket` above), so a caller always gets something it can
+//! match on, including the `cli` feature's own binary.
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

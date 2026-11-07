@@ -33,7 +33,7 @@ use floe_dto_http::query::{ChainPoint, Utxo};
 pub async fn discover_history(
     backend: &mut impl Backend,
     validators: &BTreeSet<Hash<28>>,
-) -> anyhow::Result<(Vec<Utxo>, ChainPoint)> {
+) -> floe_client::Result<(Vec<Utxo>, ChainPoint)> {
     let mut items = Vec::new();
     let mut tip = ChainPoint::default();
     for validator in validators {

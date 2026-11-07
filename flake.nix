@@ -220,19 +220,20 @@
                 pass_filenames = false;
                 always_run = true;
               };
-              # Transitive deps mean default clippy ends up using a different cargo.
-              my-clippy = {
+              clippy = {
                 enable = true;
-                name = "clippy";
-                description = "Run clippy";
-                # subbit-conformance is excluded: it's the only crate depending on
-                # amaru-uplc, pulled from an unpinned upstream branch that has been
-                # breaking independently of our own changes.
-                # The leading `clippy` mimics the argv cargo itself passes when
-                # dispatching to this binary as a subcommand; cargo-clippy's own
-                # arg parser misreads --workspace/--exclude without it.
-                entry = "${config.rust-project.toolchain}/bin/cargo-clippy clippy --workspace --exclude subbit-conformance";
-                pass_filenames = false;
+                # Without this, git-hooks-nix falls back to its own default
+                # cargo/clippy (plain nixpkgs), which drifts from the
+                # rust-overlay toolchain crane and CI build against.
+                packageOverrides = {
+                  cargo = config.rust-project.toolchain;
+                  clippy = config.rust-project.toolchain;
+                };
+                settings = {
+                  denyWarnings = true;
+                  offline = false;
+                  extraArgs = "--workspace";
+                };
               };
               cargo-machete = {
                 enable = true;

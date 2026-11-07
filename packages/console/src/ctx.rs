@@ -43,6 +43,17 @@ pub struct Ctx {
     iou_keys: IouKeys,
     providers: Providers,
     basket: Basket,
+    /// Gates `basket_build`/`basket_build_batch`: neither will run at
+    /// all until this is set (see `set_reference_utxo`'s own doc) --
+    /// `Basket`/`Tx` themselves are unchanged, still perfectly willing
+    /// to build an Opens-only tx with no reference script; this is a
+    /// stricter policy enforced one layer up, here, not a change to
+    /// what the chain itself requires. `#[serde(default)]` so a `Ctx`
+    /// persisted before this field existed still deserializes (as
+    /// `None` -- building is then forbidden until it's set, same as
+    /// if it had never existed).
+    #[serde(default)]
+    reference_utxo: Option<Utxo>,
     #[serde(default)]
     whitelist: Whitelist,
     /// The embedded wallet's own state (`plan-embedded-wallet.md`): at
@@ -296,29 +307,98 @@ impl Ctx {
         self.basket.drop_all_opens();
     }
 
+    /// Verified once, here, on set: `utxo` must carry exactly the
+    /// subbit validator's own script. Not re-verified on every build
+    /// after that -- if it's since been spent elsewhere, `basket_build`/
+    /// `basket_build_batch` will fail downstream (at actual submission)
+    /// rather than here. Consumers should be invited to pick one a
+    /// provider already publishes (`Terms::reference_script`) over
+    /// uploading their own, though either works equally well once set.
+    pub fn basket_set_reference_utxo(&mut self, utxo: Utxo) -> Result<(), Error> {
+        let (_, output) =
+            subbit_tx::floe::to_input_output(&utxo).map_err(|e| Error::Basket(e.to_string()))?;
+        if output.script() != Some(&subbit_tx::VALIDATOR.script) {
+            return Err(Error::Basket(
+                "not the subbit validator's own reference script".to_string(),
+            ));
+        }
+        self.reference_utxo = Some(utxo);
+        Ok(())
+    }
+
+    pub fn basket_reference_utxo(&self) -> Option<&Utxo> {
+        self.reference_utxo.as_ref()
+    }
+
+    pub fn basket_clear_reference_utxo(&mut self) {
+        self.reference_utxo = None;
+    }
+
+    /// Resolves a provider's published `Terms.reference_script`
+    /// against already-fetched `items` (e.g. `discover_history`'s own
+    /// output -- no separate Floe round trip needed, same "one fetch,
+    /// filter it" convention `settings::floe`'s own doc already
+    /// describes) and sets it as the basket's reference script
+    /// (`basket_set_reference_utxo`, verified there). The one piece of
+    /// "adopt a provider's own reference script" logic every UI (cli,
+    /// wasm, canary) shares, instead of each re-finding it itself.
+    pub fn basket_set_reference_utxo_from_terms(
+        &mut self,
+        terms: &subbit_l2_dto::Terms,
+        items: &[Utxo],
+    ) -> Result<(), Error> {
+        let output_ref = terms
+            .reference_script
+            .ok_or_else(|| Error::Basket("provider publishes no reference_script".to_string()))?;
+        let hash = output_ref.tx_hash.to_bytes();
+        let utxo = items
+            .iter()
+            .find(|u| u.txo_ref.hash == hash && u32::from(u.txo_ref.index) == output_ref.index)
+            .cloned()
+            .ok_or_else(|| {
+                Error::Basket(
+                    "provider's published reference_script wasn't found among the given utxos"
+                        .to_string(),
+                )
+            })?;
+        self.basket_set_reference_utxo(utxo)
+    }
+
     pub fn basket_build(
         &mut self,
         network: &str,
-        reference_utxo: Option<Utxo>,
         change_address: Address<kind::Any>,
         fuel: &BTreeMap<Input, Output>,
     ) -> Result<Transaction<ReadyForSigning>, Error> {
+        let reference_utxo = self.reference_utxo.clone().ok_or_else(|| {
+            Error::Basket(
+                "no reference script set -- call basket_set_reference_utxo first".to_string(),
+            )
+        })?;
         self.basket
-            .build(network, reference_utxo, change_address, fuel)
+            .build(network, Some(reference_utxo), change_address, fuel)
     }
 
     /// `basket_build`'s batched sibling -- see `Basket::build_batch`.
-    #[allow(clippy::too_many_arguments)]
     pub fn basket_build_batch(
         &mut self,
         network: &str,
-        reference_utxo: Option<Utxo>,
         change_address: Address<kind::Any>,
         fuel: &BTreeMap<Input, Output>,
         max_opens: usize,
     ) -> Result<Transaction<ReadyForSigning>, Error> {
-        self.basket
-            .build_batch(network, reference_utxo, change_address, fuel, max_opens)
+        let reference_utxo = self.reference_utxo.clone().ok_or_else(|| {
+            Error::Basket(
+                "no reference script set -- call basket_set_reference_utxo first".to_string(),
+            )
+        })?;
+        self.basket.build_batch(
+            network,
+            Some(reference_utxo),
+            change_address,
+            fuel,
+            max_opens,
+        )
     }
 
     // --- Embedded wallet (plan-embedded-wallet.md) -----------------------
@@ -417,6 +497,16 @@ impl Ctx {
     pub fn wallet_export(&self) -> subbit_wallet::Store {
         self.wallet.clone()
     }
+
+    /// Test-only: seeds a fresh `Ctx`'s basket directly (see
+    /// `Basket::from_outputs`).
+    #[cfg(test)]
+    pub(crate) fn test_with_basket(basket: Basket) -> Self {
+        Self {
+            basket,
+            ..Default::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -439,5 +529,91 @@ mod tests {
 
         assert_eq!(ctx.keyring_labels(), restored.keyring_labels());
         assert_eq!(ctx.whitelist(), restored.whitelist());
+    }
+
+    fn validator_utxo(tx_hash: [u8; 32], index: u32) -> Utxo {
+        let address: Address<kind::Any> =
+            subbit_tx::validator::address(NetworkId::from(cardano_sdk::Network::Preprod), None)
+                .into();
+        Utxo {
+            txo_ref: floe_dto_http::query::TxoRef {
+                hash: tx_hash,
+                index: index as u16,
+            },
+            output: floe_dto_http::cardano::TxOutput {
+                address: floe_dto_http::query::Address(address.to_string().parse().unwrap()),
+                coin: 5_000_000,
+                assets: vec![],
+                datum: None,
+                script: Some(floe_dto_http::cardano::Script {
+                    lang: floe_dto_http::cardano::ScriptLang::PlutusV3,
+                    cbor: subbit_tx::VALIDATOR.script.script().to_vec(),
+                }),
+            },
+            block_ref: floe_dto_http::query::ChainPoint {
+                slot: 0,
+                hash: vec![],
+                height: 0,
+                timestamp: 0,
+            },
+            spent_by: None,
+        }
+    }
+
+    fn terms_with_reference_script(
+        output_ref: Option<subbit_l2_dto::OutputRef>,
+    ) -> subbit_l2_dto::Terms {
+        subbit_l2_dto::Terms {
+            network: subbit_l2_dto::Network::Preprod,
+            script: Hash28::from([1u8; 28]),
+            asset: Asset::Lovelace,
+            provider: Hash28::from([2u8; 28]),
+            close_period: Duration::from_secs(900),
+            confirmation_depth: 3,
+            min_iou_amount: 500,
+            catalog: subbit_l2_dto::Catalog { resources: vec![] },
+            reference_script: output_ref,
+        }
+    }
+
+    #[test]
+    fn set_reference_utxo_from_terms_finds_and_sets_the_matching_utxo() {
+        let output_ref = subbit_l2_dto::OutputRef {
+            tx_hash: subbit_core::Hash32::from([9u8; 32]),
+            index: 2,
+        };
+        let terms = terms_with_reference_script(Some(output_ref));
+        let items = vec![validator_utxo([1u8; 32], 0), validator_utxo([9u8; 32], 2)];
+
+        let mut ctx = Ctx::default();
+        ctx.basket_set_reference_utxo_from_terms(&terms, &items)
+            .expect("the matching utxo is right there in items");
+        assert_eq!(ctx.basket_reference_utxo().unwrap().txo_ref.hash, [9u8; 32]);
+    }
+
+    #[test]
+    fn set_reference_utxo_from_terms_errors_without_a_published_reference_script() {
+        let terms = terms_with_reference_script(None);
+        let mut ctx = Ctx::default();
+        assert!(
+            ctx.basket_set_reference_utxo_from_terms(&terms, &[])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn set_reference_utxo_from_terms_errors_when_not_among_the_given_items() {
+        let output_ref = subbit_l2_dto::OutputRef {
+            tx_hash: subbit_core::Hash32::from([9u8; 32]),
+            index: 2,
+        };
+        let terms = terms_with_reference_script(Some(output_ref));
+        let items = vec![validator_utxo([1u8; 32], 0)];
+
+        let mut ctx = Ctx::default();
+        assert!(
+            ctx.basket_set_reference_utxo_from_terms(&terms, &items)
+                .is_err()
+        );
     }
 }

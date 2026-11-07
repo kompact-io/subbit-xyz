@@ -15,7 +15,13 @@ anyhow.workspace = true
 cryptoxide.workspace = true
 reqwest.workspace = true
 tempfile = "3"
-tokio.workspace = true
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "process",
+  "net",
+  "time",
+] }
 toml.workspace = true
 
 subbit-core = { workspace = true, features = ["serde"] }

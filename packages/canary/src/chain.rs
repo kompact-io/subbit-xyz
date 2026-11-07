@@ -1,7 +1,6 @@
 //! Consumer-side L1 actions via `subbit_console::Ctx` + `submit`/`upload_reference_script`/
 //! `send_payment` over a `subbit_wallet::Embedded` wallet.
 
-use floe_dto_http::query::Utxo;
 use subbit_console::{Ctx, SigningKeyHex};
 use subbit_core::Hash28;
 use subbit_tx::{
@@ -37,7 +36,7 @@ macro_rules! retry_transient {
                     tokio::time::sleep(delay).await;
                     delay *= 2;
                 }
-                Err(e) => return Err(e),
+                Err(e) => return Err(e.into()),
             }
         }
     }};
@@ -51,7 +50,6 @@ pub struct Chain {
     discovery: Backend,
     network: &'static str,
     network_id: cardano_sdk::NetworkId,
-    reference_utxo: Option<Utxo>,
 }
 
 impl Chain {
@@ -74,17 +72,17 @@ impl Chain {
             discovery,
             network: "preprod",
             network_id,
-            reference_utxo: None,
         };
         chain.refresh().await?;
-        if chain.reference_utxo.is_none() {
+        if chain.ctx.basket_reference_utxo().is_none() {
             println!("canary: uploading subbit validator as a reference script");
             let hash =
-                subbit_console::upload_reference_script(&mut chain.wallet, chain.network).await?;
+                subbit_console::upload_reference_script(&mut chain.wallet, chain.network, None)
+                    .await?;
             chain.wait_for_landing(hash).await?;
             chain.refresh().await?;
             anyhow::ensure!(
-                chain.reference_utxo.is_some(),
+                chain.ctx.basket_reference_utxo().is_some(),
                 "reference script upload confirmed but still isn't recognized -- check \
                  VALIDATOR.hash matches what was actually uploaded"
             );
@@ -111,9 +109,16 @@ impl Chain {
         let funding_utxos = retry_transient!(
             subbit_index::cardano::search_all(&mut self.discovery, funding_pay_hash, None).await
         );
-        self.reference_utxo = funding_utxos
+        match funding_utxos
             .into_iter()
-            .find(|u| u.output.script.is_some());
+            .find(|u| u.output.script.is_some())
+        {
+            Some(utxo) => self
+                .ctx
+                .basket_set_reference_utxo(utxo)
+                .map_err(|e| anyhow::anyhow!("{e}"))?,
+            None => self.ctx.basket_clear_reference_utxo(),
+        }
         Ok(())
     }
 
@@ -198,13 +203,7 @@ impl Chain {
         if self.ctx.basket_opens().is_empty() && self.ctx.basket_wills().is_empty() {
             return Ok(());
         }
-        subbit_console::submit(
-            &mut self.wallet,
-            &mut self.ctx,
-            self.network,
-            self.reference_utxo.clone(),
-        )
-        .await?;
+        subbit_console::submit(&mut self.wallet, &mut self.ctx, self.network).await?;
         self.refresh().await
     }
 
@@ -230,6 +229,6 @@ impl Chain {
 
     /// Polls `wallet.utxos(None)` until `hash`'s own utxo appears.
     async fn wait_for_landing(&mut self, hash: cardano_sdk::Hash<32>) -> anyhow::Result<()> {
-        subbit_wallet::wait_for_landing(&mut self.wallet, hash, tokio::time::sleep).await
+        Ok(subbit_wallet::wait_for_landing(&mut self.wallet, hash, tokio::time::sleep).await?)
     }
 }

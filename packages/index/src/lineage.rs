@@ -210,7 +210,7 @@ pub fn reconstruct(utxos: Vec<Utxo>, ledger_tip: ChainPoint) -> Output {
 /// reusable against any transport. (Not reusable from `subbit-console`'s
 /// wasm build specifically, though -- see `reconstruct`'s own doc for
 /// why, and use that instead there.)
-pub async fn build_output(client: &mut impl floe_client::Backend) -> anyhow::Result<Output> {
+pub async fn build_output(client: &mut impl floe_client::Backend) -> floe_client::Result<Output> {
     let pay_hash = <[u8; 28]>::from(subbit_tx::VALIDATOR.hash);
     let (utxos, ledger_tip) = cardano::search_history(client, pay_hash, None).await?;
     Ok(reconstruct(utxos, ledger_tip))

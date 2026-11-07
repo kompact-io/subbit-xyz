@@ -36,7 +36,13 @@ anyhow = { workspace = true, optional = true }
 axum = { workspace = true, optional = true, features = ["macros"] }
 base64.workspace = true
 clap = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = [
+  "rt-multi-thread",
+  "net",
+  "sync",
+  "process",
+  "time",
+] }
 http.workspace = true
 blake3.workspace = true
 cryptoxide.workspace = true

@@ -25,8 +25,8 @@
 //! `packages/canary` traffic (see `Stamper::learn_mac`) -- this used
 //! to always resign, overstating steady-state cost by paying a full
 //! `ed25519` verify on every request instead of the ~1700x cheaper
-//! cached-`Mac` check real traffic mostly pays (see `results.md`'s
-//! profiling section for the measured gap this caused).
+//! cached-`Mac` check real traffic mostly pays (see `results-ii.md` for
+//! the measured gap this caused).
 //!
 //! All `N` stampers in a sweep level fire concurrently, one tokio task
 //! each; sequential within each stamper's own loop. Same shape
@@ -118,9 +118,9 @@ struct Stamper {
     /// `Pop`-authenticated request); real clients (`subbit_stamp::Stamp`,
     /// see `packages/stamp/src/stamp.rs::auth`) reuse this on every
     /// subsequent request instead of resigning a fresh `Pop`. This bench
-    /// used to always resign -- see `results.md`'s profiling section for
-    /// why that mattered: it made every request pay a full `ed25519`
-    /// verify, overstating the real per-request cost.
+    /// used to always resign -- see `results-ii.md` for why that mattered:
+    /// it made every request pay a full `ed25519` verify, overstating the
+    /// real per-request cost.
     mac: Option<MacTtl>,
     /// Cumulative amount claimed so far -- only used by `by_id_header`
     /// (`FIREHOSE_ALWAYS_BY_ID=1`, see `Stamp::always_by_id`'s doc).

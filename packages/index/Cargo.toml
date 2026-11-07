@@ -58,7 +58,11 @@ native = [
 amaru-kernel.workspace = true
 anyhow.workspace = true
 clap = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["time"], optional = true }
+tokio = { workspace = true, features = [
+  "time",
+  "rt-multi-thread",
+  "macros",
+], optional = true }
 reqwest = { workspace = true, optional = true }
 minicbor = { workspace = true, features = ["alloc", "derive"] }
 hex = { workspace = true, features = ["alloc", "serde"] }

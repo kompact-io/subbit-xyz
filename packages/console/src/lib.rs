@@ -25,7 +25,7 @@ pub use channels::{
 };
 
 mod tx;
-pub use tx::{Basket, send_payment, submit, upload_reference_script};
+pub use tx::{Basket, send_payment, submit, teardown_reference_script, upload_reference_script};
 
 mod logs;
 pub use logs::{Entry, Level, Logs};
@@ -34,5 +34,10 @@ mod sleep;
 
 mod ctx;
 pub use ctx::Ctx;
+
+#[cfg(feature = "admin")]
+mod admin;
+#[cfg(feature = "admin")]
+pub use admin::ClaimOutcome;
 
 pub mod ui;

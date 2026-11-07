@@ -48,7 +48,7 @@ impl Provider {
             subbit_core::Hash28::from(<[u8; 28]>::from(subbit_tx::VALIDATOR.hash));
         config.terms.catalog = demo_catalog(flat_cost);
         config.finality_depth = finality_depth;
-        // Latency investigation (results.md): the defaults' cumulative
+        // Latency investigation (results-ii.md): the defaults' cumulative
         // thresholds are tiny relative to real ADA amounts, so they --
         // not the 1s/30s timers -- are what's actually triggering
         // flush/checkpoint under canary's load. Bumped to real ADA

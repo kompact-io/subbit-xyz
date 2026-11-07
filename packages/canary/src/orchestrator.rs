@@ -40,6 +40,7 @@ pub struct Orchestrator {
 impl Orchestrator {
     /// `demo_elapse` marks the last consumer to `tidy` once closed, demonstrating `Elapse`
     /// instead of a normal `subbit-claim` settle.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain: Chain,
         provider: Provider,

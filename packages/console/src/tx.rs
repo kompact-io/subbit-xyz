@@ -15,4 +15,4 @@ mod submit;
 pub use submit::submit;
 
 mod plain;
-pub use plain::{send_payment, upload_reference_script};
+pub use plain::{send_payment, teardown_reference_script, upload_reference_script};

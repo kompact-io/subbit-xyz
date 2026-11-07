@@ -41,6 +41,7 @@ use cardano_sdk::{
     Address, Credential, Hash, Input, Network, NetworkId, Output, Signature, Transaction, Value,
     VerificationKey, address::kind, cbor::ToCbor, transaction::state,
 };
+use floe_dto_http::query::Utxo;
 use subbit_core::{Hash28, VerifyingKey};
 use subbit_l2_dto::Terms;
 use subbit_wallet::Wallet;
@@ -653,18 +654,52 @@ impl JsConsole {
         self.ctx.basket_drop_all_opens();
     }
 
+    /// Sets the basket's reference script (verified once, here --
+    /// see `Ctx::basket_set_reference_utxo`'s own doc) -- `basketBuild`/
+    /// `submit` refuse to run at all until this has been called.
+    /// `utxo_json` is `findReferenceScriptJson`'s own output when
+    /// self-hosting, or a provider's published `Terms.reference_script`
+    /// resolved to a live utxo -- consumers should be invited to the
+    /// latter over uploading their own, though either works.
+    #[wasm_bindgen(js_name = basketSetReferenceUtxo)]
+    pub fn basket_set_reference_utxo(&mut self, utxo_json: &str) -> Result<(), JsError> {
+        let utxo = serde_json::from_str(utxo_json).map_err(js_err)?;
+        self.ctx.basket_set_reference_utxo(utxo).map_err(js_err)
+    }
+
+    #[wasm_bindgen(js_name = basketClearReferenceUtxo)]
+    pub fn basket_clear_reference_utxo(&mut self) {
+        self.ctx.basket_clear_reference_utxo();
+    }
+
+    /// Resolves a provider's own published `Terms.reference_script`
+    /// against already-fetched `items_json` (`fetchHistory`'s own
+    /// output, same as `findReferenceScriptJson` filters -- no
+    /// separate Floe round trip) and sets it as the basket's
+    /// reference script. `terms_json` is one `providersJson()` entry's
+    /// own `terms` field -- the preferred path over
+    /// `basketSetReferenceUtxo`'s self-hosted one, per `Ctx::
+    /// basket_set_reference_utxo_from_terms`'s own doc.
+    #[wasm_bindgen(js_name = basketSetReferenceUtxoFromTerms)]
+    pub fn basket_set_reference_utxo_from_terms(
+        &mut self,
+        terms_json: &str,
+        items_json: &str,
+    ) -> Result<(), JsError> {
+        let terms = serde_json::from_str(terms_json).map_err(js_err)?;
+        let items: Vec<Utxo> = serde_json::from_str(items_json).map_err(js_err)?;
+        self.ctx
+            .basket_set_reference_utxo_from_terms(&terms, &items)
+            .map_err(js_err)
+    }
+
     #[wasm_bindgen(js_name = basketBuild)]
     pub fn basket_build(
         &mut self,
         network: &str,
-        reference_utxo_json: Option<String>,
         change_address: &str,
         fuel_cbor_hex: Vec<String>,
     ) -> Result<String, JsError> {
-        let reference_utxo = reference_utxo_json
-            .map(|json| serde_json::from_str(&json))
-            .transpose()
-            .map_err(js_err)?;
         let change_address = parse_address(change_address)?;
         let fuel: BTreeMap<Input, Output> = fuel_cbor_hex
             .iter()
@@ -673,7 +708,7 @@ impl JsConsole {
 
         let tx = self
             .ctx
-            .basket_build(network, reference_utxo, change_address, &fuel)
+            .basket_build(network, change_address, &fuel)
             .map_err(js_err)?;
         Ok(hex::encode(tx.to_cbor()))
     }
@@ -747,27 +782,57 @@ impl JsConsole {
         self.cip30_vkh = None;
     }
 
-    /// Allocates (`Ctx::basket_build`), signs + aggregates every
-    /// required witness, and submits -- against whichever wallet
-    /// `connectCip30`/`connectEmbedded` last connected. See `submit`'s
-    /// own module doc for the three stages. `reference_utxo_json` is
-    /// `findReferenceScriptJson`'s own output, same as `basketBuild`
-    /// already took it.
-    #[wasm_bindgen(js_name = submit)]
-    pub async fn submit(
+    /// Uploads the subbit validator as a reference script, at
+    /// `address` if given (else the connected wallet's own change
+    /// address -- the common case). See `upload_reference_script`'s
+    /// own doc; doesn't set it as the basket's reference script
+    /// itself -- `basketSetReferenceUtxo`/`FromTerms` is still a
+    /// separate, explicit step after this lands.
+    #[wasm_bindgen(js_name = uploadReferenceScript)]
+    pub async fn upload_reference_script(
         &mut self,
         network: &str,
-        reference_utxo_json: Option<String>,
+        address: Option<String>,
     ) -> Result<String, JsError> {
-        let reference_utxo = reference_utxo_json
-            .map(|json| serde_json::from_str(&json))
-            .transpose()
-            .map_err(js_err)?;
+        let address = address.map(|a| parse_address(&a)).transpose()?;
         let wallet = self
             .wallet
             .as_mut()
             .ok_or_else(|| js_err("no wallet connected"))?;
-        let hash = crate::submit(wallet, &mut self.ctx, network, reference_utxo)
+        let hash = crate::upload_reference_script(wallet, network, address)
+            .await
+            .map_err(js_err)?;
+        Ok(hash.to_string())
+    }
+
+    /// Reclaims the connected wallet's own held reference-script utxo
+    /// back into an ordinary output at its own change address. See
+    /// `teardown_reference_script`'s own doc -- only ever reclaims a
+    /// utxo this wallet already has spending authority over.
+    #[wasm_bindgen(js_name = teardownReferenceScript)]
+    pub async fn teardown_reference_script(&mut self, network: &str) -> Result<String, JsError> {
+        let wallet = self
+            .wallet
+            .as_mut()
+            .ok_or_else(|| js_err("no wallet connected"))?;
+        let hash = crate::teardown_reference_script(wallet, network)
+            .await
+            .map_err(js_err)?;
+        Ok(hash.to_string())
+    }
+
+    /// Allocates (`Ctx::basket_build`), signs + aggregates every
+    /// required witness, and submits -- against whichever wallet
+    /// `connectCip30`/`connectEmbedded` last connected. See `submit`'s
+    /// own module doc for the three stages. Fails immediately if
+    /// `basketSetReferenceUtxo` hasn't been called yet.
+    #[wasm_bindgen(js_name = submit)]
+    pub async fn submit(&mut self, network: &str) -> Result<String, JsError> {
+        let wallet = self
+            .wallet
+            .as_mut()
+            .ok_or_else(|| js_err("no wallet connected"))?;
+        let hash = crate::submit(wallet, &mut self.ctx, network)
             .await
             .map_err(js_err)?;
         Ok(hash.to_string())

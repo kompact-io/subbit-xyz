@@ -63,6 +63,15 @@ impl Basket {
         Basket(Tx::filtered(map, |_| true))
     }
 
+    /// Test-only: `from_floe_utxos` without the Floe-`Utxo`-decoding
+    /// round trip, for tests that already have real `cardano_sdk::
+    /// Output`s in hand (e.g. built directly off a `Channel`'s own
+    /// `datum()`) and don't need to fake a Floe response to get them.
+    #[cfg(test)]
+    pub(crate) fn from_outputs(utxos: BTreeMap<Input, Output>) -> Self {
+        Basket(Tx::filtered(utxos, |_| true))
+    }
+
     /// Refreshes the basket's txo view from fresh Floe data (same
     /// permissive construction as `from_floe_utxos`), while preserving
     /// every staged `Open` unconditionally -- an `Open` doesn't

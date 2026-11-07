@@ -41,8 +41,6 @@ cardano-sdk = { workspace = true, features = ["serde"] }
 floe-client = { workspace = true, default-features = false, features = [
   "grpc",
 ] }
-floe-dto-http = { workspace = true, features = ["json"] }
-
 subbit-claim = { workspace = true }
 subbit-console = { workspace = true, default-features = false }
 subbit-core = { workspace = true, features = ["serde"] }

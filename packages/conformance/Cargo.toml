@@ -9,12 +9,9 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 
-[features]
-
 [dependencies]
 amaru-kernel.workspace = true
 amaru-uplc.workspace = true
-# ed25519-dalek   = { version = "2", default-features = false, optional = true }
 hex.workspace = true
 minicbor = { workspace = true, features = ["alloc"] }
 serde.workspace = true

@@ -65,25 +65,25 @@
 use std::time::Duration;
 
 use cardano_sdk::{Hash, Signature, VerificationKey};
-use floe_dto_http::query::Utxo;
 use subbit_wallet::{Wallet, wait_for_landing};
 
 use super::Basket;
-use crate::Ctx;
+use crate::{Ctx, Error};
 
-#[tracing::instrument(skip(wallet, ctx, reference_utxo), ret(Debug), err(Debug))]
+#[tracing::instrument(skip(wallet, ctx), ret(Debug), err(Debug))]
 pub async fn submit<W: Wallet>(
     wallet: &mut W,
     ctx: &mut Ctx,
     network: &str,
-    reference_utxo: Option<Utxo>,
-) -> anyhow::Result<Hash<32>> {
-    let change_address = wallet.change_address().await?;
+) -> Result<Hash<32>, Error> {
+    let change_address = wallet
+        .change_address()
+        .await
+        .map_err(|e| Error::Wallet(e.to_string()))?;
 
-    anyhow::ensure!(
-        !ctx.basket_opens().is_empty() || !ctx.basket_wills().is_empty(),
-        "nothing staged to submit"
-    );
+    if ctx.basket_opens().is_empty() && ctx.basket_wills().is_empty() {
+        return Err(Error::Basket("nothing staged to submit".to_string()));
+    }
 
     let mut max_opens = Basket::MAX_OPENS_PER_TX;
     let mut too_early_retries = 0u32;
@@ -94,8 +94,9 @@ pub async fn submit<W: Wallet>(
         // to reuse.
         let fuel = wallet
             .utxos(None)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("wallet reported no coverable utxos"))?;
+            .await
+            .map_err(|e| Error::Wallet(e.to_string()))?
+            .ok_or_else(|| Error::Wallet("wallet reported no coverable utxos".to_string()))?;
 
         // Snapshotted before build: `basket_build_batch` consumes the
         // attempted Wills/Opens on success, before `wallet.submit` ever
@@ -106,13 +107,7 @@ pub async fn submit<W: Wallet>(
         // --- 1. allocation ---------------------------------------------
         let attempted_opens = ctx.basket_opens().len().min(max_opens);
         let attempted_wills = ctx.basket_wills().len();
-        let mut tx = ctx.basket_build_batch(
-            network,
-            reference_utxo.clone(),
-            change_address.clone(),
-            &fuel,
-            max_opens,
-        )?;
+        let mut tx = ctx.basket_build_batch(network, change_address.clone(), &fuel, max_opens)?;
 
         // --- 2. sign + aggregate witnesses -------------------------------
         let mut wallet_witness: Option<(VerificationKey, Signature)> = None;
@@ -123,14 +118,19 @@ pub async fn submit<W: Wallet>(
                 continue;
             }
             if wallet_witness.is_none() {
-                wallet_witness = Some(wallet.sign_tx(&tx).await?);
+                wallet_witness = Some(
+                    wallet
+                        .sign_tx(&tx)
+                        .await
+                        .map_err(|e| Error::Wallet(e.to_string()))?,
+                );
             }
             let (vkey, sig) = wallet_witness.expect("just set above if it was None");
             if Hash::<28>::new(vkey) != vkh {
-                sign_failure = Some(anyhow::anyhow!(
+                sign_failure = Some(Error::Wallet(format!(
                     "no known key covers required signatory {vkh} (neither this console's \
                      Keyring nor the connected submit wallet)"
-                ));
+                )));
                 break;
             }
             tx.add_witness(vkey, sig);
@@ -151,7 +151,10 @@ pub async fn submit<W: Wallet>(
         // the loop above already added it.
         let (vkey, sig) = match wallet_witness {
             Some(witness) => witness,
-            None => wallet.sign_tx(&tx).await?,
+            None => wallet
+                .sign_tx(&tx)
+                .await
+                .map_err(|e| Error::Wallet(e.to_string()))?,
         };
         tx.add_witness(vkey, sig);
 
@@ -177,28 +180,30 @@ pub async fn submit<W: Wallet>(
                 // consumed by *this* still-unconfirmed tx -- a real,
                 // previously-hit preprod failure (a `Close` silently
                 // never landing after an immediately-preceding `Add`).
-                wait_for_landing(wallet, hash, crate::sleep::sleep).await?;
+                wait_for_landing(wallet, hash, crate::sleep::sleep)
+                    .await
+                    .map_err(|e| Error::Wallet(e.to_string()))?;
                 if ctx.basket_opens().is_empty() {
                     break hash;
                 }
             }
             Err(submit_err) => {
                 *ctx = snapshot;
-                let e = anyhow::Error::from(submit_err);
+                let message = submit_err.to_string();
 
                 if let Some(stale) =
-                    missing_input(&e).filter(|input| ctx.basket_wills().contains_key(input))
+                    missing_input(&message).filter(|input| ctx.basket_wills().contains_key(input))
                 {
                     ctx.basket_drop_intent(&stale);
                 } else if too_early_retries < 10
-                    && let Some(wait) = too_early_wait(&e)
+                    && let Some(wait) = too_early_wait(&message)
                 {
                     too_early_retries += 1;
                     crate::sleep::sleep(wait).await;
                 } else if max_opens > 1 && !ctx.basket_opens().is_empty() {
-                    max_opens = back_off(max_opens, &e);
+                    max_opens = back_off(max_opens, &message);
                 } else {
-                    return Err(e);
+                    return Err(Error::Wallet(message));
                 }
             }
         }
@@ -213,9 +218,8 @@ pub async fn submit<W: Wallet>(
 /// the non-uniform part: tag/IOU/redeemer sizes vary a little channel
 /// to channel) lands much closer to the real ceiling in one step than
 /// blind halving. Anything else falls back to halving.
-fn back_off(attempt: usize, err: &anyhow::Error) -> usize {
-    let message = format!("{err:#}");
-    if let Some((supplied, expected)) = parse_max_tx_size_mismatch(&message)
+fn back_off(attempt: usize, message: &str) -> usize {
+    if let Some((supplied, expected)) = parse_max_tx_size_mismatch(message)
         && expected < supplied
     {
         let scaled = (attempt as u128 * expected as u128 * 95 / (supplied as u128 * 100)) as usize;
@@ -250,8 +254,7 @@ fn parse_max_tx_size_mismatch(message: &str) -> Option<(u64, u64)> {
 /// already-spent (or never-existed) input or reference input --
 /// parsed from "...transaction input or reference input: {64 hex
 /// chars}#{index}". `None` for any other rejection shape.
-fn missing_input(err: &anyhow::Error) -> Option<cardano_sdk::Input> {
-    let message = format!("{err:#}");
+fn missing_input(message: &str) -> Option<cardano_sdk::Input> {
     let needle = "transaction input or reference input: ";
     let start = message.find(needle)? + needle.len();
     let rest = message.get(start..)?;
@@ -265,10 +268,9 @@ fn missing_input(err: &anyhow::Error) -> Option<cardano_sdk::Input> {
 /// tx's own lower bound -- parsed from amaru's own rejection message
 /// ("current slot {current} not within transaction validity interval
 /// [{needed}, +∞)"), +5s buffer. `None` for any other rejection shape.
-fn too_early_wait(err: &anyhow::Error) -> Option<Duration> {
-    let message = format!("{err:#}");
-    let current = parse_u64_after(&message, "current slot ")?;
-    let needed = parse_u64_after(&message, "validity interval [")?;
+fn too_early_wait(message: &str) -> Option<Duration> {
+    let current = parse_u64_after(message, "current slot ")?;
+    let needed = parse_u64_after(message, "validity interval [")?;
     Some(Duration::from_secs(needed.saturating_sub(current) + 5))
 }
 
@@ -278,31 +280,29 @@ mod tests {
 
     #[test]
     fn back_off_scales_by_reported_size_mismatch() {
-        let err = anyhow::anyhow!("MaxTxSizeUTxO Mismatch {{supplied: 20000, expected: 16384}}");
-        assert_eq!(back_off(40, &err), 31);
+        let message = "MaxTxSizeUTxO Mismatch {supplied: 20000, expected: 16384}";
+        assert_eq!(back_off(40, message), 31);
     }
 
     #[test]
     fn back_off_halves_on_an_unrecognized_rejection() {
-        let err = anyhow::anyhow!("some other ledger rejection");
-        assert_eq!(back_off(40, &err), 20);
+        let message = "some other ledger rejection";
+        assert_eq!(back_off(40, message), 20);
     }
 
     #[test]
     fn missing_input_parses_hash_and_index() {
         let hash_hex = "11".repeat(32);
-        let err = anyhow::anyhow!(
+        let message = format!(
             "bad inputs UTxO: transaction input or reference input: {hash_hex}#3 is missing"
         );
-        let input = missing_input(&err).expect("should parse");
+        let input = missing_input(&message).expect("should parse");
         assert_eq!(input.output_index(), 3);
     }
 
     #[test]
     fn too_early_wait_adds_five_second_buffer() {
-        let err = anyhow::anyhow!(
-            "current slot 100 not within transaction validity interval [140, +\u{221e})"
-        );
-        assert_eq!(too_early_wait(&err), Some(Duration::from_secs(45)));
+        let message = "current slot 100 not within transaction validity interval [140, +\u{221e})";
+        assert_eq!(too_early_wait(message), Some(Duration::from_secs(45)));
     }
 }

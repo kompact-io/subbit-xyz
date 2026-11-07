@@ -346,6 +346,32 @@
         <button id="wallet-scrub">Scrub (delete key + delegation)</button>
       </section>
 
+      <section id="section-reference-script">
+        <h2>Reference script</h2>
+        <p>
+          Building a tx against an existing channel needs the subbit validator
+          available on-chain as a reference script -- usually a provider already
+          publishes one (the Tx tab's submit picks that up automatically).
+          Upload your own here only if you want independence from any provider's
+          copy, or Tear down to reclaim the ADA it's locked up once you no
+          longer need it. Both act on whichever wallet is connected for submit,
+          above.
+        </p>
+        <div class="row">
+          <div>
+            <input
+              id="reference-script-address"
+              placeholder="target address (optional -- defaults to this wallet's own change address)"
+            />
+          </div>
+          <div style="flex: 0">
+            <button id="reference-script-upload">Upload</button>
+          </div>
+        </div>
+        <button id="reference-script-teardown">Tear down</button>
+        <pre id="reference-script-out"></pre>
+      </section>
+
       <section id="section-keyring">
         <h2>Keyring</h2>
         <div class="row">

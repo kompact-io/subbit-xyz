@@ -1095,6 +1095,36 @@ el("basket-drop-all-intents").addEventListener("click", () => {
   renderBasket();
 });
 
+// Prefers a provider's own published reference script (`Terms.
+// reference_script`, see `Ctx::basket_set_reference_utxo_from_terms`'s
+// own doc) over self-hosting one -- tries every known provider's terms
+// in turn (first live match wins), falling back to whatever reference
+// script this wallet itself holds (`findReferenceScriptJson`, the
+// pre-existing self-upload path) only if no provider's own checks out.
+// Returns `"provider"` / `"self-hosted"` / `null` (nothing resolved).
+function resolveReferenceUtxo(liveItemsJson) {
+  const providers = JSON.parse(store.providersJson()); // [[label, entry], ...]
+  for (const [, entry] of providers) {
+    if (!entry.terms || !entry.terms.reference_script) continue;
+    try {
+      store.basketSetReferenceUtxoFromTerms(
+        JSON.stringify(entry.terms),
+        liveItemsJson,
+      );
+      return "provider";
+    } catch (e) {
+      // This provider's published reference script isn't live/found
+      // among `liveItemsJson` -- try the next provider.
+    }
+  }
+  const referenceUtxoJson = findReferenceScriptJson(liveItemsJson);
+  if (referenceUtxoJson) {
+    store.basketSetReferenceUtxo(referenceUtxoJson);
+    return "self-hosted";
+  }
+  return null;
+}
+
 el("basket-submit").addEventListener("click", async () => {
   if (!submitBackend) {
     log("submit: no wallet connected");
@@ -1110,15 +1140,22 @@ el("basket-submit").addEventListener("click", async () => {
     const liveItems = JSON.parse(historyJson).items.filter(
       (u) => u.spent_by == null,
     );
-    const referenceUtxoJson =
-      findReferenceScriptJson(JSON.stringify(liveItems)) ?? undefined;
+    const resolvedFrom = resolveReferenceUtxo(JSON.stringify(liveItems));
+    if (!resolvedFrom) {
+      log(
+        "submit: no reference script set -- upload one (Settings tab) or add a provider that publishes one",
+      );
+      el("basket-submit-out").textContent = "error: no reference script set";
+      return;
+    }
+    log(`submit: using ${resolvedFrom} reference script`);
 
     // Build, sign, attach the witness, and submit all happen in Rust
     // now (`ui::wasm::submit`), against whichever backend
     // `connectCip30`/`connectEmbedded` last connected -- this file no
     // longer calls `wallet.api.*` (or anything `Embedded`-specific)
     // directly.
-    const txHash = await store.submit(config.floe.network, referenceUtxoJson);
+    const txHash = await store.submit(config.floe.network);
 
     saveStore();
     renderBasket();
@@ -1282,6 +1319,55 @@ el("wallet-scrub").addEventListener("click", () => {
   saveStore();
   renderEmbeddedWallet();
   drainLogs();
+});
+
+// --- Settings tab: reference script (upload/teardown) -----------------------
+//
+// Acts on whichever wallet `wallet-use-for-submit`/`connectCip30` last
+// connected (`submitBackend`), same as `basket-submit` -- neither of
+// these touches the basket's own reference-script setting
+// (`basketSetReferenceUtxo`/`FromTerms`, wired into `basket-submit`'s
+// own handler above), they only create/reclaim the on-chain utxo
+// itself.
+
+el("reference-script-upload").addEventListener("click", async () => {
+  if (!submitBackend) {
+    log("upload reference script: no wallet connected");
+    return;
+  }
+  const addressInput = el("reference-script-address").value.trim();
+  try {
+    const hash = await store.uploadReferenceScript(
+      config.floe.network,
+      addressInput === "" ? undefined : addressInput,
+    );
+    el("reference-script-out").textContent = `uploaded: ${hash}`;
+    log(`reference script uploaded, tx=${hash}`);
+  } catch (e) {
+    log(`upload reference script failed: ${e}`);
+    el("reference-script-out").textContent = `error: ${e}`;
+  }
+});
+
+el("reference-script-teardown").addEventListener("click", async () => {
+  if (!submitBackend) {
+    log("teardown reference script: no wallet connected");
+    return;
+  }
+  if (
+    !confirm(
+      "Tear down this wallet's held reference script? It won't be usable by anything still relying on it.",
+    )
+  )
+    return;
+  try {
+    const hash = await store.teardownReferenceScript(config.floe.network);
+    el("reference-script-out").textContent = `torn down: ${hash}`;
+    log(`reference script torn down, tx=${hash}`);
+  } catch (e) {
+    log(`teardown reference script failed: ${e}`);
+    el("reference-script-out").textContent = `error: ${e}`;
+  }
 });
 
 // --- Settings tab: data management (a destructive, whole-store setting) -----
