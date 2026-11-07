@@ -1,4 +1,4 @@
-use subbit_core::{Duration, cbor};
+use subbit_core::{Instant, cbor};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Stage {
     Opened { subbed: u64 },
-    Closed { subbed: u64, elapse_at: Duration },
+    Closed { subbed: u64, elapse_at: Instant },
     Settled,
 }
 
@@ -68,7 +68,7 @@ impl<'b, C> minicbor::Decode<'b, C> for Stage {
             }
             122 => {
                 let subbed: u64 = d.decode_with(ctx)?;
-                let elapse_at: Duration = d.decode_with(ctx)?;
+                let elapse_at: Instant = d.decode_with(ctx)?;
                 cbor::expect_end(d)?;
                 Stage::Closed { subbed, elapse_at }
             }

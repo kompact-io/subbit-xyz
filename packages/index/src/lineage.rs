@@ -218,7 +218,7 @@ pub async fn build_output(client: &mut impl floe_client::Backend) -> anyhow::Res
 
 #[cfg(test)]
 mod tests {
-    use subbit_core::{Duration, Hash32, Tag, VerifyingKey};
+    use subbit_core::{Duration, Hash32, Instant, Tag, VerifyingKey};
     use subbit_l1_dto::Asset;
 
     use super::*;
@@ -318,7 +318,7 @@ mod tests {
             Some(2),
             Stage::Closed {
                 subbed: 0,
-                elapse_at: Duration::from_millis(0),
+                elapse_at: Instant::from_millis(0),
             },
             100,
         )];

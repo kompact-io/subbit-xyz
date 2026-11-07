@@ -10,7 +10,7 @@ mod support;
 use std::net::SocketAddr;
 
 use subbit_examples_echo_client::config::{Config as ClientConfig, Dialect};
-use subbit_l2_dto::{Catalog, Cost, CostByEgress, ResourceInfo, ResourceInfoOverride};
+use subbit_l2_dto::{Catalog, Cost, CostByEgress, ResourceInfo};
 use subbit_stamp::local;
 use support::{EchoProxy, EchoServer, SubbitGate};
 
@@ -21,35 +21,30 @@ const FLAT_COST: u64 = 5;
 /// the other two: exactly the three resources `plan-update-echo.md`
 /// asked the demo to cover.
 fn demo_catalog() -> Catalog {
+    let resource_info = |cost: Cost| ResourceInfo {
+        cost,
+        description: "Echo demo resource".to_string(),
+        mime_type: "text/plain".to_string(),
+        max_timeout_seconds: 60,
+        service_name: None,
+        tags: None,
+        icon_url: None,
+    };
     Catalog {
-        default: ResourceInfo {
-            cost: Cost::ByRequest(FLAT_COST),
-            description: "Echo demo resource".to_string(),
-            mime_type: "text/plain".to_string(),
-            max_timeout_seconds: 60,
-            service_name: None,
-            tags: None,
-            icon_url: None,
-        },
         resources: vec![
             (
-                "/echo/egress".to_string(),
-                ResourceInfoOverride {
-                    cost: Some(Cost::ByEgress(CostByEgress {
-                        base: 1,
-                        per_kib: 1,
-                        max_bytes: 65_536,
-                    })),
-                    ..Default::default()
-                },
+                "/{*rest}".to_string(),
+                resource_info(Cost::ByRequest(FLAT_COST)),
             ),
             (
-                "/echo/claim".to_string(),
-                ResourceInfoOverride {
-                    cost: Some(Cost::ByClaim(50)),
-                    ..Default::default()
-                },
+                "/echo/egress".to_string(),
+                resource_info(Cost::ByEgress(CostByEgress {
+                    base: 1,
+                    per_kib: 1,
+                    max_bytes: 65_536,
+                })),
             ),
+            ("/echo/claim".to_string(), resource_info(Cost::ByClaim(50))),
         ],
     }
 }
@@ -75,7 +70,7 @@ fn client_config(
         subbit: Some(local::Config {
             cache,
             stamp: subbit_stamp::Config::new(
-                subbit_stamp::account::Config {
+                subbit_stamp::id::Config {
                     signing_key: seed,
                     tag: subbit_core::Tag::from(tag.to_vec()),
                 },

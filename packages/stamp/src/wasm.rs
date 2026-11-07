@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
 
-use crate::{Account, Stamp, dialect::vanilla};
+use crate::{Id, Stamp, dialect::vanilla};
 
 #[wasm_bindgen]
 pub struct JsStamp(Stamp);
@@ -16,9 +16,9 @@ impl JsStamp {
             .map_err(|_| JsError::new("signing_key must be 32 bytes"))?;
         let key = ed25519_dalek::SigningKey::from_bytes(&key);
         let tag = subbit_core::Tag::from(tag.to_vec());
-        let account = Account::new(key, tag);
+        let id = Id::new(key, tag);
         let ttl = subbit_core::Duration::from_secs(ttl_relative_secs);
-        Ok(JsStamp(Stamp::new(account, ttl)))
+        Ok(JsStamp(Stamp::new(id, ttl)))
     }
 
     /// Base64 request envelope for spending `cost`. Send it yourself
@@ -45,8 +45,9 @@ impl JsStamp {
     pub fn set_catalog(&mut self, catalog_json: &str) -> Result<(), JsError> {
         let catalog: subbit_l2_dto::Catalog =
             serde_json::from_str(catalog_json).map_err(|e| JsError::new(&e.to_string()))?;
-        self.0.set_catalog(catalog);
-        Ok(())
+        self.0
+            .set_catalog(catalog)
+            .map_err(|e| JsError::new(&e.to_string()))
     }
 
     /// The cached catalog, JSON-encoded for the JS side to `JSON.parse`

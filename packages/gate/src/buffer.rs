@@ -4,7 +4,7 @@
 //! state per key is ever worth writing. This collapses many requests
 //! for the same `Keytag` into one pending entry; `Db` drains it into a
 //! single `redb` write transaction per flush instead of one per
-//! request. See `plan-db-buffer.md` for the design this implements.
+//! request.
 //!
 //! `map` is an `RwLock<Arc<DashMap<..>>>`, not a bare `ArcSwap`: a
 //! flush needs to swap in a fresh generation and know, by the time it

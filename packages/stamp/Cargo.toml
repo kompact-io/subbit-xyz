@@ -19,6 +19,7 @@ required-features = ["cli"]
 
 [dependencies]
 subbit-core = { workspace = true, features = ["serde"] }
+subbit-cost = { workspace = true }
 subbit-l2-dto = { workspace = true, default-features = false }
 ed25519-dalek = { workspace = true, default-features = false, features = [
   "rand_core",

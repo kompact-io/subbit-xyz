@@ -68,16 +68,18 @@ mod tests {
             confirmation_depth: 3,
             min_iou_amount: 500,
             catalog: Catalog {
-                default: crate::ResourceInfo {
-                    cost: crate::Cost::ByRequest(1_000),
-                    description: "Access to a metered resource".to_string(),
-                    mime_type: "application/octet-stream".to_string(),
-                    max_timeout_seconds: 60,
-                    service_name: None,
-                    tags: None,
-                    icon_url: None,
-                },
-                resources: Vec::new(),
+                resources: vec![(
+                    "/{*rest}".to_string(),
+                    crate::ResourceInfo {
+                        cost: crate::Cost::ByRequest(1_000),
+                        description: "Access to a metered resource".to_string(),
+                        mime_type: "application/octet-stream".to_string(),
+                        max_timeout_seconds: 60,
+                        service_name: None,
+                        tags: None,
+                        icon_url: None,
+                    },
+                )],
             },
             reference_script: Some(OutputRef {
                 tx_hash: subbit_core::Hash32::from([3u8; 32]),

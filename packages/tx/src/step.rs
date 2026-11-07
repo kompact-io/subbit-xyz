@@ -1,5 +1,5 @@
 use minicbor::{Decode, Encode};
-use subbit_core::{Duration, Hash28, Iou};
+use subbit_core::{Hash28, Instant, Iou};
 use subbit_l1_dto::{Constants, Cont, Eol, Step};
 
 use crate::{Bounds, channel::Channel, iou, variables};
@@ -23,7 +23,7 @@ pub enum Can {
     #[n(3)]
     Settle {
         #[n(0)]
-        before: Duration,
+        before: Instant,
         #[n(1)]
         available: u64,
     },
@@ -32,7 +32,7 @@ pub enum Can {
     #[n(5)]
     Elapse {
         #[n(0)]
-        after: Duration,
+        after: Instant,
     },
 }
 
@@ -56,7 +56,7 @@ pub enum Want {
     #[n(2)]
     Close {
         #[n(0)]
-        upper: Duration,
+        upper: Instant,
     },
     #[n(3)]
     Settle {
@@ -68,7 +68,7 @@ pub enum Want {
     #[n(5)]
     Elapse {
         #[n(0)]
-        lower: Duration,
+        lower: Instant,
     },
 }
 
@@ -178,7 +178,7 @@ pub enum WillCont {
     #[n(2)]
     Close {
         #[n(0)]
-        upper: Duration,
+        upper: Instant,
     },
     #[n(3)]
     Settle {
@@ -196,7 +196,7 @@ impl WillCont {
     pub fn sub(iou: Iou, gain: u64) -> Self {
         Self::Sub { iou, gain }
     }
-    pub fn close(upper: Duration) -> Self {
+    pub fn close(upper: Instant) -> Self {
         Self::Close { upper }
     }
     pub fn settle(iou: Iou, gain: u64) -> Self {
@@ -231,7 +231,7 @@ pub enum WillEol {
     #[n(1)]
     Elapse {
         #[n(0)]
-        lower: Duration,
+        lower: Instant,
     },
 }
 
@@ -239,7 +239,7 @@ impl WillEol {
     pub fn end() -> Self {
         Self::End
     }
-    pub fn elapse(lower: Duration) -> Self {
+    pub fn elapse(lower: Instant) -> Self {
         Self::Elapse { lower }
     }
 

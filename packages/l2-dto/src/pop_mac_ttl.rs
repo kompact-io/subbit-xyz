@@ -2,7 +2,7 @@ use minicbor::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use subbit_core::{Duration, MacSig, Signature, Tag, VerifyingKey, tbs};
+use subbit_core::{Instant, MacSig, Signature, Tag, VerifyingKey, tbs};
 
 /// `key`, `tag`, and an expiry: what a `Pop` or `Mac` proves live
 /// possession of. An `Iou`'s own amount is its freshness proof,
@@ -16,7 +16,7 @@ pub struct KeyTagTtl {
     #[n(1)]
     pub tag: Tag,
     #[n(2)]
-    pub ttl: Duration,
+    pub expires_at: Instant,
 }
 
 impl KeyTagTtl {
@@ -79,7 +79,7 @@ mod tests {
         KeyTagTtl {
             key: VerifyingKey::from([1u8; 32]),
             tag: Tag::from(b"t".to_vec()),
-            ttl: Duration::from_secs(0),
+            expires_at: Instant::from_secs(0),
         }
     }
 

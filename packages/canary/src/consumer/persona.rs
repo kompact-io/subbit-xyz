@@ -1,8 +1,4 @@
-//! Named behavior templates ("personas") a `Consumer` can be built from,
-//! and the deterministic random sampling that turns one into a concrete
-//! `Behavior` -- so a scenario can say "5 richy, 2 alice, 3 richy but
-//! x402-only" instead of hand-picking a deposit/dialect/add-count for
-//! every single consumer.
+//! Named behavior templates ("personas") a `Consumer` is sampled from.
 
 use std::ops::RangeInclusive;
 use std::time::Duration;
@@ -11,65 +7,47 @@ use rand::{Rng, RngExt};
 
 use super::Dialect;
 
-/// A concrete, already-sampled plan for one consumer: what `ConsumerBuilder`
-/// turns into actual `Consumer` fields, and what the persona-driven
-/// scenario reads back to know what actions to run.
+/// A concrete, already-sampled plan for one consumer.
 #[derive(Debug, Clone)]
 pub struct Behavior {
     pub dialect: Dialect,
     pub deposit: u64,
-    /// One entry per `Want::Add` this consumer performs mid-lifecycle,
-    /// in order.
+    /// One entry per `Want::Add` this consumer performs mid-lifecycle.
     pub add_amounts: Vec<u64>,
-    /// One entry per spend round -- `spend_counts.len() ==
-    /// add_amounts.len() + 1`, since the last round has no `Add`
-    /// following it, just the eventual `Close`.
+    /// One entry per spend round.
     pub spend_counts: Vec<usize>,
-    /// Delay between each spend request within a round -- `ZERO` (the
-    /// default) fires every request back to back, as fast as the local
-    /// provider accepts them; a nonzero pace spreads the same loop out
-    /// in real time instead (see `Persona::chunk`).
+    /// Delay between each spend request within a round.
     pub pace: Duration,
-    /// Set by `Persona::burst`: overrides `spend_counts`/`pace` entirely
-    /// for that one (and only) round -- see `BurstStop`.
+    /// Overrides `spend_counts`/`pace` for one round -- see `Persona::burst`.
     pub burst: Option<BurstStop>,
 }
 
-/// A sampled stop condition for `Persona::burst`'s spend loop: run until
-/// `deadline` or `commit_max`, whichever comes first. See
-/// `Consumer::firehose_l2`'s own burst branch.
+/// A sampled stop condition for `Persona::burst`'s spend loop.
 #[derive(Debug, Clone, Copy)]
 pub struct BurstStop {
     pub deadline: Duration,
     pub commit_max: u64,
+    pub close_after: Duration,
 }
 
-/// A named behavior template: ranges and weights `generate` samples from,
-/// not concrete values -- the same `Persona` produces a different
-/// `Behavior` for every consumer index it's applied to.
+/// A named behavior template: ranges and weights `generate` samples from.
 #[derive(Debug, Clone)]
 pub struct Persona {
     pub name: String,
     deposit: RangeInclusive<u64>,
-    /// Probability of `Dialect::X402` over `Dialect::Vanilla` when
-    /// sampling -- `1.0`/`0.0` pins a single dialect (see
-    /// `Persona::dialect_only`).
+    /// Probability of `Dialect::X402` over `Dialect::Vanilla`.
     x402_weight: f64,
     adds: RangeInclusive<u32>,
     /// Each `Add`'s amount, as a fraction of `deposit`.
     add_amount_frac: RangeInclusive<f64>,
     spends_per_round: RangeInclusive<u32>,
-    /// See `Behavior::pace`.
     pace: Duration,
-    /// Set by `burst`: deadline plus the fraction of the sampled
-    /// deposit to spend up to. `None` for every other persona/modifier.
-    burst: Option<(Duration, RangeInclusive<f64>)>,
+    /// Set by `burst`: deadline, commit-max fraction, close_after.
+    burst: Option<(Duration, RangeInclusive<f64>, Duration)>,
 }
 
 impl Persona {
-    /// A neutral baseline: fixed 10 ADA deposit, 50/50 dialect, no
-    /// `Add`s, one spend before close. Presets below (`alice`, `richy`)
-    /// build on this rather than repeating every field.
+    /// A neutral baseline: fixed 10 ADA deposit, 50/50 dialect, no `Add`s.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -113,9 +91,7 @@ impl Persona {
         self
     }
 
-    /// Pins this persona to a single dialect -- e.g. "richy, but
-    /// x402-only" -- by collapsing `x402_weight` to `1.0`/`0.0` rather
-    /// than sampling it.
+    /// Pins this persona to a single dialect.
     pub fn dialect_only(self, dialect: Dialect) -> Self {
         match dialect {
             Dialect::X402 => self.x402_weight(1.0),
@@ -123,8 +99,7 @@ impl Persona {
         }
     }
 
-    /// A modest, middle-of-the-road user: ~20 ADA deposit, 50/50
-    /// dialect, 1-3 top-ups, light spend between each.
+    /// A modest, middle-of-the-road user.
     pub fn alice() -> Self {
         Self::new("alice")
             .deposit(18_000_000..=22_000_000)
@@ -134,8 +109,7 @@ impl Persona {
             .spends_per_round(1..=5)
     }
 
-    /// A whale: ~100 ADA deposit, mostly x402, more top-ups, and much
-    /// heavier spend per round.
+    /// A whale: bigger deposit, mostly x402, heavier spend.
     pub fn richy() -> Self {
         Self::new("richy")
             .deposit(90_000_000..=110_000_000)
@@ -145,26 +119,29 @@ impl Persona {
             .spends_per_round(10..=30)
     }
 
-    /// Pure L2 load test: back-to-back requests, no `Add`s, until a
-    /// deadline or a sampled fraction of deposit is committed. See
-    /// `BurstStop`, `Consumer::firehose_l2`, `parse_roster`'s `:burst`.
+    /// Pure L2 load test: back-to-back requests until deposit committed, no
+    /// deadline (`commit_max` is the only stop condition). Uses a 10-year
+    /// "deadline" rather than `Duration::MAX` -- `Instant + Duration::MAX`
+    /// panics on overflow in `spend_burst`.
+    // commit_max is the full deposit, not a fraction -- firehose_l2 reinvokes in
+    // deadline-sized slices, so a fraction would thin concurrency over the run.
     pub fn burst(self) -> Self {
         let mut this = self.adds(0..=0);
-        this.burst = Some((Duration::from_secs(10), 0.5..=0.9));
+        this.burst = Some((
+            Duration::from_secs(10 * 365 * 24 * 3600),
+            1.0..=1.0,
+            Duration::from_secs(45),
+        ));
         this
     }
 
-    /// `burst`'s paced opposite: fewer, larger steps with a real delay
-    /// between requests. ~14x slower than `burst`'s rate -- match
-    /// `--flat-cost` by that factor to compare fund-flow rates fairly.
-    /// See `parse_roster`'s `:chunk` modifier.
+    /// `burst`'s paced opposite: fewer, larger, delayed steps.
     pub fn chunk(self) -> Self {
         self.spends_per_round(5..=10)
             .pace(Duration::from_millis(200))
     }
 
-    /// Looks up a preset by name -- the CLI roster syntax (`persona::parse_roster`)
-    /// goes through this rather than matching persona names in two places.
+    /// Looks up a preset by name.
     pub fn by_name(name: &str) -> anyhow::Result<Self> {
         match name {
             "alice" => Ok(Self::alice()),
@@ -195,9 +172,10 @@ impl Persona {
         let burst = self
             .burst
             .as_ref()
-            .map(|(deadline, commit_max_frac)| BurstStop {
+            .map(|(deadline, commit_max_frac, close_after)| BurstStop {
                 deadline: *deadline,
                 commit_max: ((deposit as f64) * rng.random_range(commit_max_frac.clone())) as u64,
+                close_after: *close_after,
             });
         Behavior {
             dialect,
@@ -216,17 +194,7 @@ pub struct RosterEntry {
     pub count: usize,
 }
 
-/// Parses `--persona` specs of the form `<name>[:<modifier>]*=<count>`,
-/// e.g. `alice=5`, `richy:x402=3` (richy, x402-only, 3 of them),
-/// `alice:burst=2` (alice, but hundreds of spends in one round instead
-/// of her usual modest few -- see `Persona::burst`), `richy:x402:burst=1`
-/// (both at once -- modifiers apply left to right, in any order).
-/// Recognized modifiers: `x402`, `vanilla` (dialect), `burst` (fast,
-/// high-volume spend), `chunk` (paced, moderate-volume spend -- see
-/// `Persona::burst`/`::chunk` for how to compare the two fairly). Falls
-/// back to a sensible default roster (`alice=3 richy=1`)
-/// when `specs` is empty, so a scenario always has *something* to drive
-/// without the caller enumerating every option.
+/// Parses `--persona` specs of the form `<name>[:<modifier>]*=<count>`.
 pub fn parse_roster(specs: &[String]) -> anyhow::Result<Vec<RosterEntry>> {
     if specs.is_empty() {
         return Ok(vec![

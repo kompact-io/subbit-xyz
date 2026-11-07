@@ -63,7 +63,7 @@ impl Command {
 
     async fn serve(config: Config, listen: SocketAddr) -> anyhow::Result<()> {
         let ctx = Arc::new(Ctx::from_config(config)?);
-        let app = app::router(AppState { ctx });
+        let app = app::router(AppState::new(ctx));
         let listener = tokio::net::TcpListener::bind(listen).await?;
         tracing::info!(%listen, "Starting");
         axum::serve(listener, app).await?;
@@ -72,18 +72,30 @@ impl Command {
 }
 
 fn init_tracing() {
-    let filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stderr)
-        .init();
+    #[cfg(feature = "console")]
+    {
+        // Diagnostic only -- see `results.md`'s profiling section.
+        // Needs `RUSTFLAGS="--cfg tokio_unstable"` to actually emit the
+        // task-level events tokio-console reads; without it this layer
+        // is wired in but silent.
+        console_subscriber::init();
+        return;
+    }
+    #[cfg(not(feature = "console"))]
+    {
+        let filter =
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .init();
+    }
 }
 
 /// Built by hand rather than `#[tokio::main]` so worker-thread count
 /// is overridable at runtime (`TOKIO_WORKER_THREADS`), without a
-/// rebuild -- needed to sweep it while diagnosing the throughput
-/// ceiling described in `plan-fix-throughput.md`. Unset, this matches
+/// rebuild -- needed to sweep it while diagnosing a throughput
+/// ceiling (see `benches/worker_threads.rs`). Unset, this matches
 /// `#[tokio::main]`'s own default (one worker per core).
 fn build_runtime() -> std::io::Result<tokio::runtime::Runtime> {
     let mut builder = tokio::runtime::Builder::new_multi_thread();

@@ -72,3 +72,54 @@ pub trait Wallet {
         tx: &Transaction<state::ReadyForSigning>,
     ) -> impl Future<Output = Result<Hash<32>, Self::Error>>;
 }
+
+/// Polls `wallet.utxos(None)` until a utxo originating from `hash`
+/// appears. Exponential backoff, capped attempts: a real preprod
+/// indexer lag is usually a handful of seconds, not longer. Shared by
+/// every caller that submits a tx through a `Wallet` and needs to wait
+/// for it to actually land before doing anything that depends on its
+/// effect (`subbit-console`'s own multi-batch `submit`, `subbit-canary`'s
+/// `Chain`).
+///
+/// `sleep` is caller-supplied rather than a direct `tokio::time::sleep`
+/// call: this crate has no opinion on async runtime, and `subbit-
+/// console`'s own copy of this logic has to work compiled either way
+/// (native tokio, or wasm's `setTimeout`) -- see its own `sleep`
+/// module's doc comment. A native-only caller (`subbit-canary`) can
+/// just pass `tokio::time::sleep` directly.
+///
+/// A `utxos` error here is a hard failure, not treated as "not landed
+/// yet": if the backend (Floe) can't answer the question right now,
+/// that's a real problem for the caller to see, not something to
+/// quietly paper over by assuming "no" and retrying -- a backend
+/// returning a genuine error should fail loudly, not be swallowed into
+/// a longer wait.
+pub async fn wait_for_landing<W, S, F>(
+    wallet: &mut W,
+    hash: Hash<32>,
+    mut sleep: S,
+) -> anyhow::Result<()>
+where
+    W: Wallet,
+    S: FnMut(std::time::Duration) -> F,
+    F: Future<Output = ()>,
+{
+    const MAX_ATTEMPTS: u32 = 20;
+    let mut wait = std::time::Duration::from_secs(2);
+    for attempt in 0..MAX_ATTEMPTS {
+        let utxos = wallet
+            .utxos(None)
+            .await
+            .map_err(|e| anyhow::anyhow!("polling for {hash} to land: {e}"))?;
+        if utxos.is_some_and(|utxos| utxos.keys().any(|input| input.transaction_id() == hash)) {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            attempt + 1 < MAX_ATTEMPTS,
+            "tx {hash} still hasn't landed after {MAX_ATTEMPTS} polls -- giving up"
+        );
+        sleep(wait).await;
+        wait = (wait * 2).min(std::time::Duration::from_secs(30));
+    }
+    unreachable!("loop above always returns or bails by its last iteration")
+}

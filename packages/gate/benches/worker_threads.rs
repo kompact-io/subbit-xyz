@@ -1,10 +1,9 @@
-//! Diagnose `plan-fix-throughput.md`'s hypothesis 1: that
-//! `subbit-gate`'s measured real-world throughput ceiling comes from
-//! `Ctx::handle_spend` running synchronously, inline, on tokio's
-//! worker threads (`main.rs`'s `handle_spend` calls it directly, no
-//! `.await`, no `spawn_blocking`) -- not from write-transaction
-//! contention, which `l2_throughput.rs`'s own buffered-vs-unbuffered
-//! comparison already rules out.
+//! Measures whether `Ctx::handle_spend` running synchronously, inline,
+//! on tokio's worker threads caps `subbit-gate`'s real-world
+//! throughput -- not write-transaction contention, which
+//! `l2_throughput.rs`'s own buffered-vs-unbuffered comparison already
+//! rules out. Test B's result is why `app::handle_spend` now runs on
+//! `spawn_blocking` instead of calling `Ctx::handle_spend` inline.
 //!
 //! Mounts the real, unmodified `subbit_gate::app::router` in
 //! process (no canary/preprod dependency) and drives it over real
@@ -61,16 +60,18 @@ const SPEND_PATH: &str = "/v1/spend/resource";
 
 fn catalog_dto() -> CatalogDto {
     CatalogDto {
-        default: ResourceInfo {
-            cost: Cost::ByRequest(1),
-            description: "bench resource".to_string(),
-            mime_type: "application/octet-stream".to_string(),
-            max_timeout_seconds: 60,
-            service_name: None,
-            tags: None,
-            icon_url: None,
-        },
-        resources: Vec::new(),
+        resources: vec![(
+            "/{*rest}".to_string(),
+            ResourceInfo {
+                cost: Cost::ByRequest(1),
+                description: "bench resource".to_string(),
+                mime_type: "application/octet-stream".to_string(),
+                max_timeout_seconds: 60,
+                service_name: None,
+                tags: None,
+                icon_url: None,
+            },
+        )],
     }
 }
 
@@ -120,7 +121,7 @@ fn build_consumer(db: &Db, seed: u8) -> http::HeaderMap {
     let body = KeyTagTtl {
         key,
         tag,
-        ttl: now() + CoreDuration::from_secs(3600),
+        expires_at: now() + CoreDuration::from_secs(3600),
     };
     let sig = Signature::from(ed25519::signature(&body.tbs(), &sk));
     let payload = Request::ByPopMac {
@@ -314,7 +315,7 @@ fn main() {
     });
     sweep_worker_threads("real server (app::router)", TEST_A_CONCURRENCY, || {
         let (_file, ctx, headers) = build_ctx(TEST_A_CONCURRENCY);
-        let router = app::router(AppState { ctx });
+        let router = app::router(AppState::new(ctx));
         (router, SPEND_PATH.to_string(), headers[0].clone())
     });
 

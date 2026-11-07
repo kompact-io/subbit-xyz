@@ -1,8 +1,9 @@
 //! reqwest middleware for x402, v2: injects a `PAYMENT-SIGNATURE`
-//! request header (costed via `Cost`) on the way out, once terms have
-//! been learned from a prior `PAYMENT-REQUIRED`; applies whichever of
-//! `PAYMENT-RESPONSE`/`PAYMENT-REQUIRED` the reply carries on the way
-//! back. Gated behind `reqwest` + `x402`.
+//! request header (costed via `Stamp::resolve_charge`, see `catalog`)
+//! on the way out, once terms have been learned from a prior
+//! `PAYMENT-REQUIRED` and approved by `TermsPolicy`; applies
+//! whichever of `PAYMENT-RESPONSE`/`PAYMENT-REQUIRED` the reply
+//! carries on the way back. Gated behind `reqwest` + `x402`.
 
 use std::sync::Mutex;
 
@@ -13,30 +14,36 @@ use reqwest_middleware::{Error as MwError, Middleware, Next, Result as MwResult}
 use subbit_l2_dto::dialect::x402::SubbitAccept;
 
 use crate::Cache;
+use crate::catalog::MissPolicy;
 use crate::dialect::x402::{
-    self, PAYMENT_REQUIRED_HEADER, PAYMENT_RESPONSE_HEADER, PAYMENT_SIGNATURE_HEADER,
+    self, PAYMENT_REQUIRED_HEADER, PAYMENT_RESPONSE_HEADER, PAYMENT_SIGNATURE_HEADER, TermsPolicy,
 };
+use crate::reqwest::{ChargeOutcome, charge_outcome};
 
 /// `reqwest_middleware::Middleware` that injects a request envelope
-/// (via `dialect::x402::request`, costed by `C: Cost`) once
-/// `accepted` has been learned, and applies the response header on
+/// (via `dialect::x402::request`, costed by `stamp`'s own catalog,
+/// falling back to `policy: P` on a miss) once `accepted` has been
+/// learned -- itself gated by `terms: T`, see
+/// `dialect::x402::TermsPolicy` -- and applies the response header on
 /// the way back. The very first request against a fresh `Stamp` (or
 /// after terms change) carries no payment at all: there's nothing to
 /// pay under yet, so it goes out bare, and the resulting
 /// `PAYMENT-REQUIRED` challenge is what teaches `accepted` for the
 /// caller's own retry.
-pub struct Stamp<C> {
+pub struct Stamp<P, T> {
     stamp: Mutex<crate::Stamp>,
     accepted: Mutex<Option<SubbitAccept>>,
-    costing: C,
+    policy: P,
+    terms: T,
 }
 
-impl<C: super::Cost> Stamp<C> {
-    pub fn new(stamp: crate::Stamp, costing: C) -> Self {
+impl<P: MissPolicy, T: TermsPolicy> Stamp<P, T> {
+    pub fn new(stamp: crate::Stamp, policy: P, terms: T) -> Self {
         Self {
             stamp: Mutex::new(stamp),
             accepted: Mutex::new(None),
-            costing,
+            policy,
+            terms,
         }
     }
 
@@ -50,7 +57,7 @@ impl<C: super::Cost> Stamp<C> {
 }
 
 #[async_trait::async_trait]
-impl<C: super::Cost + 'static> Middleware for Stamp<C> {
+impl<P: MissPolicy + 'static, T: TermsPolicy + 'static> Middleware for Stamp<P, T> {
     async fn handle(
         &self,
         mut req: Request,
@@ -60,7 +67,19 @@ impl<C: super::Cost + 'static> Middleware for Stamp<C> {
         // --- inject on request, only once terms are known ---
         let accepted = self.accepted.lock().unwrap().clone();
         if let Some(accepted) = accepted {
-            let cost = self.costing.cost(&req);
+            // See `reqwest::vanilla::Stamp::handle`'s own doc comment
+            // on why a rejected miss here is a caller-visible error,
+            // not a panic.
+            let charge = {
+                let mut stamp = self.stamp.lock().unwrap();
+                stamp
+                    .resolve_charge(req.url().path(), &self.policy)
+                    .map_err(|e| MwError::Middleware(e.into()))?
+            };
+            let cost = match charge_outcome(charge, req.url().path())? {
+                ChargeOutcome::Unpriced => return next.run(req, extensions).await,
+                ChargeOutcome::Priced(cost) => cost,
+            };
             let envelope = {
                 let mut stamp = self.stamp.lock().unwrap();
                 x402::request(&mut stamp, cost, accepted)
@@ -91,6 +110,7 @@ impl<C: super::Cost + 'static> Middleware for Stamp<C> {
             if let Err(e) = x402::response(
                 &mut stamp,
                 &mut accepted,
+                &self.terms,
                 settlement.as_deref(),
                 required.as_deref(),
             ) {

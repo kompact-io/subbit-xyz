@@ -61,7 +61,7 @@ pub enum Commit {
 mod tests {
     use super::*;
     use crate::{KeyTagTtl, PopTtl};
-    use subbit_core::{Duration, Signature, Tag, VerifyingKey};
+    use subbit_core::{Instant, Signature, Tag, VerifyingKey};
 
     fn channel_id() -> ChannelId {
         ChannelId {
@@ -75,7 +75,7 @@ mod tests {
             body: KeyTagTtl {
                 key: VerifyingKey::from([0u8; 32]),
                 tag: Tag::from(b"t".to_vec()),
-                ttl: Duration::from_secs(0),
+                expires_at: Instant::from_secs(0),
             },
             sig: Signature::from([0u8; 64]),
         })

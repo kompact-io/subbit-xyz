@@ -1,3 +1,10 @@
+//! Wire shapes only: what actually rides over the network (in
+//! `subbit_l2_dto::Terms.catalog`, in x402's `SubbitExtra`, etc).
+//! `crate::Catalog`, the compiled matchit-backed resolver, is a
+//! separate, deliberately non-wire type built from `dto::Catalog` --
+//! see its own module doc comment for why the two share a name
+//! disambiguated only by this module path.
+
 use minicbor::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -65,6 +72,42 @@ impl Cost {
 pub const CLAIM_BUDGET_HEADER: &str = "SUBBIT_BUDGET";
 pub const CLAIM_COST_HEADER: &str = "SUBBIT_COST";
 
+/// A breakdown of resources available from a provider: each entry
+/// pairs a matchit path pattern with the full `ResourceInfo` it
+/// resolves to. There is no separate "default" field -- a provider
+/// wanting blanket coverage registers a catch-all entry of its own
+/// (`"/{*rest}"`), at matchit's own lower priority, so specific routes
+/// still win. Note matchit's own documented quirk: a catch-all never
+/// matches the bare root path `/` itself (an empty capture), so a
+/// provider that genuinely serves a priced resource at `/` needs a
+/// second, literal `"/"` entry alongside the catch-all -- the two
+/// coexist without conflict.
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Catalog {
+    #[n(0)]
+    pub resources: Vec<(String, ResourceInfo)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ResourceInfo {
+    #[n(0)]
+    pub cost: Cost,
+    #[n(1)]
+    pub description: String,
+    #[n(2)]
+    pub mime_type: String,
+    #[n(3)]
+    pub max_timeout_seconds: u64,
+    #[n(4)]
+    pub service_name: Option<String>,
+    #[n(5)]
+    pub tags: Option<Vec<String>>,
+    #[n(6)]
+    pub icon_url: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,5 +157,37 @@ mod tests {
     #[test]
     fn by_claim_quote_is_the_cap() {
         assert_eq!(Cost::ByClaim(42).quote(), 42);
+    }
+
+    fn resource_info() -> ResourceInfo {
+        ResourceInfo {
+            cost: Cost::ByRequest(10),
+            description: "Access to a metered resource".to_string(),
+            mime_type: "application/octet-stream".to_string(),
+            max_timeout_seconds: 60,
+            service_name: None,
+            tags: None,
+            icon_url: None,
+        }
+    }
+
+    #[test]
+    fn catalog_roundtrips_with_no_resources() {
+        let catalog = Catalog {
+            resources: Vec::new(),
+        };
+        let bytes = minicbor::to_vec(&catalog).expect("encode failed");
+        let decoded: Catalog = minicbor::decode(&bytes).expect("decode failed");
+        assert_eq!(catalog, decoded);
+    }
+
+    #[test]
+    fn catalog_roundtrips_with_a_resource() {
+        let catalog = Catalog {
+            resources: vec![("/special".to_string(), resource_info())],
+        };
+        let bytes = minicbor::to_vec(&catalog).expect("encode failed");
+        let decoded: Catalog = minicbor::decode(&bytes).expect("decode failed");
+        assert_eq!(catalog, decoded);
     }
 }

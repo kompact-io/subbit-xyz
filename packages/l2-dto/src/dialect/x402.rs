@@ -8,6 +8,9 @@
 
 pub mod spec;
 
+mod error;
+pub use error::{X402Error, error_reason};
+
 mod require;
 pub use require::{KnownExtra, Require, SCHEME, SubbitAccept, SubbitExtra};
 

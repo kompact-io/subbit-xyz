@@ -1,7 +1,7 @@
 //! Isolates where `benches/firehose.rs` vs `packages/canary`'s ~60x
-//! latency gap actually comes from (see `plan-fix-canary.md`): both
-//! drive the real `subbit-gate` binary over real HTTP with a real
-//! per-request signature, so the gap has to be in whatever differs
+//! latency gap actually comes from: both drive the real `subbit-gate`
+//! binary over real HTTP with a real per-request signature, so the
+//! gap has to be in whatever differs
 //! between them on the client side. The one structural difference:
 //! canary's `Consumer` sends every spend through
 //! `subbit_stamp::reqwest::vanilla::Stamp` wrapped in a
@@ -17,21 +17,26 @@
 //! `reqwest_middleware` sit in the path.
 //!
 //! Run with: `cargo bench --bench stamp_overhead -p subbit-gate`
+//!
+//! Note: measured -- stamp+middleware is not slower (if anything
+//! slightly faster) than the hand-rolled path, so it doesn't explain
+//! the ~60x gap; a canary run accidentally in debug mode does (see
+//! `results.md`'s ~50-60x debug-signing-slowdown note), and is the
+//! likely real cause.
 
-use std::{
-    net::SocketAddr,
-    path::PathBuf,
-    process::Stdio,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use ed25519_dalek::{Signer, SigningKey};
 use reqwest_middleware::ClientBuilder;
 use subbit_core::{Duration as CoreDuration, Signature, Tag, VerifyingKey};
 use subbit_gate::{Backing, Config, Keytag, now};
-use subbit_l2_dto::{CatalogIndex, Cost, KeyTagTtl, PopMacTtl, PopTtl, Request, Terms};
+use subbit_l2_dto::{Cost, KeyTagTtl, PopMacTtl, PopTtl, Request, Terms};
+use subbit_stamp::catalog;
 use subbit_stamp::reqwest::vanilla::Stamp as VanillaMiddleware;
-use tokio::process::{Child, Command};
+
+#[path = "support/mod.rs"]
+mod support;
+use support::Server;
 
 const REQUESTS: usize = 300;
 const PRIME_COMMIT: u64 = u64::MAX / 2;
@@ -45,7 +50,9 @@ fn main() {
 }
 
 async fn run() {
-    let server = Server::spawn().await;
+    let mut config = Config::default();
+    config.terms.catalog.resources[0].1.cost = Cost::ByRequest(1);
+    let server = Server::spawn(config).await;
     let client = reqwest::Client::new();
 
     let seed_a = [11u8; 32];
@@ -79,7 +86,7 @@ async fn run() {
         let body = KeyTagTtl {
             key: key_a,
             tag: tag_a.clone(),
-            ttl: now() + CoreDuration::from_secs(3600),
+            expires_at: now() + CoreDuration::from_secs(3600),
         };
         let sig = Signature::from(SigningKey::from_bytes(&seed_a).sign(&body.tbs()).to_bytes());
         let payload = Request::ByPopMac {
@@ -114,10 +121,10 @@ async fn run() {
         .json()
         .await
         .unwrap();
-    let costing = CatalogIndex::new(terms.catalog).unwrap();
-    let account = subbit_stamp::Account::new(SigningKey::from_bytes(&seed_b), tag_b.clone());
-    let stamp = subbit_stamp::Stamp::new(account, subbit_core::Duration::from_secs(3600));
-    let middleware = VanillaMiddleware::new(stamp, costing);
+    let account = subbit_stamp::Id::new(SigningKey::from_bytes(&seed_b), tag_b.clone());
+    let mut stamp = subbit_stamp::Stamp::new(account, subbit_core::Duration::from_secs(3600));
+    stamp.set_catalog(terms.catalog).unwrap();
+    let middleware = VanillaMiddleware::new(stamp, catalog::reject);
     let stamp_client = ClientBuilder::new(reqwest::Client::new())
         .with(middleware)
         .build();
@@ -150,77 +157,6 @@ fn report(label: &str, samples: &[Duration]) {
         pct(0.50),
         pct(0.99),
     );
-}
-
-// ---------------------------------------------------------------------------
-// Spawning the real binary + priming channels (same approach as firehose.rs)
-// ---------------------------------------------------------------------------
-
-fn sibling_bin(name: &str) -> PathBuf {
-    let exe = std::env::current_exe().expect("current_exe");
-    let mut dir = exe.clone();
-    for _ in 0..4 {
-        dir.pop();
-        let candidate = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-        if candidate.exists() {
-            return candidate;
-        }
-    }
-    panic!(
-        "{name} binary not found near {}; run `cargo build --workspace` first",
-        exe.display()
-    );
-}
-
-struct Server {
-    _child: Child,
-    _dir: tempfile::TempDir,
-    addr: SocketAddr,
-}
-
-impl Server {
-    fn base_url(&self) -> String {
-        format!("http://{}", self.addr)
-    }
-
-    async fn spawn() -> Self {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let mut config = Config::default();
-        config.db.db_path = dir.path().join("db.redb").to_string_lossy().into_owned();
-        config.terms.catalog.default.cost = Cost::ByRequest(1);
-        let config_path = dir.path().join("config.toml");
-        std::fs::write(&config_path, toml::to_string_pretty(&config).unwrap()).unwrap();
-
-        let addr: SocketAddr = {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-            listener.local_addr().unwrap()
-        };
-        let child = Command::new(sibling_bin("subbit-gate"))
-            .arg("--config")
-            .arg(&config_path)
-            .arg("serve")
-            .arg("--listen")
-            .arg(addr.to_string())
-            .kill_on_drop(true)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawn subbit-gate");
-
-        let client = reqwest::Client::new();
-        let ready_url = format!("http://{addr}/v1/a/ious");
-        for _ in 0..200 {
-            if client.get(&ready_url).send().await.is_ok() {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        Self {
-            _child: child,
-            _dir: dir,
-            addr,
-        }
-    }
 }
 
 async fn seed_backings(

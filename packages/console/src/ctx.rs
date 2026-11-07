@@ -9,8 +9,8 @@
 //! plain `serde_json` on `Ctx` directly. Every method here takes/
 //! returns already-typed domain values, never raw hex/JSON strings:
 //! parsing those belongs to whichever frontend is crossing its own
-//! boundary (mirrors `Basket`'s own long-standing rule, now applied
-//! crate-wide). A UI's own marshalling layer (`ui::wasm`, `ui::cli`)
+//! boundary (mirrors `Basket`'s own rule, applied crate-wide). A UI's
+//! own marshalling layer (`ui::wasm`, `ui::cli`)
 //! should be boilerplate: parse args, call a `Ctx` method, (de)
 //! serialize the result -- never reach into `Ctx`'s fields directly
 //! from outside this module.
@@ -307,6 +307,20 @@ impl Ctx {
             .build(network, reference_utxo, change_address, fuel)
     }
 
+    /// `basket_build`'s batched sibling -- see `Basket::build_batch`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn basket_build_batch(
+        &mut self,
+        network: &str,
+        reference_utxo: Option<Utxo>,
+        change_address: Address<kind::Any>,
+        fuel: &BTreeMap<Input, Output>,
+        max_opens: usize,
+    ) -> Result<Transaction<ReadyForSigning>, Error> {
+        self.basket
+            .build_batch(network, reference_utxo, change_address, fuel, max_opens)
+    }
+
     // --- Embedded wallet (plan-embedded-wallet.md) -----------------------
     //
     // No `Embedded`/`Backend` here -- constructing a real embedded
@@ -409,10 +423,10 @@ impl Ctx {
 mod tests {
     use super::*;
 
-    /// File/`localStorage` round-trips live in `ui::cli`/`ui::wasm`
-    /// now -- that's where the storage decision lives. This just
-    /// checks `Ctx`'s own `Serialize`/`Deserialize` derive round-trips
-    /// its fields correctly, with nothing storage-specific involved.
+    /// File/`localStorage` round-trips live in `ui::cli`/`ui::wasm` --
+    /// that's where the storage decision lives. This just checks
+    /// `Ctx`'s own `Serialize`/`Deserialize` derive round-trips its
+    /// fields correctly, with nothing storage-specific involved.
     #[test]
     fn json_roundtrips() {
         let mut ctx = Ctx::default();

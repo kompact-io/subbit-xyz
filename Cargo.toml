@@ -3,6 +3,7 @@ members = [
   "packages/build-info",
   "packages/config",
   "packages/core",
+  "packages/cost",
   "packages/l1-dto",
   "packages/l2-dto",
   "packages/index-dto",
@@ -51,7 +52,6 @@ url = { version = "2.5.8", features = ["serde"] }
 # two distinct `amaru-kernel` types (git vs. crates.io), even at the
 # same version number.
 amaru-uplc = { git = "https://github.com/kompact-io/amaru", branch = "nix-proper" }
-amaru-plutus = { git = "https://github.com/kompact-io/amaru", branch = "nix-proper" }
 amaru-kernel = { git = "https://github.com/kompact-io/amaru", branch = "nix-proper" }
 anyhow = "1.0.102"
 async-trait = "0.1.92"
@@ -112,9 +112,11 @@ ed25519-dalek = { version = "3.0.0", default-features = false }
 
 subbit-build-info = { path = "packages/build-info", default-features = false }
 subbit-claim = { path = "packages/claim", default-features = false }
+subbit-console = { path = "packages/console", default-features = false }
 subbit-gate-client = { path = "packages/gate-client", default-features = false }
 subbit-config = { path = "packages/config", default-features = false }
 subbit-core = { path = "packages/core", default-features = false }
+subbit-cost = { path = "packages/cost", default-features = false }
 subbit-l1-dto = { path = "packages/l1-dto", default-features = false }
 subbit-l2-dto = { path = "packages/l2-dto", default-features = false }
 subbit-index = { path = "packages/index", default-features = false }

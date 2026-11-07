@@ -37,12 +37,12 @@ enum Command {
     Run,
 }
 
-fn now() -> subbit_core::Duration {
+fn now() -> subbit_core::Instant {
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system clock before unix epoch")
         .as_millis() as u64;
-    subbit_core::Duration::from_millis(ms)
+    subbit_core::Instant::from_millis(ms)
 }
 
 impl Cli {
@@ -224,6 +224,7 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
+        .with_writer(std::io::stderr)
         .init();
 
     Cli::parse().run().await

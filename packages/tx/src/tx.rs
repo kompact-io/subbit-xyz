@@ -5,8 +5,7 @@ use cardano_sdk::{
     transaction::state::ReadyForSigning,
 };
 
-use subbit_core::Duration;
-use subbit_core::Hash28;
+use subbit_core::{Hash28, Instant};
 use subbit_l1_dto::{Redeemer, Step};
 
 use crate::{Bounds, Open, validator};
@@ -286,7 +285,23 @@ impl Tx {
         let mut target = fuel::saturating_sub_value(&produced_value, &spent_value);
         let target_lovelace = target.lovelace() + FEE_BUFFER;
         target.with_lovelace(target_lovelace);
-        let fuel_inputs = fuel::select(fuel, &target)?;
+        // `fuel::select` scores purely by value coverage, with no notion
+        // of "this one's special" -- a script- or datum-bearing utxo
+        // (the reference-script output chief among them, but any other
+        // would be just as wrong to spend as plain fee/collateral) is
+        // just another large-lovelace entry in the caller's own
+        // wallet-wide `fuel` set (it lives at the same funding-wallet
+        // address). Without this filter, a long-running session that
+        // eventually exhausts its smaller plain change outputs will
+        // have that utxo selected and spent as an ordinary fee input --
+        // for the reference script specifically, destroying the one
+        // copy every future `Will` batch depends on.
+        let plain_fuel: Utxos = fuel
+            .iter()
+            .filter(|(_, output)| output.datum().is_none() && output.script().is_none())
+            .map(|(i, o)| (i.clone(), o.clone()))
+            .collect();
+        let fuel_inputs = fuel::select(&plain_fuel, &target)?;
 
         let inputs: Vec<_> = self
             .inputs()
@@ -304,7 +319,16 @@ impl Tx {
             .chain(fuel_inputs.iter().map(|i| (i.clone(), None)))
             .collect();
         let outputs = self.outputs(network_id);
-        let collaterals = fuel_inputs.clone();
+        // Collateral only matters when a Plutus script actually runs
+        // (spending a `Will` off the validator) -- a pure `Open` batch
+        // has no script execution at all, so declaring collateral for
+        // it only wastes tx-body bytes against `maxTxSize` headroom
+        // that would otherwise fit more Opens.
+        let collaterals = if self.wills.is_empty() {
+            Vec::new()
+        } else {
+            fuel_inputs.clone()
+        };
         let specified_signatories = self
             .signers()
             .iter()
@@ -312,7 +336,7 @@ impl Tx {
             .collect::<Vec<_>>();
         let bounds = self.bounds();
 
-        let to_slot = |d: Duration| network_parameters.protocol_parameters.posix_to_slot(*d);
+        let to_slot = |d: Instant| network_parameters.protocol_parameters.posix_to_slot(*d);
         let lower_bound = bounds
             .lower
             .map_or(SlotBound::None, |d| SlotBound::Inclusive(to_slot(d)));

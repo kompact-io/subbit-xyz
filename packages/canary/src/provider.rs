@@ -1,90 +1,39 @@
-//! Spawns the real `subbit-gate` binary as a child process, the same
-//! technique `examples/echo/tests`' `support::sibling_bin` and the old
-//! `packages/e2e::harness::Server` both used.
+//! `Provider`: the three real sibling processes a provider actually is -- `gate`, `index`,
+//! `claim` -- orchestrated together as one unit with one combined lifetime. `index`/`claim`
+//! are spawned once `gate` is up and `claim`'s fee wallet is funded, so they start as `None`.
 
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::process::Stdio;
-use std::time::Duration;
+mod claim;
+mod gate;
+mod index;
 
-use anyhow::{Context, bail};
-use tokio::process::{Child, Command};
+use claim::ClaimProcess;
+use gate::GateProcess;
+use index::IndexProcess;
+
+use anyhow::Context;
 
 use crate::identity::Identity;
 
-/// Every workspace binary lands in the same `target/<profile>/`
-/// directory regardless of which package defines it; locate `name`
-/// there relative to this running binary's own `current_exe()`.
-fn sibling_bin(name: &str) -> anyhow::Result<PathBuf> {
-    let mut dir = std::env::current_exe().context("resolving current_exe")?;
-    dir.pop();
-    let bin = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-    if !bin.exists() {
-        bail!(
-            "{name} binary not found at {}; run `cargo build --workspace` first",
-            bin.display()
-        );
-    }
-    Ok(bin)
-}
-
 pub struct Provider {
-    _child: Child,
-    addr: SocketAddr,
-    _dir: tempfile::TempDir,
+    gate: GateProcess,
+    _index: Option<IndexProcess>,
+    _claim: Option<ClaimProcess>,
 }
 
 impl Provider {
-    pub async fn spawn(mut config: subbit_gate::Config) -> anyhow::Result<Self> {
-        let dir = tempfile::tempdir().context("tempdir")?;
-        config.db.db_path = dir.path().join("db.redb").to_string_lossy().into_owned();
-
-        let config_path = dir.path().join("config.toml");
-        std::fs::write(&config_path, toml::to_string_pretty(&config)?)?;
-
-        let addr = free_local_addr()?;
-        let child = Command::new(sibling_bin("subbit-gate")?)
-            .arg("--config")
-            .arg(&config_path)
-            .arg("serve")
-            .arg("--listen")
-            .arg(addr.to_string())
-            // Default to `warn`, not the server's own `info` default:
-            // an `info`-level line per request (two per spend) writes
-            // synchronously to this inherited stderr on every request,
-            // which is itself a real, measured source of per-request
-            // latency under load, independent of anything server- or
-            // client-logic-related. Still overridable by the
-            // environment this canary process itself runs under.
-            .env(
-                "RUST_LOG",
-                std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".into()),
-            )
-            .kill_on_drop(true)
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .context("spawn subbit-gate")?;
-
-        wait_ready(addr).await?;
-
+    pub async fn spawn(config: subbit_gate::Config) -> anyhow::Result<Self> {
         Ok(Self {
-            _child: child,
-            addr,
-            _dir: dir,
+            gate: GateProcess::spawn(config).await?,
+            _index: None,
+            _claim: None,
         })
     }
 
     pub fn base_url(&self) -> String {
-        format!("http://{}", self.addr)
+        self.gate.base_url()
     }
 
-    /// Spawns a real `subbit-gate` configured for this run's own demo
-    /// `Terms`: `flat_cost` for every request, closing after
-    /// `close_period`, validated against the real `subbit-tx` validator
-    /// script. Consumers fetch the published catalog themselves (see
-    /// `Consumer::connect`) rather than being handed one by this
-    /// constructor.
+    /// Spawns a real `subbit-gate` configured for this run's own demo `Terms`.
     pub async fn spawn_demo(
         flat_cost: u64,
         provider_identity: Identity,
@@ -99,48 +48,79 @@ impl Provider {
             subbit_core::Hash28::from(<[u8; 28]>::from(subbit_tx::VALIDATOR.hash));
         config.terms.catalog = demo_catalog(flat_cost);
         config.finality_depth = finality_depth;
+        // Latency investigation (results.md): the defaults' cumulative
+        // thresholds are tiny relative to real ADA amounts, so they --
+        // not the 1s/30s timers -- are what's actually triggering
+        // flush/checkpoint under canary's load. Bumped to real ADA
+        // scale to let the timers dominate instead and see if that
+        // changes the measured L2 latency.
+        config.db.buffer.max_pending = 10_000_000; // 10 ADA
+        config.db.buffer.max_buffer_interval = std::time::Duration::from_secs(1);
+        config.db.exposure.single_write_threshold = 1_000_000; // 1 ADA
+        config.db.exposure.max_cumulative_exposure = 10_000_000; // 10 ADA
+        config.db.exposure.max_checkpoint_interval = std::time::Duration::from_secs(1);
         println!("canary: spawning provider");
         let provider = Self::spawn(config).await?;
         println!("canary: provider up at {}", provider.base_url());
         Ok(provider)
     }
+
+    /// Spawns the real `lineage-index`/`subbit-claim` binaries alongside this already-running
+    /// gate, completing the three-process `Provider`. `claim_fee_seed`'s own wallet must already
+    /// be funded on-chain before this is called.
+    pub async fn spawn_support_processes(
+        &mut self,
+        floe_endpoint: &str,
+        network: cardano_sdk::Network,
+        claim_fee_seed: [u8; 32],
+        ref_script_host: cardano_sdk::Address<cardano_sdk::address::kind::Shelley>,
+        provider_signing_key: [u8; 32],
+    ) -> anyhow::Result<()> {
+        let base_url = self.base_url();
+
+        println!("canary: spawning the real lineage-index binary");
+        self._index = Some(
+            IndexProcess::spawn(floe_endpoint, &base_url)
+                .await
+                .context("spawning lineage-index")?,
+        );
+
+        println!("canary: spawning the real subbit-claim binary");
+        self._claim = Some(
+            ClaimProcess::spawn(
+                floe_endpoint,
+                &base_url,
+                network,
+                claim_fee_seed,
+                ref_script_host,
+                provider_signing_key,
+            )
+            .await
+            .context("spawning subbit-claim")?,
+        );
+
+        println!(
+            "canary: real subbit-claim/lineage-index now running as child processes -- \
+             claiming/indexing is fully asynchronous from here"
+        );
+        Ok(())
+    }
 }
 
-/// This run's own demo cost catalog: a flat per-request cost for its one
-/// resource, published at exactly the path consumers then spend against
-/// (`/v1/spend/echo`) -- no separate hardcoded spend path for a consumer
-/// to keep in sync with by hand.
-pub(crate) fn demo_catalog(flat_cost: u64) -> subbit_l2_dto::Catalog {
+/// This run's own demo cost catalog: a flat per-request cost for `/v1/spend/echo`.
+fn demo_catalog(flat_cost: u64) -> subbit_l2_dto::Catalog {
     subbit_l2_dto::Catalog {
-        default: subbit_l2_dto::ResourceInfo {
-            cost: subbit_l2_dto::Cost::ByRequest(flat_cost),
-            description: "Canary smoke-test resource".to_string(),
-            mime_type: "text/plain".to_string(),
-            max_timeout_seconds: 60,
-            service_name: None,
-            tags: None,
-            icon_url: None,
-        },
         resources: vec![(
-            "/v1/spend/echo".to_string(),
-            subbit_l2_dto::ResourceInfoOverride::default(),
+            "/{*rest}".to_string(),
+            subbit_l2_dto::ResourceInfo {
+                cost: subbit_l2_dto::Cost::ByRequest(flat_cost),
+                description: "Canary smoke-test resource".to_string(),
+                mime_type: "text/plain".to_string(),
+                max_timeout_seconds: 60,
+                service_name: None,
+                tags: None,
+                icon_url: None,
+            },
         )],
     }
-}
-
-fn free_local_addr() -> anyhow::Result<SocketAddr> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    Ok(listener.local_addr()?)
-}
-
-async fn wait_ready(addr: SocketAddr) -> anyhow::Result<()> {
-    let url = format!("http://{addr}/v1/a/ious");
-    let client = reqwest::Client::new();
-    for _ in 0..100 {
-        if client.get(&url).send().await.is_ok() {
-            return Ok(());
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    bail!("server at {addr} did not become ready in time")
 }

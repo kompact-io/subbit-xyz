@@ -101,16 +101,18 @@ mod tests {
             confirmation_depth: 3,
             min_iou_amount: 0,
             catalog: Catalog {
-                default: ResourceInfo {
-                    cost: Cost::ByRequest(0),
-                    description: String::new(),
-                    mime_type: String::new(),
-                    max_timeout_seconds: 0,
-                    service_name: None,
-                    tags: None,
-                    icon_url: None,
-                },
-                resources: Vec::new(),
+                resources: vec![(
+                    "/{*rest}".to_string(),
+                    ResourceInfo {
+                        cost: Cost::ByRequest(0),
+                        description: String::new(),
+                        mime_type: String::new(),
+                        max_timeout_seconds: 0,
+                        service_name: None,
+                        tags: None,
+                        icon_url: None,
+                    },
+                )],
             },
             reference_script: None,
         }

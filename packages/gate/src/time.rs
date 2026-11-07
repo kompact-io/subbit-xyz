@@ -1,9 +1,9 @@
-use subbit_core::Duration;
+use subbit_core::Instant;
 
-pub fn now() -> Duration {
+pub fn now() -> Instant {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis();
-    Duration::from_millis(now_ms as u64)
+    Instant::from_millis(now_ms as u64)
 }

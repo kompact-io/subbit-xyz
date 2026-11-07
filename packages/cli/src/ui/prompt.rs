@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use cardano_sdk::{Hash, SigningKey};
 use inquire::{Confirm, CustomType, Select, Text};
 use serde_json::{Value, json};
-use subbit_core::{Duration, Hash28, VerifyingKey};
+use subbit_core::{Duration, Hash28, Instant, VerifyingKey};
 
 use crate::{ctx::Ctx, time::now};
 
@@ -48,15 +48,14 @@ pub enum Relative {
 
 /// Prompt for a relative duration (e.g. "210s"), then resolve it against
 /// `now()` in the given direction to an absolute time.
-pub fn prompt_relative_duration(field: &str, direction: Relative) -> anyhow::Result<Duration> {
+pub fn prompt_relative_duration(field: &str, direction: Relative) -> anyhow::Result<Instant> {
     let offset = prompt_parsed(field, "relative, e.g. 210s", |s: &str| {
         s.parse::<Duration>()
     })?;
     match direction {
         Relative::Future => Ok(now() + offset),
         Relative::Past => now()
-            .checked_sub(*offset)
-            .map(Duration)
+            .checked_sub(offset)
             .ok_or_else(|| anyhow!("{field} offset is larger than the current time")),
     }
 }

@@ -57,15 +57,19 @@ fn describe_input(
 }
 
 /// Good enough for human time
-fn human_time(elapse_at: &subbit_core::Duration) -> String {
-    const THRESHOLD_MS: i128 = 120_000; // 2 mins
-    let delta = now().as_millis() as i128 - elapse_at.as_millis() as i128;
-    let mins = |ms: i128| (ms.unsigned_abs() / 60_000).to_string();
-    match delta {
-        d if d > THRESHOLD_MS => format!("-{}m", mins(d)),
-        d if d > 0 => "now".to_string(),
-        d if d > -THRESHOLD_MS => "now".to_string(),
-        d => format!("+{}m", mins(d)),
+fn human_time(elapse_at: &subbit_core::Instant) -> String {
+    let threshold = subbit_core::Duration::from_millis(120_000); // 2 mins
+    let now = now();
+    let mins = |span: subbit_core::Duration| (span.as_secs() / 60).to_string();
+    let (sign, delta) = if now >= *elapse_at {
+        ("-", now - *elapse_at)
+    } else {
+        ("+", *elapse_at - now)
+    };
+    if delta > threshold {
+        format!("{sign}{}m", mins(delta))
+    } else {
+        "now".to_string()
     }
 }
 

@@ -1,5 +1,5 @@
-//! The embedded wallet's own core logic (`plan-embedded-wallet.md` +
-//! this session's console-views resumption): a thin layer over
+//! The embedded wallet's own core logic (`plan-embedded-wallet.md`):
+//! a thin layer over
 //! `subbit_wallet::Store` -- generate/import a key, set/clear a
 //! delegation credential, scrub, reveal, and a small read-only `View`
 //! for the Settings tab to render. No I/O here, same rule as every

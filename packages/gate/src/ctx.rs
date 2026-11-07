@@ -92,12 +92,9 @@ impl Ctx {
         let mutual: Arc<dyn MutualService> = Arc::new(mutual::Unsupported);
         let dialects = Self::configured_dialects(config.dialects);
 
-        // config.limiter isn't consumed yet, see the `// Todo :: Handle
-        // buckets!` marker below. Wire it in here once that lands.
-
-        // for k in db.keys().unwrap().iter() {
-        //     tracing::info!("keys : {}", k);
-        // }
+        // `config.limiter` isn't consumed yet: no `Limiter` is built
+        // here, and `default_channel` below never seeds a channel's
+        // `Bucket` from it, so rate limiting is defined but inert.
 
         Ok(Self::new(
             db,
@@ -167,10 +164,9 @@ impl Ctx {
     /// logic; `main.rs` does nothing but call this and translate the
     /// `Wire` it returns into a real HTTP response.
     pub fn handle_spend(&self, headers: &HeaderMap, url: &str) -> Wire {
-        let url = catalog::normalize(url);
         tracing::info!(method = "spend", url = %url, "request in");
-        let wire = self.spend_wire(headers, &url);
-        self.log_response("spend", &url, &wire);
+        let wire = self.spend_wire(headers, url);
+        self.log_response("spend", url, &wire);
         wire
     }
 
@@ -204,10 +200,9 @@ impl Ctx {
     /// itself (`Catalog::actual_cost`), so a future cost model needing
     /// yet another header never has to change this signature.
     pub fn handle_refund(&self, headers: &HeaderMap, url: &str) -> Wire {
-        let url = catalog::normalize(url);
         tracing::info!(method = "refund", url = %url, "request in");
-        let wire = self.refund_wire(headers, &url);
-        self.log_response("refund", &url, &wire);
+        let wire = self.refund_wire(headers, url);
+        self.log_response("refund", url, &wire);
         wire
     }
 
@@ -287,9 +282,25 @@ impl Ctx {
     }
 
     /// The per-resource info a dialect needs beyond cost itself
-    /// (x402's `description`/`mimeType`/`maxTimeoutSeconds`).
+    /// (x402's `description`/`mimeType`/`maxTimeoutSeconds`). Panics
+    /// if `url` matches nothing in the catalog at all: every
+    /// provider-configured `Catalog` is expected to register a
+    /// catch-all (`"/{*rest}"`) for blanket coverage (see `Catalog`'s
+    /// own doc comment) -- an unmatched `url` here means either a
+    /// provider config that genuinely forgot one, or a route this
+    /// server serves but never published pricing for, both startup-
+    /// time configuration mistakes rather than a per-request failure
+    /// mode worth a wire-level error of their own.
     pub(crate) fn resource_info(&self, url: &str) -> ResourceInfo {
-        self.catalog.resolve(url)
+        Self::require_catalog(url, self.catalog.resolve(url).cloned())
+    }
+
+    /// Unwraps a catalog lookup for `url`, panicking with a consistent
+    /// message when it misses. See `resource_info`'s own doc comment
+    /// on why an unmatched `url` panics rather than returning some
+    /// fallback.
+    fn require_catalog<T>(url: &str, found: Option<T>) -> T {
+        found.unwrap_or_else(|| panic!("no catalog entry for {url}; register a catch-all route"))
     }
 
     /// Cooperatively close the channel `keytag` names, using the
@@ -330,7 +341,7 @@ impl Ctx {
             PopMacTtl::Pop(pop) => self.pop_body(pop),
             PopMacTtl::Mac(mac) => self.mac_body(mac),
         }?;
-        if now() > body.ttl {
+        if now() > body.expires_at {
             return Err(CoreError::InvalidAuth);
         }
         Ok(body)
@@ -346,9 +357,11 @@ impl Ctx {
         }
     }
 
-    /// What a request against `url` costs.
+    /// What a request against `url` costs. See `resource_info`'s own
+    /// doc comment on why an unmatched `url` panics rather than
+    /// returning some fallback amount.
     pub(crate) fn cost(&self, url: &str) -> u64 {
-        self.catalog.cost(url)
+        Self::require_catalog(url, self.catalog.cost(url))
     }
 
     /// How much to give back on a refund against `url`.
@@ -357,7 +370,7 @@ impl Ctx {
     /// at all means nothing was served, refunding the full quote.
     /// Never refunds more than the quote.
     pub(crate) fn refund_amount(&self, url: &str, headers: &HeaderMap) -> u64 {
-        let quoted = self.catalog.cost(url);
+        let quoted = self.cost(url);
         match catalog::actual_cost(&self.catalog, url, headers) {
             None => quoted,
             Some(actual) => quoted.saturating_sub(actual.min(quoted)),
@@ -404,7 +417,6 @@ impl Ctx {
             .collect())
     }
 
-    // TODO :: insert buckets
     fn default_channel(&self) -> Channel {
         Channel::new(None, None, 0, Default::default(), Default::default(), None)
     }

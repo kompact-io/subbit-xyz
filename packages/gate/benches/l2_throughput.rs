@@ -1,10 +1,10 @@
-//! Concurrent L2 write-path throughput, in process -- the measurement
-//! `plan-db-buffer.md` describes doing against real `subbit-gate`
-//! via canary's `:burst` persona (preprod, 200 consumers), reproduced
-//! here directly against `Db` so it's a `cargo bench` instead of a
-//! live deployment. Canary still owns verifying this against a real
-//! server/network; this owns verifying the write-buffering mechanism
-//! itself, cheaply and repeatably.
+//! Concurrent L2 write-path throughput, in process -- the same shape
+//! canary's `:burst` persona drives against a real `subbit-gate`
+//! (preprod, 200 consumers), reproduced here directly against `Db` so
+//! it's a `cargo bench` instead of a live deployment. Canary still
+//! owns verifying this against a real server/network; this owns
+//! verifying the write-buffering mechanism itself, cheaply and
+//! repeatably.
 //!
 //! Run with: `cargo bench --bench l2_throughput`
 use std::{
@@ -71,10 +71,9 @@ fn open_db(buffer: BufferConfig) -> (NamedTempFile, Db) {
 
 /// Collapses to one `redb` write transaction per call -- any nonzero
 /// `update_exposed` amount immediately exceeds `max_pending: 0`, so
-/// `maybe_flush` fires every time. This is the pre-buffering design's
-/// cost profile (`plan-db-buffer.md`'s "Problem"), reproduced with
-/// today's code as a baseline to compare against, not a separate code
-/// path of its own.
+/// `maybe_flush` fires every time. Reproduces the pre-buffering
+/// design's cost profile as a baseline to compare against, not a
+/// separate code path of its own.
 fn unbuffered() -> BufferConfig {
     BufferConfig {
         max_pending: 0,

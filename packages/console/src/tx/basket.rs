@@ -1,15 +1,11 @@
 //! The basket (plan-subbit-console.md section I): wraps `subbit_tx::
 //! tx::Tx` directly, at the Rust level -- not just JSON at a wasm
-//! boundary. This is the fix for a real architectural gap: an earlier
-//! round had the basket and the Floe data it's built from living only
-//! inside `subbit-tx`'s own (now-removed) `wasm` feature, with no
-//! native equivalent at all -- meaning a native wrapper (a TUI, say)
-//! would have had to reimplement this from scratch rather than reuse
-//! it. `Basket` is the single core implementation; `subbit-tx` itself
-//! stays entirely `wasm_bindgen`-free, and both `src/wasm.rs` (the
-//! browser) and `src/main.rs` (the native "test-driving" bin, and any
-//! future native TUI with "an interface very similar to the web-app")
-//! are thin wrappers over this same type.
+//! boundary. `Basket` is the single core implementation; `subbit-tx`
+//! itself stays entirely `wasm_bindgen`-free, and both `src/wasm.rs`
+//! (the browser) and `src/main.rs` (the native "test-driving" bin, and
+//! any future native TUI with "an interface very similar to the
+//! web-app") are thin wrappers over this same type, so neither has to
+//! reimplement basket logic of its own.
 //!
 //! Every method here takes already-typed domain values (`Input`,
 //! `Want`, `Constants`, ...), never raw hex/JSON strings -- parsing
@@ -33,10 +29,8 @@ use crate::Error;
 /// Serializes/deserializes exactly as `Tx` itself does (gated on
 /// `subbit-tx`'s own `serde` feature, which this crate always enables)
 /// -- the same "cache the staged Tx between invocations" shape
-/// `subbit-cli`'s own `Config::cache_path` already relies on, now part
-/// of `Store` (section G) so a reload doesn't lose a draft basket (see
-/// plan-subbit-console.md's "Open items/risks" entry on this, now
-/// resolved).
+/// `subbit-cli`'s own `Config::cache_path` already relies on. Part of
+/// `Store` (section G), so a reload doesn't lose a draft basket.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Basket(Tx);
 
@@ -47,6 +41,12 @@ impl Default for Basket {
 }
 
 impl Basket {
+    /// `build_batch`'s default cap: a conservative round number, not a
+    /// measured ceiling -- raise it once real preprod headroom
+    /// (`maxTxSize`, exec units) has actually been measured for a batch
+    /// of Opens this size.
+    pub const MAX_OPENS_PER_TX: usize = 40;
+
     /// Builds the basket's initial txo set from Floe `searchUtxos`
     /// results. Permissive, matching `Tx::filtered`'s own precedent: a
     /// `Utxo` that doesn't parse as a subbit txo is silently
@@ -173,6 +173,47 @@ impl Basket {
             )
             .map_err(|e| Error::Basket(e.to_string()))
     }
+
+    /// `build`'s batched sibling: a basket holding more than `max_opens`
+    /// staged Opens would hand `Tx::build` more channels than one real
+    /// transaction can fit (preprod's own `maxTxSize` caps it well under
+    /// a few hundred small channels; callers needing a real number
+    /// should measure it, this just picks a conservative round one).
+    /// Stashes every Open past `max_opens` out of the basket, builds
+    /// from what's left (every staged Will, plus up to `max_opens`
+    /// Opens), then restores the stash either way -- call this
+    /// repeatedly (interleaved with submitting each returned tx) to
+    /// drain a basket bigger than `max_opens` Opens.
+    ///
+    /// Only Opens are capped: a caller's own `Want` staging (one per
+    /// round per channel, typically) hasn't yet needed the same
+    /// treatment, and `Will`s can't be safely stashed and restored the
+    /// way `Open`s can -- `propose` only accepts the original `Want`,
+    /// which a staged `Will` no longer carries (see `refresh_txos`'s own
+    /// doc). If a caller ever needs to cap a tx's total Wills too, this
+    /// is the place to add it, once that's actually been hit.
+    pub fn build_batch(
+        &mut self,
+        network: &str,
+        reference_utxo: Option<Utxo>,
+        change_address: Address<kind::Any>,
+        fuel: &BTreeMap<Input, Output>,
+        max_opens: usize,
+    ) -> Result<Transaction<ReadyForSigning>, Error> {
+        let overflow_keytags: Vec<String> =
+            self.0.opens().keys().skip(max_opens).cloned().collect();
+        let overflow: Vec<Open> = overflow_keytags
+            .iter()
+            .filter_map(|keytag| self.0.drop_open(keytag))
+            .collect();
+
+        let result = self.build(network, reference_utxo, change_address, fuel);
+
+        for open in overflow {
+            self.0.add_open(open);
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -228,6 +269,105 @@ mod tests {
         assert!(!tx.to_cbor().is_empty());
         // Submit clears what was staged.
         assert!(basket.0.opens().is_empty());
+    }
+
+    /// Same shape as `constants`, but a distinct `tag` per `i` so each
+    /// produces its own keytag in the basket's `opens` map.
+    fn constants_n(provider: Hash28, i: u8) -> Constants {
+        Constants::new(
+            Tag::from(vec![i]),
+            Asset::Lovelace,
+            VerifyingKey::from([1u8; 32]),
+            Hash28::from([2u8; 28]),
+            provider,
+            Duration::from_secs(900),
+        )
+    }
+
+    fn fuel_for(change_address: &Address<kind::Any>) -> BTreeMap<Input, Output> {
+        let fee_input = Input::new(Hash::<32>::from([4u8; 32]), 0);
+        let fee_output = Output::new(change_address.clone(), cardano_sdk::Value::new(50_000_000));
+        BTreeMap::from([(fee_input, fee_output)])
+    }
+
+    #[test]
+    fn build_batch_caps_opens_and_leaves_the_rest_staged() {
+        let mut basket = Basket::from_floe_utxos(std::iter::empty());
+        for i in 0..5u8 {
+            basket.add_open(constants_n(Hash28::from([3u8; 28]), i), 5_000_000, None);
+        }
+        assert_eq!(basket.opens().len(), 5);
+
+        let network_id = network_id_preprod();
+        let change_address: Address<kind::Any> = cardano_sdk::Address::new(
+            network_id,
+            Credential::from_key(Hash::<28>::from([9u8; 28])),
+        )
+        .into();
+        let fuel = fuel_for(&change_address);
+
+        let tx = basket
+            .build_batch("preprod", None, change_address.clone(), &fuel, 2)
+            .expect("building a 2-open batch out of 5 staged should succeed");
+        assert!(!tx.to_cbor().is_empty());
+        assert_eq!(
+            basket.opens().len(),
+            3,
+            "the 3 Opens past the cap must still be staged after the batch builds"
+        );
+
+        // Draining the rest: one more batch, same cap, covers what's left.
+        let tx2 = basket
+            .build_batch("preprod", None, change_address, &fuel, 2)
+            .expect("a second batch should pick up the remaining Opens");
+        assert!(!tx2.to_cbor().is_empty());
+        assert_eq!(
+            basket.opens().len(),
+            1,
+            "5 Opens drained 2 at a time across 2 batches should leave exactly 1"
+        );
+    }
+
+    #[test]
+    fn build_never_selects_a_script_bearing_utxo_as_fee_fuel() {
+        // A reference-script-shaped utxo sitting in the funding
+        // wallet's own `fuel` set (exactly how `subbit-canary`'s
+        // `Chain::refresh`/submit.rs's own `wallet.utxos(None)` hands
+        // it over, undifferentiated from any other wallet utxo) must
+        // never be picked as a plain fee input, even when its lovelace
+        // balance makes it the best coverage candidate -- otherwise
+        // it's spent away, destroying the one reference script every
+        // future `Will` batch depends on (the real preprod failure
+        // this regression-tests: "reference script required when
+        // stepping channels" reappearing mid-run).
+        let mut basket = Basket::from_floe_utxos(std::iter::empty());
+        basket.add_open(constants(Hash28::from([3u8; 28])), 5_000_000, None);
+
+        let network_id = network_id_preprod();
+        let change_address: Address<kind::Any> = cardano_sdk::Address::new(
+            network_id,
+            Credential::from_key(Hash::<28>::from([9u8; 28])),
+        )
+        .into();
+
+        let script_input = Input::new(Hash::<32>::from([5u8; 32]), 0);
+        let script_output =
+            Output::new(change_address.clone(), cardano_sdk::Value::new(90_000_000))
+                .with_plutus_script(subbit_tx::VALIDATOR.script.clone());
+        let plain_input = Input::new(Hash::<32>::from([4u8; 32]), 0);
+        let plain_output = Output::new(change_address.clone(), cardano_sdk::Value::new(50_000_000));
+        let fuel = BTreeMap::from([
+            (script_input.clone(), script_output),
+            (plain_input, plain_output),
+        ]);
+
+        let tx = basket
+            .build("preprod", None, change_address, &fuel)
+            .expect("plain fuel alone should still cover a single Open");
+        assert!(
+            !tx.inputs().any(|i| i == script_input),
+            "the script-bearing utxo must never be selected as a fee input"
+        );
     }
 
     #[test]

@@ -5,16 +5,16 @@
 //!
 //! Just `discover_history`, reusing `subbit_index::cardano::
 //! search_history` per whitelisted validator (plan section K), not a
-//! port. There used to be a second function, `discover_live` (`search_all`,
-//! live-only), but every live-only need (the basket's own live-txo
-//! cache, `basketBuild`'s reference-script lookup) is a strict subset
-//! of what `discover_history` already returns -- `Utxo::spent_by ==
-//! None` picks out exactly the live ones (see `subbit_index::cardano::
-//! search_history`'s own doc: "unlike `search_all`, this includes
-//! `spent_by` items"). One Floe round-trip now backs the Channels
-//! tab's lineage view, the live-txo cache, *and* submit's
-//! reference-script lookup -- `ui::wasm`/`app.js` filter the one
-//! response rather than this crate fetching live/history separately.
+//! port. No separate live-only fetch: every live-only need (the
+//! basket's own live-txo cache, `basketBuild`'s reference-script
+//! lookup) is a strict subset of what `discover_history` already
+//! returns -- `Utxo::spent_by == None` picks out exactly the live ones
+//! (see `subbit_index::cardano::search_history`'s own doc: "unlike
+//! `search_all`, this includes `spent_by` items"). One Floe round-trip
+//! backs the Channels tab's lineage view, the live-txo cache, *and*
+//! submit's reference-script lookup -- `ui::wasm`/`app.js` filter the
+//! one response rather than this crate fetching live/history
+//! separately.
 
 use std::collections::BTreeSet;
 

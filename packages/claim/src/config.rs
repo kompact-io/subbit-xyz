@@ -37,7 +37,12 @@ pub struct Config {
     pub min_total: u64,
     pub min_single: u64,
     pub panic_settle_ms: u64,
-    /// How many `Want`s to batch per submitted transaction.
+    /// How many `Want`s to batch per submitted transaction. A flat
+    /// conservative cap, not a measured ceiling -- matches
+    /// `Basket::MAX_OPENS_PER_TX`'s own reasoning. TODO: make this
+    /// dynamic (shrink/retry on `MaxTxSizeUTxO`, the way `console::
+    /// submit`'s own Opens batching already does) instead of a fixed
+    /// number.
     pub step_chunk: usize,
     /// How many times to poll Floe's `ReadTx` for a submitted tx before
     /// giving up, and how long to wait between attempts.
@@ -59,7 +64,7 @@ impl Default for Config {
             min_total: 1_000_000,
             min_single: 100_000,
             panic_settle_ms: 5 * 60 * 1000,
-            step_chunk: 20,
+            step_chunk: 40,
             wait_attempts: 30,
             wait_interval_secs: 10,
         }

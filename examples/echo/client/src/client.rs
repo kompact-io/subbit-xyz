@@ -11,12 +11,28 @@ use reqwest::{Request, Response, Url};
 use reqwest_middleware::{
     ClientBuilder, ClientWithMiddleware, Middleware, Next, Result as MwResult,
 };
-use subbit_l2_dto::CatalogIndex;
+use subbit_stamp::catalog;
+use subbit_stamp::dialect::x402::{self as x402_dialect, TermsDecision};
 use subbit_stamp::local;
 use subbit_stamp::reqwest::vanilla::Stamp as VanillaMiddleware;
 use subbit_stamp::reqwest::x402::Stamp as X402Middleware;
 
 use crate::config::{Config, Dialect};
+
+/// This throwaway client has no consent loop of its own to offer: a
+/// catalog miss is a hard failure, matching this crate's pre-
+/// `MissPolicy` behavior exactly.
+type Policy = fn(&str) -> catalog::MissDecision;
+const POLICY: Policy = catalog::reject;
+
+/// Same reasoning for x402's own terms: accept the first challenge,
+/// never a later change to it, rather than silently following
+/// whatever a fresh `PAYMENT-REQUIRED` happens to name.
+type Terms = fn(
+    &subbit_l2_dto::dialect::x402::SubbitAccept,
+    Option<&subbit_l2_dto::dialect::x402::SubbitAccept>,
+) -> TermsDecision;
+const TERMS: Terms = x402_dialect::accept_once;
 
 pub enum Client {
     Plain(ClientWithMiddleware),
@@ -24,12 +40,12 @@ pub enum Client {
         client: ClientWithMiddleware,
         // Kept alongside the client (rather than only inside it) so we can
         // read `.cache()` back out after the request completes.
-        stamp: Arc<VanillaMiddleware<CatalogIndex>>,
+        stamp: Arc<VanillaMiddleware<Policy>>,
         cache_path: std::path::PathBuf,
     },
     X402 {
         client: ClientWithMiddleware,
-        stamp: Arc<X402Middleware<CatalogIndex>>,
+        stamp: Arc<X402Middleware<Policy, Terms>>,
         cache_path: std::path::PathBuf,
     },
 }
@@ -42,12 +58,13 @@ impl Client {
             ));
         };
         // The same `Config::build` `local::Local` wraps for its own
-        // no-network driver: here we take the raw pieces and wire them
-        // into whichever dialect's middleware instead.
-        let (stamp, catalog) = subbit.build().context("failed to build stamp")?;
+        // no-network driver: here we take the stamp (its catalog
+        // already loaded, see `Stamp::set_catalog`) and wire it into
+        // whichever dialect's middleware instead.
+        let stamp = subbit.build().context("failed to build stamp")?;
         match config.dialect {
             Dialect::Vanilla => {
-                let stamp = Arc::new(VanillaMiddleware::new(stamp, catalog));
+                let stamp = Arc::new(VanillaMiddleware::new(stamp, POLICY));
                 let client = ClientBuilder::new(reqwest::Client::new())
                     .with(ForwardVanilla(stamp.clone()))
                     .build();
@@ -58,7 +75,7 @@ impl Client {
                 })
             }
             Dialect::X402 => {
-                let stamp = Arc::new(X402Middleware::new(stamp, catalog));
+                let stamp = Arc::new(X402Middleware::new(stamp, POLICY, TERMS));
                 let client = ClientBuilder::new(reqwest::Client::new())
                     .with(ForwardX402(stamp.clone()))
                     .build();
@@ -124,7 +141,7 @@ impl Client {
     }
 }
 
-struct ForwardVanilla(Arc<VanillaMiddleware<CatalogIndex>>);
+struct ForwardVanilla(Arc<VanillaMiddleware<Policy>>);
 
 #[async_trait::async_trait]
 impl Middleware for ForwardVanilla {
@@ -138,7 +155,7 @@ impl Middleware for ForwardVanilla {
     }
 }
 
-struct ForwardX402(Arc<X402Middleware<CatalogIndex>>);
+struct ForwardX402(Arc<X402Middleware<Policy, Terms>>);
 
 #[async_trait::async_trait]
 impl Middleware for ForwardX402 {

@@ -12,8 +12,8 @@ macros::newtype_array!(MacSig, 20);
 mod asset;
 pub use asset::Asset;
 
-mod duration;
-pub use duration::Duration;
+mod time;
+pub use time::{Duration, Instant};
 
 mod tag_tbs;
 pub use tag_tbs::TagTbs;

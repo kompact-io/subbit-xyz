@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use cardano_sdk::Input;
-use subbit_core::Duration;
+use subbit_core::{Duration, Instant};
 use subbit_index_dto::OutputReference;
 use subbit_l1_dto::Stage;
 use subbit_tx::Channel;
@@ -61,9 +61,18 @@ pub fn decide(
     channels: &BTreeMap<Input, Channel>,
     summaries: &BTreeMap<Keytag, ChannelSummary>,
     cfg: &DecisionConfig,
-    now: Duration,
+    now: Instant,
 ) -> Vec<(Input, Want)> {
-    let mut claims: Vec<(Input, Want, u64)> = Vec::new();
+    // `economic`: Sub/Settle candidates whose own claimable delta is
+    // what justifies spending a tick's tx on them -- gated by
+    // `min_single`/`min_total` below. `mandatory`: a `Closed` channel
+    // eligible to settle (see this function's doc comment) but whose
+    // delta doesn't clear `min_single` -- `Variables::settle` treats a
+    // zero/small gain as a legitimate Closed -> Settled transition in
+    // its own right, so these bypass both thresholds entirely rather
+    // than getting stuck waiting for `panic_settle` to force them.
+    let mut economic: Vec<(Input, Want, u64)> = Vec::new();
+    let mut mandatory: Vec<(Input, Want)> = Vec::new();
 
     for (input, channel) in channels {
         let keytag = Keytag::of(channel.constants());
@@ -78,34 +87,42 @@ pub fn decide(
             Stage::Opened { subbed } => {
                 let delta = iou.amount().saturating_sub(*subbed);
                 if delta >= cfg.min_single {
-                    claims.push((input.clone(), Want::Sub { iou: iou.clone() }, delta));
+                    economic.push((input.clone(), Want::Sub { iou: iou.clone() }, delta));
                 }
             }
             Stage::Closed { subbed, elapse_at } => {
                 let delta = iou.amount().saturating_sub(*subbed);
                 let confirmed_safe = summary.backing.is_none()
                     || summary.safe_to_settle.contains(&output_ref(input));
-                let past_panic = elapse_at.saturating_sub(*now) <= *cfg.panic_settle;
-                if delta >= cfg.min_single && (confirmed_safe || !summary.is_active || past_panic) {
-                    claims.push((input.clone(), Want::Settle { iou: iou.clone() }, delta));
+                let past_panic = elapse_at.saturating_sub(now) <= cfg.panic_settle;
+                let eligible = confirmed_safe || !summary.is_active || past_panic;
+                if eligible {
+                    if delta >= cfg.min_single {
+                        economic.push((input.clone(), Want::Settle { iou: iou.clone() }, delta));
+                    } else {
+                        mandatory.push((input.clone(), Want::Settle { iou: iou.clone() }));
+                    }
                 }
             }
             Stage::Settled => {}
         }
     }
 
-    let total: u64 = claims.iter().map(|(_, _, delta)| *delta).sum();
+    let total: u64 = economic.iter().map(|(_, _, delta)| *delta).sum();
     if total >= cfg.min_total {
-        claims.into_iter().map(|(i, w, _)| (i, w)).collect()
+        mandatory
+            .into_iter()
+            .chain(economic.into_iter().map(|(i, w, _)| (i, w)))
+            .collect()
     } else {
-        Vec::new()
+        mandatory
     }
 }
 
 #[cfg(test)]
 mod tests {
     use cardano_sdk::Hash;
-    use subbit_core::{Duration, Iou, Signature, Tag, VerifyingKey};
+    use subbit_core::{Duration, Instant, Iou, Signature, Tag, VerifyingKey};
     use subbit_l1_dto::{Asset, Constants};
     use subbit_tx::Variables;
 
@@ -177,7 +194,7 @@ mod tests {
             &channels,
             &summaries,
             &cfg(0, 1_000, 0),
-            Duration::from_secs(0),
+            Instant::from_secs(0),
         );
         assert!(wants.is_empty());
     }
@@ -190,7 +207,7 @@ mod tests {
             &channels,
             &summaries,
             &cfg(1_000_000, 1, 0),
-            Duration::from_secs(0),
+            Instant::from_secs(0),
         );
         assert!(wants.is_empty());
     }
@@ -198,13 +215,13 @@ mod tests {
     #[test]
     fn settled_channels_are_never_claimed() {
         let (channels, summaries) = channels_summaries(channel(Stage::Settled), summary(true, 0));
-        let wants = decide(&channels, &summaries, &cfg(0, 1, 0), Duration::from_secs(0));
+        let wants = decide(&channels, &summaries, &cfg(0, 1, 0), Instant::from_secs(0));
         assert!(wants.is_empty());
     }
 
     #[test]
     fn closed_active_with_time_left_waits() {
-        let elapse_at = Duration::from_secs(1_000);
+        let elapse_at = Instant::from_secs(1_000);
         let (channels, summaries) = channels_summaries(
             channel(Stage::Closed {
                 subbed: 0,
@@ -212,18 +229,13 @@ mod tests {
             }),
             summary(true, 1_000),
         );
-        let wants = decide(
-            &channels,
-            &summaries,
-            &cfg(0, 1, 60),
-            Duration::from_secs(0),
-        );
+        let wants = decide(&channels, &summaries, &cfg(0, 1, 60), Instant::from_secs(0));
         assert!(wants.is_empty());
     }
 
     #[test]
     fn closed_active_inside_panic_window_settles_anyway() {
-        let elapse_at = Duration::from_secs(30);
+        let elapse_at = Instant::from_secs(30);
         let (channels, summaries) = channels_summaries(
             channel(Stage::Closed {
                 subbed: 0,
@@ -231,19 +243,14 @@ mod tests {
             }),
             summary(true, 1_000),
         );
-        let wants = decide(
-            &channels,
-            &summaries,
-            &cfg(0, 1, 60),
-            Duration::from_secs(0),
-        );
+        let wants = decide(&channels, &summaries, &cfg(0, 1, 60), Instant::from_secs(0));
         assert_eq!(wants.len(), 1);
         assert!(matches!(wants[0].1, Want::Settle { .. }));
     }
 
     #[test]
     fn closed_inactive_settles_regardless_of_time_left() {
-        let elapse_at = Duration::from_secs(1_000);
+        let elapse_at = Instant::from_secs(1_000);
         let (channels, summaries) = channels_summaries(
             channel(Stage::Closed {
                 subbed: 0,
@@ -251,12 +258,7 @@ mod tests {
             }),
             summary(false, 1_000),
         );
-        let wants = decide(
-            &channels,
-            &summaries,
-            &cfg(0, 1, 60),
-            Duration::from_secs(0),
-        );
+        let wants = decide(&channels, &summaries, &cfg(0, 1, 60), Instant::from_secs(0));
         assert_eq!(wants.len(), 1);
         assert!(matches!(wants[0].1, Want::Settle { .. }));
     }
@@ -266,7 +268,7 @@ mod tests {
         // Active, plenty of time left -- the old rule alone would
         // wait (see `closed_active_with_time_left_waits`). No backing
         // on file for this keytag at all is, by itself, enough.
-        let elapse_at = Duration::from_secs(1_000);
+        let elapse_at = Instant::from_secs(1_000);
         let (channels, mut summaries) = channels_summaries(
             channel(Stage::Closed {
                 subbed: 0,
@@ -277,11 +279,33 @@ mod tests {
         for summary in summaries.values_mut() {
             summary.backing = None;
         }
+        let wants = decide(&channels, &summaries, &cfg(0, 1, 60), Instant::from_secs(0));
+        assert_eq!(wants.len(), 1);
+        assert!(matches!(wants[0].1, Want::Settle { .. }));
+    }
+
+    #[test]
+    fn closed_zero_delta_still_settles_to_step_the_stage() {
+        // No outstanding IOU delta since the last Sub (iou amount ==
+        // subbed), well under min_single/min_total -- the settle must
+        // still fire, since its job here is purely the Closed ->
+        // Settled transition, not claiming a gain.
+        let elapse_at = Instant::from_secs(1_000);
+        let (channels, mut summaries) = channels_summaries(
+            channel(Stage::Closed {
+                subbed: 1_000,
+                elapse_at,
+            }),
+            summary(true, 1_000),
+        );
+        for summary in summaries.values_mut() {
+            summary.backing = None;
+        }
         let wants = decide(
             &channels,
             &summaries,
-            &cfg(0, 1, 60),
-            Duration::from_secs(0),
+            &cfg(1_000_000, 1_000, 60),
+            Instant::from_secs(0),
         );
         assert_eq!(wants.len(), 1);
         assert!(matches!(wants[0].1, Want::Settle { .. }));
@@ -292,7 +316,7 @@ mod tests {
         // Same setup, but this time there *is* a backing on file
         // (elsewhere) -- it's specifically this input's own txo ref
         // showing up in `safe_to_settle` that makes it safe.
-        let elapse_at = Duration::from_secs(1_000);
+        let elapse_at = Instant::from_secs(1_000);
         let (channels, mut summaries) = channels_summaries(
             channel(Stage::Closed {
                 subbed: 0,
@@ -303,12 +327,7 @@ mod tests {
         for summary in summaries.values_mut() {
             summary.safe_to_settle = vec![output_ref(&input(9))];
         }
-        let wants = decide(
-            &channels,
-            &summaries,
-            &cfg(0, 1, 60),
-            Duration::from_secs(0),
-        );
+        let wants = decide(&channels, &summaries, &cfg(0, 1, 60), Instant::from_secs(0));
         assert_eq!(wants.len(), 1);
         assert!(matches!(wants[0].1, Want::Settle { .. }));
     }

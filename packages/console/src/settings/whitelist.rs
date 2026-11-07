@@ -1,12 +1,11 @@
 //! Whitelisted validator script hashes (plan-subbit-console.md section
 //! J/K): which on-chain scripts `Ctx` is willing to treat as `subbit`
 //! channels at all, before any `Constants`-level checks apply. Used to
-//! scope every Floe discovery call (`settings::floe::discover_live`/
-//! `discover_history`) -- a validator not on this list is never
-//! queried, let alone shown. Previously a bare `BTreeSet<Hash<28>>`
-//! field directly on `Ctx`; pulled out into its own type for the same
-//! reason `Providers`/`Keyring` already have one -- `Ctx` should hold
-//! named, independently testable pieces, not raw collections.
+//! scope every Floe discovery call (`settings::floe::discover_history`)
+//! -- a validator not on this list is never queried, let alone shown.
+//! Its own type, same reason `Providers`/`Keyring` already have one --
+//! `Ctx` should hold named, independently testable pieces, not raw
+//! collections.
 
 use std::collections::BTreeSet;
 

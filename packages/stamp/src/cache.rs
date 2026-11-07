@@ -66,7 +66,7 @@ impl Cache {
 
 #[cfg(test)]
 mod tests {
-    use subbit_core::{Duration, MacSig, Tag, VerifyingKey};
+    use subbit_core::{Instant, MacSig, Tag, VerifyingKey};
     use subbit_l2_dto::KeyTagTtl;
 
     use super::*;
@@ -76,7 +76,7 @@ mod tests {
             body: KeyTagTtl {
                 key: VerifyingKey::from([9u8; 32]),
                 tag: Tag::from(b"t".to_vec()),
-                ttl: Duration::from_secs(60),
+                expires_at: Instant::from_secs(60),
             },
             sig: MacSig::from([0u8; 20]),
         }
@@ -124,16 +124,18 @@ mod tests {
 
     fn catalog() -> Catalog {
         Catalog {
-            default: subbit_l2_dto::ResourceInfo {
-                cost: subbit_l2_dto::Cost::ByRequest(10),
-                description: "Access to a metered resource".to_string(),
-                mime_type: "application/octet-stream".to_string(),
-                max_timeout_seconds: 60,
-                service_name: None,
-                tags: None,
-                icon_url: None,
-            },
-            resources: Vec::new(),
+            resources: vec![(
+                "/{*rest}".to_string(),
+                subbit_l2_dto::ResourceInfo {
+                    cost: subbit_l2_dto::Cost::ByRequest(10),
+                    description: "Access to a metered resource".to_string(),
+                    mime_type: "application/octet-stream".to_string(),
+                    max_timeout_seconds: 60,
+                    service_name: None,
+                    tags: None,
+                    icon_url: None,
+                },
+            )],
         }
     }
 

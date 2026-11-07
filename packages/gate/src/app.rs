@@ -19,12 +19,38 @@ use axum::{
     response::{IntoResponse, Response as AxumResponse},
     routing::{get, post},
 };
+use tokio::sync::Semaphore;
 
 use crate::{Backing, Ctx, Keytag, wire::Wire};
 
 #[derive(Clone)]
 pub struct AppState {
     pub ctx: Arc<Ctx>,
+    /// Caps how many `handle_spend`/`handle_refund` calls run on
+    /// `spawn_blocking` OS threads at once. Profiling (back-of-envelope
+    /// calc in `results.md`) found tokio's blocking pool otherwise
+    /// grows to 200+ OS threads at concurrency=160 on a 12-core host --
+    /// real oversubscription, measured (not theorized): CPU time
+    /// spreads almost perfectly evenly across all of them (top 5
+    /// busiest threads = ~7% of total CPU), and the same process
+    /// burns the same ~630%/700% CPU budget for roughly half the
+    /// throughput once a run's been going a while, vs. a fresh start --
+    /// a growing-thread-population cost, not a fixed per-request one.
+    /// Bounding concurrent blocking work to roughly core count is the
+    /// direct fix for that specific mechanism.
+    pub blocking_limit: Arc<Semaphore>,
+}
+
+impl AppState {
+    pub fn new(ctx: Arc<Ctx>) -> Self {
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        Self {
+            ctx,
+            blocking_limit: Arc::new(Semaphore::new(cores)),
+        }
+    }
 }
 
 /// One shared resource-guard path per verb, not a route tree per
@@ -67,19 +93,22 @@ pub fn router(state: AppState) -> Router {
 /// fixed (roughly core count) -- an inline call there blocks that
 /// worker from servicing any other task for the call's duration.
 /// `benches/worker_threads.rs`'s Test B measured this as a real,
-/// consistent ~40% throughput improvement (not the dominant factor in
-/// any real-world ceiling measured so far, see `plan-fix-throughput.md`,
-/// but worth taking for free).
+/// consistent ~40% throughput improvement -- not the dominant factor
+/// in any real-world ceiling measured so far, but worth taking for
+/// free.
 async fn handle_spend(
     State(state): State<AppState>,
     Path(path): Path<String>,
     headers: HeaderMap,
 ) -> AxumResponse {
-    into_axum_response(
-        tokio::task::spawn_blocking(move || state.ctx.handle_spend(&headers, &path))
-            .await
-            .expect("handle_spend panicked"),
+    run_spend_blocking(
+        state,
+        path,
+        "handle_spend",
+        move |ctx, headers, path| ctx.handle_spend(headers, path),
+        headers,
     )
+    .await
 }
 
 async fn handle_refund(
@@ -87,10 +116,46 @@ async fn handle_refund(
     Path(path): Path<String>,
     headers: HeaderMap,
 ) -> AxumResponse {
+    run_spend_blocking(
+        state,
+        path,
+        "handle_refund",
+        move |ctx, headers, path| ctx.handle_refund(headers, path),
+        headers,
+    )
+    .await
+}
+
+/// Shared body of `handle_spend`/`handle_refund`: acquire a
+/// `blocking_limit` permit, root `path` (axum's `{*path}` wildcard
+/// strips the leading slash -- matching matchit's own catch-all
+/// semantics, see `subbit_cost::Catalog`'s own doc comment -- but
+/// every resource path `Ctx`/`Catalog` deal in is leading-slash-
+/// rooted; this is the one boundary responsible for that conversion),
+/// then run `f` on `spawn_blocking`. See `handle_spend`'s own doc
+/// comment on why this runs off the async worker pool at all.
+async fn run_spend_blocking(
+    state: AppState,
+    path: String,
+    panic_label: &'static str,
+    f: impl FnOnce(&Ctx, &HeaderMap, &str) -> Wire + Send + 'static,
+    headers: HeaderMap,
+) -> AxumResponse {
+    let permit = state
+        .blocking_limit
+        .clone()
+        .acquire_owned()
+        .await
+        .expect("blocking_limit semaphore never closes");
+    let ctx = state.ctx;
+    let path = format!("/{path}");
     into_axum_response(
-        tokio::task::spawn_blocking(move || state.ctx.handle_refund(&headers, &path))
-            .await
-            .expect("handle_refund panicked"),
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            f(&ctx, &headers, &path)
+        })
+        .await
+        .unwrap_or_else(|_| panic!("{panic_label} panicked")),
     )
 }
 
@@ -110,13 +175,39 @@ fn into_axum_response(wire: Wire) -> AxumResponse {
     response
 }
 
+/// Distinguishes a malformed request (400) from a real server-side
+/// failure (500) while still letting `#[instrument(err)]` log either
+/// uniformly -- the two `handle_*` bodies below just match on variant.
+#[derive(Debug, thiserror::Error)]
+enum AdminError {
+    #[error("decode: {0}")]
+    Decode(#[from] minicbor::decode::Error),
+    #[error("apply: {0}")]
+    Apply(#[from] crate::db::Error),
+}
+
+impl AdminError {
+    fn status(&self) -> StatusCode {
+        match self {
+            Self::Decode(_) => StatusCode::BAD_REQUEST,
+            Self::Apply(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+#[tracing::instrument(skip_all, fields(count), err(Debug))]
+fn decode_and_apply_backings(state: &AppState, body: &Bytes) -> Result<usize, AdminError> {
+    let backings = minicbor::decode::<BTreeMap<Keytag, Option<Backing>>>(body)?;
+    let count = backings.len();
+    tracing::Span::current().record("count", count);
+    state.ctx.apply_backings(backings)?;
+    Ok(count)
+}
+
 async fn handle_backings(State(state): State<AppState>, body: Bytes) -> AxumResponse {
-    match minicbor::decode::<BTreeMap<Keytag, Option<Backing>>>(&body) {
-        Err(e) => (StatusCode::BAD_REQUEST, format!("err: {}", e)).into_response(),
-        Ok(backings) => match state.ctx.apply_backings(backings) {
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("err: {}", e)).into_response(),
-            Ok(_) => StatusCode::OK.into_response(),
-        },
+    match decode_and_apply_backings(&state, &body) {
+        Err(e) => (e.status(), format!("err: {}", e)).into_response(),
+        Ok(_) => StatusCode::OK.into_response(),
     }
 }
 
@@ -125,13 +216,19 @@ async fn handle_backings(State(state): State<AppState>, body: Bytes) -> AxumResp
 /// choosing (see `index_output`'s module doc). `/backings` stays
 /// mounted alongside this, unchanged, for the simpler naive-index
 /// path (no lineage, no server-side choosing needed).
+#[tracing::instrument(skip_all, fields(channels), err(Debug))]
+fn decode_and_apply_index(state: &AppState, body: &Bytes) -> Result<usize, AdminError> {
+    let output = minicbor::decode::<subbit_index_dto::Output>(body)?;
+    let channels = output.channels.len();
+    tracing::Span::current().record("channels", channels);
+    state.ctx.apply_output(output)?;
+    Ok(channels)
+}
+
 async fn handle_index(State(state): State<AppState>, body: Bytes) -> AxumResponse {
-    match minicbor::decode::<subbit_index_dto::Output>(&body) {
-        Err(e) => (StatusCode::BAD_REQUEST, format!("err: {}", e)).into_response(),
-        Ok(output) => match state.ctx.apply_output(output) {
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("err: {}", e)).into_response(),
-            Ok(_) => StatusCode::OK.into_response(),
-        },
+    match decode_and_apply_index(&state, &body) {
+        Err(e) => (e.status(), format!("err: {}", e)).into_response(),
+        Ok(_) => StatusCode::OK.into_response(),
     }
 }
 

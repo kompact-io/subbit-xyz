@@ -1,4 +1,4 @@
-use subbit_core::Duration;
+use subbit_core::Instant;
 use web_time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, thiserror::Error)]
@@ -7,8 +7,8 @@ pub enum Error {
     System,
 }
 
-pub fn now() -> Result<Duration, Error> {
-    Ok(Duration::from_millis(
+pub fn now() -> Result<Instant, Error> {
+    Ok(Instant::from_millis(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| Error::System)?

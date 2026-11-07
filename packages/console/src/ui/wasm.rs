@@ -31,7 +31,6 @@
 //! equivalent `ui::cli` command narrates.
 
 mod cip30;
-mod submit;
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -167,7 +166,7 @@ fn decode_unspent_output(hex_cbor: &str) -> Result<(Input, Output), JsError> {
 /// This session's submit wallet, whichever backend is currently
 /// connected -- `WalletHandleError` wraps `Cip30::Error` and
 /// `subbit_wallet::wallet::embedded::Error`, two unrelated types;
-/// unifying them here is what lets `submit::submit` stay generic over
+/// unifying them here is what lets `subbit_console::submit` stay generic over
 /// `impl Wallet` instead of this crate branching on backend itself.
 /// Never serialized -- a live connection (a CIP-30 `api` handle, or
 /// `Embedded`'s own live `Backend`) can't survive a reload either way,
@@ -304,8 +303,7 @@ impl JsConsole {
     }
 
     /// Routine persistence: writes directly to `localStorage` -- call
-    /// this after every mutation, in place of the old pattern of
-    /// reading `toJson()` and setting `localStorage` from JS.
+    /// this after every mutation.
     #[wasm_bindgen(js_name = save)]
     pub fn save(&self) -> Result<(), JsError> {
         let storage = local_storage()?;
@@ -769,7 +767,7 @@ impl JsConsole {
             .wallet
             .as_mut()
             .ok_or_else(|| js_err("no wallet connected"))?;
-        let hash = submit::submit(wallet, &mut self.ctx, network, reference_utxo)
+        let hash = crate::submit(wallet, &mut self.ctx, network, reference_utxo)
             .await
             .map_err(js_err)?;
         Ok(hash.to_string())

@@ -12,6 +12,6 @@ pub mod store;
 pub mod wallet;
 
 pub use store::{Store, reveal_hex};
-pub use wallet::Wallet;
 pub use wallet::embedded::{Embedded, credential_of, derive_address};
 pub use wallet::witness::{self, decode_single_vkey_witness};
+pub use wallet::{Wallet, wait_for_landing};

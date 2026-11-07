@@ -10,3 +10,9 @@
 
 pub mod basket;
 pub use basket::Basket;
+
+mod submit;
+pub use submit::submit;
+
+mod plain;
+pub use plain::{send_payment, upload_reference_script};

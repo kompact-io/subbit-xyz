@@ -1,7 +1,4 @@
-//! Turns a `--persona` roster into everything `Orchestrator::build` needs
-//! to register signing keys and build real `Consumer`s: identity/tag
-//! derivation and persona sampling are consumer-construction concerns in
-//! their own right, independent of chain or network state.
+//! Turns a `--persona` roster into planned consumers (identity, tag, sampled behavior).
 
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -10,29 +7,20 @@ use crate::identity::{self, Identity};
 
 use super::persona::{self, Behavior};
 
-fn tag_for(l2_seed: &[u8; 32], i: usize) -> Vec<u8> {
-    identity::tag_for(l2_seed, "", i)
-}
-
-/// Consumer index `i`'s identity material, derived the same way whether
-/// it ends up persona-driven (`plan_roster`) or a bare placeholder (a
-/// teardown scan).
+/// Consumer index `i`'s identity material, used by both a real roster seat and a teardown placeholder.
 pub(crate) fn identity_for(l2_seed: &[u8; 32], i: usize) -> (Identity, [u8; 32], Vec<u8>) {
     let seed = identity::consumer_seed(l2_seed, i);
-    let tag = tag_for(l2_seed, i);
+    let tag = identity::tag_for(l2_seed, i);
     (Identity::from_seed(seed), seed, tag)
 }
 
-/// Seeds the one `StdRng` every persona samples from, so a given
-/// `L2_SEED_HEX` reproduces the exact same sampled behaviors, not just
-/// the same identities.
+/// Seeds the one `StdRng` every persona samples from, so `L2_SEED_HEX` reproduces behaviors too.
 fn rng_from_seed(l2_seed: &[u8; 32]) -> StdRng {
     let derived = identity::derive_seed(l2_seed, "persona-rng");
     StdRng::seed_from_u64(u64::from_le_bytes(derived[..8].try_into().unwrap()))
 }
 
-/// One roster seat, fully planned: identity, tag, and a sampled
-/// `Behavior`, ready for `ConsumerBuilder`.
+/// One roster seat, fully planned: identity, tag, and a sampled `Behavior`.
 pub(crate) struct PlannedConsumer {
     pub identity: Identity,
     pub seed: [u8; 32],
@@ -41,12 +29,11 @@ pub(crate) struct PlannedConsumer {
     pub behavior: Behavior,
 }
 
-/// Parses `roster_specs`, expands it into one seat per consumer, and
-/// samples each one's own concrete `Behavior` -- everything
-/// `Orchestrator::build` needs, independent of chain or network state.
+/// Parses `roster_specs` and samples each seat's own concrete `Behavior`.
 pub(crate) fn plan_roster(
     l2_seed: &[u8; 32],
     roster_specs: &[String],
+    burst_target_lovelace: Option<u64>,
 ) -> anyhow::Result<Vec<PlannedConsumer>> {
     let roster = persona::parse_roster(roster_specs)?;
     anyhow::ensure!(
@@ -65,7 +52,10 @@ pub(crate) fn plan_roster(
         .enumerate()
         .map(|(i, persona)| {
             let (identity, seed, tag) = identity_for(l2_seed, i);
-            let behavior = persona.generate(&mut rng);
+            let mut behavior = persona.generate(&mut rng);
+            if let (Some(target), Some(burst)) = (burst_target_lovelace, behavior.burst.as_mut()) {
+                burst.commit_max = target;
+            }
             println!(
                 "canary: [{i}] {} -- dialect={:?} deposit={} adds={:?} spend_counts={:?}",
                 persona.name,

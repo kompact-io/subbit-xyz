@@ -20,13 +20,13 @@ x402 = ["serde", "dep:serde_json"]
 # Optional serde support for vanilla's/the shared types, independent of
 # x402 (e.g. a consumer that wants vanilla's wire types JSON-loggable
 # without pulling in the whole x402 scheme).
-serde = ["dep:serde", "subbit-core/serde"]
+serde = ["dep:serde", "subbit-core/serde", "subbit-cost/serde"]
 
 [dependencies]
 subbit-core = { workspace = true }
+subbit-cost = { workspace = true }
 minicbor = { workspace = true, features = ["alloc", "derive"] }
 thiserror = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 hex = { workspace = true }
-matchit = { workspace = true }

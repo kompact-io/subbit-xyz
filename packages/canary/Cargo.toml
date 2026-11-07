@@ -37,21 +37,17 @@ tokio = { workspace = true, features = [
 toml.workspace = true
 tracing-subscriber.workspace = true
 
-amaru-uplc.workspace = true
-amaru-plutus.workspace = true
-amaru-kernel.workspace = true
-
-cardano-connector.workspace = true
 cardano-sdk = { workspace = true, features = ["serde"] }
-cardano-wallet.workspace = true
-cardano-session.workspace = true
 floe-client = { workspace = true, default-features = false, features = [
   "grpc",
 ] }
+floe-dto-http = { workspace = true, features = ["json"] }
 
 subbit-claim = { workspace = true }
+subbit-console = { workspace = true, default-features = false }
 subbit-core = { workspace = true, features = ["serde"] }
 subbit-index = { workspace = true, features = ["native"] }
+subbit-wallet = { workspace = true, default-features = false }
 subbit-stamp = { workspace = true, features = [
   "reqwest",
   "local",
@@ -61,5 +57,4 @@ subbit-stamp = { workspace = true, features = [
 subbit-l1-dto = { workspace = true, features = ["serde"] }
 subbit-l2-dto = { workspace = true, features = ["vanilla", "x402", "serde"] }
 subbit-gate = { workspace = true, features = ["main", "vanilla", "x402"] }
-subbit-session = { workspace = true, features = ["serde"] }
 subbit-tx = { workspace = true, features = ["serde"] }

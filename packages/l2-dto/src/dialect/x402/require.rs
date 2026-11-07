@@ -76,6 +76,15 @@ pub enum SubbitExtra {
 pub enum KnownExtra {
     #[serde(rename = "subbit-v1")]
     SubbitV1 {
+        // `paymentFlow` is a protocol-reserved key (x402-specification-v2.md
+        // §6.1), not a scheme-private one like the fields below it, so it
+        // keeps the spec's own camelCase spelling rather than this enum's
+        // snake_case convention. Subbit commits the IOU before the resource
+        // runs and never settles again after, which is `upfront`
+        // (`settle → resource → respond`), not the `authorization` default
+        // a generic client would assume if this were left unset.
+        #[serde(rename = "paymentFlow")]
+        payment_flow: String,
         // `Terms::script`/`::asset` are already covered by
         // `SubbitAccept`'s own `pay_to`/`asset`, so only the rest of
         // `Terms`'s channel-open fields are inlined here.
@@ -98,6 +107,7 @@ pub enum KnownExtra {
 impl SubbitExtra {
     pub fn subbit_v1(terms: &Terms, channel_status: Option<ChannelStatus>) -> Self {
         Self::Known(KnownExtra::SubbitV1 {
+            payment_flow: "upfront".to_string(),
             provider: terms.provider,
             close_period: terms.close_period,
             confirmation_depth: terms.confirmation_depth,
@@ -122,16 +132,18 @@ pub(crate) mod tests {
             confirmation_depth: 3,
             min_iou_amount: 5_000,
             catalog: crate::Catalog {
-                default: crate::ResourceInfo {
-                    cost: crate::Cost::ByRequest(0),
-                    description: "Access to a metered resource".to_string(),
-                    mime_type: "application/octet-stream".to_string(),
-                    max_timeout_seconds: 60,
-                    service_name: None,
-                    tags: None,
-                    icon_url: None,
-                },
-                resources: Vec::new(),
+                resources: vec![(
+                    "/{*rest}".to_string(),
+                    crate::ResourceInfo {
+                        cost: crate::Cost::ByRequest(0),
+                        description: "Access to a metered resource".to_string(),
+                        mime_type: "application/octet-stream".to_string(),
+                        max_timeout_seconds: 60,
+                        service_name: None,
+                        tags: None,
+                        icon_url: None,
+                    },
+                )],
             },
             reference_script: None,
         }
@@ -171,6 +183,7 @@ pub(crate) mod tests {
     fn extra_serializes_with_a_kind_tag_and_the_non_redundant_script_terms() {
         let json = serde_json::to_value(extra()).unwrap();
         assert_eq!(json["kind"], "subbit-v1");
+        assert_eq!(json["paymentFlow"], "upfront");
         assert_eq!(json["close_period"], 900_000);
         assert_eq!(json["min_iou_amount"], 5_000);
         assert!(json["channel_status"].is_null());

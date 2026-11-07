@@ -225,7 +225,13 @@
                 enable = true;
                 name = "clippy";
                 description = "Run clippy";
-                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path Cargo.toml";
+                # subbit-conformance is excluded: it's the only crate depending on
+                # amaru-uplc, pulled from an unpinned upstream branch that has been
+                # breaking independently of our own changes.
+                # The leading `clippy` mimics the argv cargo itself passes when
+                # dispatching to this binary as a subcommand; cargo-clippy's own
+                # arg parser misreads --workspace/--exclude without it.
+                entry = "${config.rust-project.toolchain}/bin/cargo-clippy clippy --workspace --exclude subbit-conformance";
                 pass_filenames = false;
               };
               cargo-machete = {

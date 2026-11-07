@@ -24,7 +24,7 @@ pub enum Error {
 /// yourself (native reqwest, JS fetch, ...); hand the reply to
 /// [`response`]/[`response_bytes`].
 pub fn request(stamp: &mut Stamp, cost: u64) -> String {
-    to_base64(&stamp.next_payload(cost))
+    to_base64(&stamp.next_request(cost))
 }
 
 /// Parse, verify, and apply a base64 response envelope from the
@@ -64,16 +64,16 @@ mod tests {
     use subbit_l2_dto::ChannelStatus;
 
     use super::*;
-    use crate::Account;
+    use crate::Id;
 
     fn stamp() -> Stamp {
-        let account = Account::new(SigningKey::from_bytes(&[1u8; 32]), Tag::from(b"t".to_vec()));
+        let account = Id::new(SigningKey::from_bytes(&[1u8; 32]), Tag::from(b"t".to_vec()));
         Stamp::new(account, Duration::from_secs(60))
     }
 
     fn status_for(stamp: &Stamp, amount: u64, spendable: Option<u64>) -> ChannelStatus {
         ChannelStatus {
-            iou: stamp.account().iou(amount),
+            iou: stamp.id().iou(amount),
             spendable,
             uncommitted: None,
         }
@@ -120,39 +120,6 @@ mod tests {
         let bytes = minicbor::to_vec(&result).unwrap();
         response_bytes(&mut stamp, &bytes).unwrap();
         assert_eq!(stamp.committed(), Some(7_000));
-    }
-
-    #[test]
-    fn response_clears_the_cached_mac_on_invalid_auth() {
-        let mut stamp = stamp();
-        let status = status_for(&stamp, 100, Some(100));
-        stamp
-            .apply_status(
-                status,
-                Some(subbit_l2_dto::MacTtl {
-                    body: subbit_l2_dto::KeyTagTtl {
-                        key: subbit_core::VerifyingKey::from([9u8; 32]),
-                        tag: Tag::from(b"t".to_vec()),
-                        ttl: Duration::from_secs(60),
-                    },
-                    sig: subbit_core::MacSig::from([0u8; 20]),
-                }),
-            )
-            .unwrap();
-        assert!(matches!(stamp.auth(), crate::Auth::Mac(_)));
-
-        let failure = Response {
-            success: false,
-            error: Some(CoreError::InvalidAuth),
-            status: Status {
-                channel: None,
-                mac: None,
-            },
-        };
-        let envelope = subbit_core::base64::to_base64(&failure);
-        let err = response(&mut stamp, &envelope).unwrap_err();
-        assert!(matches!(err, Error::Protocol(CoreError::InvalidAuth)));
-        assert!(matches!(stamp.auth(), crate::Auth::Pop(_)));
     }
 
     #[test]

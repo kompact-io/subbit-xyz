@@ -135,16 +135,18 @@ mod tests {
 
     fn catalog_dto(cost: subbit_l2_dto::Cost) -> CatalogDto {
         CatalogDto {
-            default: subbit_l2_dto::ResourceInfo {
-                cost,
-                description: "Access to a metered resource".to_string(),
-                mime_type: "application/octet-stream".to_string(),
-                max_timeout_seconds: 60,
-                service_name: None,
-                tags: None,
-                icon_url: None,
-            },
-            resources: Vec::new(),
+            resources: vec![(
+                "/{*rest}".to_string(),
+                subbit_l2_dto::ResourceInfo {
+                    cost,
+                    description: "Access to a metered resource".to_string(),
+                    mime_type: "application/octet-stream".to_string(),
+                    max_timeout_seconds: 60,
+                    service_name: None,
+                    tags: None,
+                    icon_url: None,
+                },
+            )],
         }
     }
 
@@ -193,7 +195,7 @@ mod tests {
         let body = KeyTagTtl {
             key,
             tag,
-            ttl: now() + Duration::from_secs(60),
+            expires_at: now() + Duration::from_secs(60),
         };
         let sig = Signature::from(cryptoxide::ed25519::signature(&body.tbs(), sk));
         PopMacTtl::Pop(PopTtl { body, sig })

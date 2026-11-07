@@ -19,18 +19,22 @@
 //!   `status` (its own type, `Status`) is the part x402 has no field
 //!   of its own for, so it rides in `extensions`. `dialect::vanilla`
 //!   re-exports `Response` as-is, see `dialect::x402::settlement`.
-//! - `Cost`/`OutputRef`: `ResourceInfo.cost` and
-//!   `Terms.reference_script`, respectively.
-//! - `Catalog`/`ResourceInfo`/`ResourceInfoOverride`: `Terms.catalog`,
-//!   what a provider charges and presents, resolved per path.
-//!   `CatalogIndex` compiles a `Catalog` into a router for repeated
-//!   lookups, shared by provider and consumer alike.
+//! - `Cost`/`CostByEgress`/`Catalog`/`ResourceInfo`: wire shapes
+//!   re-exported from `subbit-cost`'s own `dto` module -- `Terms.
+//!   catalog`, what a provider charges and presents, resolved per
+//!   path. Each entry is a complete `ResourceInfo`, no separate
+//!   default/override; a provider wanting blanket coverage registers
+//!   its own catch-all pattern (see `subbit_cost::dto::Catalog`'s own
+//!   doc comment). The compiled, matchit-backed resolver
+//!   (`subbit_cost::Catalog`, shared by provider and consumer alike)
+//!   is deliberately not re-exported here -- it's not a wire shape,
+//!   depend on `subbit-cost` directly for it.
+//! - `OutputRef`: `Terms.reference_script`.
 //! - `dialect::vanilla`, `dialect::x402`: each dialect's own wire
 //!   shapes, see their own module doc comments.
 
-mod catalog;
-pub use catalog::{
-    Catalog, CatalogError, CatalogIndex, ResourceInfo, ResourceInfoOverride, normalize,
+pub use subbit_cost::dto::{
+    CLAIM_BUDGET_HEADER, CLAIM_COST_HEADER, Catalog, Cost, CostByEgress, ResourceInfo,
 };
 
 mod channel_id;
@@ -38,9 +42,6 @@ pub use channel_id::ChannelId;
 
 mod channel_status;
 pub use channel_status::ChannelStatus;
-
-mod cost;
-pub use cost::{CLAIM_BUDGET_HEADER, CLAIM_COST_HEADER, Cost, CostByEgress};
 
 mod mutual;
 pub use mutual::Mutual;

@@ -13,8 +13,11 @@ pub type SubbitExtension = crate::Status;
 /// is `batch-settlement`'s own commitment identifier. No `payer`:
 /// Subbit already identifies the payer by the channel's own
 /// `Keytag`, which `transaction` already carries on success.
+///
+/// `error_reason` is this binding's x402 vocabulary (`super::error`),
+/// not `CoreError`'s own `Display` string — see that module for why.
 pub fn settlement(response: crate::Response, transaction: String, network: String) -> Response {
-    let error_reason = response.error.as_ref().map(ToString::to_string);
+    let error_reason = response.error.as_ref().map(super::error_reason);
     Response {
         success: response.success,
         error_reason,
@@ -72,7 +75,7 @@ mod tests {
             body: crate::KeyTagTtl {
                 key: subbit_core::VerifyingKey::from([1u8; 32]),
                 tag: subbit_core::Tag::from(b"t".to_vec()),
-                ttl: subbit_core::Duration::from_secs(60),
+                expires_at: subbit_core::Instant::from_secs(60),
             },
             sig: subbit_core::MacSig::from([0u8; 20]),
         };
@@ -108,7 +111,10 @@ mod tests {
             "cardano:preprod".to_string(),
         );
         let json = serde_json::to_value(&response).unwrap();
-        assert_eq!(json["errorReason"], CoreError::InvalidAuth.to_string());
+        assert_eq!(
+            json["errorReason"],
+            "invalid_batch_settlement_cardano_auth_invalid"
+        );
         assert_eq!(json["transaction"], "");
     }
 

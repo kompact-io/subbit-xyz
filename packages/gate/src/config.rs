@@ -10,7 +10,7 @@ pub struct Config {
     #[n(0)]
     pub mac_key: mac::Key,
 
-    /// Limiter config
+    /// Not yet consumed -- see the comment in `Ctx::from_config`.
     #[n(1)]
     pub limiter: limiter::Config,
 
@@ -26,8 +26,8 @@ pub struct Config {
     /// `Catalog` (cost, and per-resource info for dialects that need
     /// it, x402's `description`/`mimeType`/`maxTimeoutSeconds`/etc.).
     /// Dialect-agnostic (`subbit_l2_dto::Terms`'s own doc comment):
-    /// vanilla would serve this from `.well-known/subbit` (not yet
-    /// routed); x402 embeds it in every 402.
+    /// vanilla serves this from `.well-known/subbit` (`app::router`);
+    /// x402 embeds it in every 402.
     #[n(4)]
     pub terms: Terms,
 
@@ -47,7 +47,6 @@ pub struct Config {
     /// top-up. At providers' discretion.
     #[n(6)]
     pub finality_depth: u64,
-    // TODO :: Add bucket
 }
 
 /// Which wire dialects this server answers. Both on by default; either
@@ -87,19 +86,21 @@ impl Default for Config {
                 min_iou_amount: 0,
                 // A starter value only, written out to `config.toml`
                 // by `init` for a provider to edit: `Catalog` has no
-                // hardcoded fallback of its own, an incomplete config
-                // fails to load rather than silently using this.
+                // hardcoded fallback of its own, an unregistered path
+                // simply has no entry rather than silently using this.
                 catalog: Catalog {
-                    default: ResourceInfo {
-                        cost: Cost::ByRequest(0),
-                        description: "Access to a metered resource".to_string(),
-                        mime_type: "application/octet-stream".to_string(),
-                        max_timeout_seconds: 60,
-                        service_name: None,
-                        tags: None,
-                        icon_url: None,
-                    },
-                    resources: Vec::new(),
+                    resources: vec![(
+                        "/{*rest}".to_string(),
+                        ResourceInfo {
+                            cost: Cost::ByRequest(0),
+                            description: "Access to a metered resource".to_string(),
+                            mime_type: "application/octet-stream".to_string(),
+                            max_timeout_seconds: 60,
+                            service_name: None,
+                            tags: None,
+                            icon_url: None,
+                        },
+                    )],
                 },
                 reference_script: None,
             },

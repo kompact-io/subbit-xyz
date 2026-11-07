@@ -1,23 +1,23 @@
-//! Provider-side wrapping of `subbit-l2-dto`'s shared `CatalogIndex`:
-//! adds `actual_cost`, settling a `ByEgress`/`ByClaim` quote against
-//! the real response.
+//! Provider-side wrapping of `subbit-cost`'s shared `Catalog`: adds
+//! `actual_cost`, settling a `ByEgress`/`ByClaim` quote against the
+//! real response.
 
 use http::HeaderMap;
 use subbit_l2_dto::{CLAIM_COST_HEADER, Cost};
 
-pub use subbit_l2_dto::{
-    Catalog as CatalogDto, CatalogError as Error, CatalogIndex as Catalog, ResourceInfo,
-    ResourceInfoOverride, normalize,
-};
+pub use subbit_cost::{Catalog, CatalogError as Error, dto::Catalog as CatalogDto};
+pub use subbit_l2_dto::ResourceInfo;
 
 /// What `path` actually cost: `ByEgress` reads the real
 /// `Content-Length` against `path`'s own rule; `ByClaim` reads the
 /// provider's claimed `CLAIM_COST_HEADER` as-is. `None` when
-/// nothing relevant is present, including for `ByRequest`;
-/// `Ctx::refund_amount` treats `None` as nothing served, refunding
-/// the full quote.
+/// nothing relevant is present, including for `ByRequest` and for a
+/// `path` with no catalog entry at all (a provider's own config
+/// error -- see `Ctx::resource_info`'s doc comment); `Ctx::
+/// refund_amount` treats `None` as nothing served, refunding the
+/// full quote.
 pub fn actual_cost(catalog: &Catalog, path: &str, headers: &HeaderMap) -> Option<u64> {
-    match catalog.resolve(path).cost {
+    match &catalog.resolve(path)?.cost {
         Cost::ByEgress(rule) => {
             let len = parse_u64_header(headers, http::header::CONTENT_LENGTH.as_str())?;
             Some(rule.cost(len))
@@ -48,19 +48,19 @@ mod tests {
         }
     }
 
-    fn catalog(default: ResourceInfo, resources: Vec<(String, ResourceInfoOverride)>) -> Catalog {
-        Catalog::new(CatalogDto { default, resources }).unwrap()
+    fn catalog(info: ResourceInfo) -> Catalog {
+        Catalog::new(CatalogDto {
+            resources: vec![("/{*rest}".to_string(), info)],
+        })
+        .unwrap()
     }
 
     fn egress_catalog() -> Catalog {
-        catalog(
-            resource_info(Cost::ByEgress(CostByEgress {
-                base: 5,
-                per_kib: 2,
-                max_bytes: 10_240,
-            })),
-            Vec::new(),
-        )
+        catalog(resource_info(Cost::ByEgress(CostByEgress {
+            base: 5,
+            per_kib: 2,
+            max_bytes: 10_240,
+        })))
     }
 
     fn content_length(bytes: u64) -> HeaderMap {
@@ -97,7 +97,7 @@ mod tests {
         let catalog = egress_catalog();
         assert_eq!(
             actual_cost(&catalog, "/resource", &content_length(1_000_000)),
-            Some(catalog.cost("/resource"))
+            catalog.cost("/resource")
         );
     }
 
@@ -108,7 +108,7 @@ mod tests {
     }
 
     fn claim_catalog() -> Catalog {
-        catalog(resource_info(Cost::ByClaim(42)), Vec::new())
+        catalog(resource_info(Cost::ByClaim(42)))
     }
 
     #[test]

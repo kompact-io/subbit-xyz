@@ -1,30 +1,8 @@
-//! Native test-driving CLI for `subbit-console`'s core logic (plan-
-//! subbit-console.md: "should have a native build for testing / test-
-//! driving"). Not the shipped frontend -- that's `ui::wasm`, composed
-//! into `packages/console/www`. This just exercises the same `Ctx` the
-//! wasm bindings wrap, from a terminal, against a real file on disk.
-//! `main.rs` is a one-line shim calling `run` here -- all the actual
-//! argument parsing and dispatch lives in the library, not the binary,
-//! so a future native TUI ("an interface very similar to the web-app")
-//! has this shape to reuse rather than starting from `main.rs` again.
+//! subbit-console via cli.
 //!
-//! `load`/`save` (below) are this adapter's own choice of *where* to
-//! persist (a file) -- `Ctx` has no file-I/O code of its own at all;
-//! see `ui::wasm`'s `load`/`save` for the same choice made differently
-//! (`localStorage`).
+//! Initially intended for testdriving logic. YMMV.
 //!
-//! Narration goes through the same `crate::Logs` `ui::wasm` uses,
-//! flushed to stderr once at the end of `run` -- stdout stays reserved
-//! for each command's actual data output (a generated key's hex, a
-//! `List`'s rows, `Export`'s JSON), same as any well-behaved CLI tool,
-//! so only genuinely log-shaped narration (an action that otherwise
-//! produces no output at all) goes through `Logs` here; a value this
-//! binary has no other way to show stays a direct `println!` (see
-//! `Logs`'s own doc on that split). Unlike `ui::wasm`, a failed action
-//! here still aborts the whole process via `?` -- each invocation is
-//! already exactly one action, so there's no live session to keep
-//! going, and `main.rs`'s own `eprintln!("error: {e}")` already plays
-//! the role `Logs` plays for the browser's longer-lived page.
+//! Should operate just like the wasm.
 
 use std::path::{Path, PathBuf};
 
@@ -83,6 +61,7 @@ enum Cmd {
     Delete,
 }
 
+/// Manages signing keys. Populates relevant known keys
 #[derive(Subcommand)]
 enum KeyringCmd {
     /// Add an existing signing key (hex-encoded 32-byte ed25519 seed).
@@ -105,12 +84,13 @@ enum KeyringCmd {
         #[arg(long)]
         iou: bool,
     },
-    Remove {
-        label: String,
-    },
+    /// Remove a key fom keyring
+    Remove { label: String },
+    /// List all keys
     List,
 }
 
+/// Manage known Consumer VKH.
 #[derive(Subcommand)]
 enum ConsumersCmd {
     /// Add a verifying-only consumer vkh.
@@ -126,6 +106,7 @@ enum ConsumersCmd {
     List,
 }
 
+/// Manage known Verifying Keys
 #[derive(Subcommand)]
 enum IouCmd {
     /// Add a verifying-only iou_key.
@@ -141,6 +122,7 @@ enum IouCmd {
     List,
 }
 
+/// Manage known providers
 #[derive(Subcommand)]
 enum ProvidersCmd {
     Add { label: String, base_url: String },
@@ -148,18 +130,15 @@ enum ProvidersCmd {
     List,
 }
 
+/// Manage the "Basket" of steps you want commited in txs onchain.
 #[derive(Subcommand)]
 enum BasketCmd {
-    /// Stages an Open in `Ctx`'s own basket (persisted across
-    /// invocations, like everything else) and saves it. Proves
-    /// `crate::Basket` (plan section I) is usable from a native
-    /// binary, not just from wasm, *and* that it now actually
-    /// persists. Doesn't fetch from Floe or build a real transaction --
-    /// those need a live `Backend`/wallet session this bin doesn't
-    /// have yet.
+    /// Open a new channel
     Open {
         tag: Tag,
+        // FIXME :: takes a raw key, not a stored label like `IouCmd::Add`'s `key` does.
         iou_key: VerifyingKey,
+        // FIXME :: takes a raw hash, not a stored label like `ConsumersCmd::Add`'s `vkh` does.
         consumer: Hash28,
         provider: Hash28,
         close_period_secs: u64,
@@ -176,10 +155,10 @@ enum WalletCmd {
     /// Mints a fresh key, stores it, and prints its hex seed once --
     /// save it now.
     Generate,
-    /// Imports an existing raw hex signing key.
-    Import {
-        key_hex: String,
-    },
+    /// Imports an existing raw hex signing key, read from stdin (one
+    /// line) -- never as a CLI argument, which would leak it into shell
+    /// history and `ps` output.
+    Import,
     SetDelegation {
         credential_hex: Hash28,
     },
@@ -336,8 +315,10 @@ pub fn run() -> Result<(), Error> {
                 save(&ctx, &cli.path)?;
                 println!("{}", subbit_wallet::reveal_hex(&key));
             }
-            WalletCmd::Import { key_hex } => {
-                ctx.wallet_import(&key_hex)?;
+            WalletCmd::Import => {
+                let mut key_hex = String::new();
+                std::io::stdin().read_line(&mut key_hex)?;
+                ctx.wallet_import(key_hex.trim())?;
                 save(&ctx, &cli.path)?;
                 logs.info("embedded wallet key imported");
             }
@@ -369,6 +350,8 @@ pub fn run() -> Result<(), Error> {
                 );
                 if let Some(address) = ctx.wallet_address(network) {
                     println!("{address}");
+                } else {
+                    logs.info("address: no wallet key configured");
                 }
             }
             WalletCmd::View => {

@@ -73,10 +73,26 @@ getrandom = { version = "0.4", default-features = false, features = [
   "wasm_js",
 ] }
 hex.workspace = true
+tracing.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 clap = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# `tx::submit`'s retry/backoff sleep (`src/sleep.rs`) -- every native
+# caller (`subbit-canary`, a future async `ui::cli`) already runs
+# under a tokio runtime, so this just borrows it rather than this
+# crate owning its own.
+tokio = { workspace = true, features = ["time", "rt-multi-thread", "macros"] }
+# `grpc` gives `ui::cli`'s own `Chain` subcommand (`Refresh`/`Submit`)
+# a real native transport to Floe -- same backend `subbit-canary`'s
+# own `chain.rs` already uses, just reached from the CLI instead of a
+# hardcoded scenario. Unions onto the bare `floe-client` dependency
+# above (same pattern as the wasm32 block below adding `http-json`).
+floe-client = { workspace = true, default-features = false, features = [
+  "grpc",
+] }
 
 # `packages/console/www`'s wasm-bindgen bundle (`src/ui/wasm.rs`) --
 # gated by target, not a Cargo feature: `ui::wasm`'s module declaration

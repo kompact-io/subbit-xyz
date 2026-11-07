@@ -1,6 +1,7 @@
 //! reqwest middleware for vanilla: injects a `subbit` request
-//! envelope (costed via `Cost`) on the way out, applies the response
-//! envelope on the way back. Gated behind `reqwest` + `vanilla`.
+//! envelope (costed via `Stamp::resolve_charge`, see `catalog`) on
+//! the way out, applies the response envelope on the way back. Gated
+//! behind `reqwest` + `vanilla`.
 
 use std::sync::Mutex;
 
@@ -10,21 +11,24 @@ use reqwest::{Request, Response, ResponseBuilderExt};
 use reqwest_middleware::{Error as MwError, Middleware, Next, Result as MwResult};
 
 use crate::Cache;
+use crate::catalog::MissPolicy;
 use crate::dialect::vanilla::{self, HEADER};
+use crate::reqwest::{ChargeOutcome, charge_outcome};
 
 /// `reqwest_middleware::Middleware` that injects a request envelope
-/// (via `dialect::vanilla::request`, costed by `C: Cost`) and applies
-/// the response envelope on the way back.
-pub struct Stamp<C> {
+/// (via `dialect::vanilla::request`, costed by `stamp`'s own catalog,
+/// see `Stamp::resolve_charge`, falling back to `policy: P` on a
+/// miss) and applies the response envelope on the way back.
+pub struct Stamp<P> {
     stamp: Mutex<crate::Stamp>,
-    costing: C,
+    policy: P,
 }
 
-impl<C: super::Cost> Stamp<C> {
-    pub fn new(stamp: crate::Stamp, costing: C) -> Self {
+impl<P: MissPolicy> Stamp<P> {
+    pub fn new(stamp: crate::Stamp, policy: P) -> Self {
         Self {
             stamp: Mutex::new(stamp),
-            costing,
+            policy,
         }
     }
 
@@ -41,7 +45,7 @@ impl<C: super::Cost> Stamp<C> {
 }
 
 #[async_trait::async_trait]
-impl<C: super::Cost + 'static> Middleware for Stamp<C> {
+impl<P: MissPolicy + 'static> Middleware for Stamp<P> {
     async fn handle(
         &self,
         mut req: Request,
@@ -49,7 +53,19 @@ impl<C: super::Cost + 'static> Middleware for Stamp<C> {
         next: Next<'_>,
     ) -> MwResult<Response> {
         // --- inject on request ---
-        let cost = self.costing.cost(&req);
+        let charge = {
+            let mut stamp = self.stamp.lock().unwrap();
+            stamp
+                .resolve_charge(req.url().path(), &self.policy)
+                .map_err(|e| MwError::Middleware(e.into()))?
+        };
+        let cost = match charge_outcome(charge, req.url().path())? {
+            // Send as-is, no payment envelope at all: nothing for the
+            // server to echo back, so skip straight to returning its
+            // reply untouched.
+            ChargeOutcome::Unpriced => return next.run(req, extensions).await,
+            ChargeOutcome::Priced(cost) => cost,
+        };
         let envelope = {
             let mut stamp = self.stamp.lock().unwrap();
             vanilla::request(&mut stamp, cost)

@@ -64,7 +64,12 @@ fn main() {
         }
         Cmd::Request { path, json } => {
             let mut spender = Local::build(&config).expect("build stamp");
-            let envelope = spender.request(&path).expect("request envelope");
+            // A standalone CLI call has no interactive consent loop to
+            // fall back on, so a catalog miss is a hard failure here,
+            // matching the old pre-`MissPolicy` behavior exactly.
+            let envelope = spender
+                .request(&path, &subbit_stamp::catalog::reject)
+                .expect("request envelope");
             if json {
                 todo!("Not yet implemented")
                 // println!("{}", serde_json::json!({ HEADER_NAME: envelope }));
