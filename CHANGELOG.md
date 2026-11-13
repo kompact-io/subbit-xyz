@@ -12,12 +12,14 @@ All notable changes to this project will be documented here. Format based on
 
 ### Changed
 
+- Both dialects now answer every spend/refund failure with a flat 402; the typed `Response` body carries the real reason.
 - Output yield now selects on payment credential, not just address. This makes
   downstream processes easier.
 - Make constants persist for settled, and make them a sibling of stage in the
   datum, rather than a field. This makes downstream processes easier.
 - Drop support for `ByHash`, change ByAsset to simply `Asset`.
 - Other (hopefully all) single variant constr have been flattened to lists.
+- Fix to ordered list insert.
 
 ### Removed
 

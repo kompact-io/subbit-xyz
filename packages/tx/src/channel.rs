@@ -1,6 +1,7 @@
 use cardano_sdk::{Hash, Output, Value, cbor::ToCbor};
 use minicbor::{Decode, Encode};
-use subbit_core::{Constants, Currency, Datum, Hash28, Iou, Stage};
+use subbit_core::{Hash28, Iou};
+use subbit_l1_dto::{Asset, Constants, Datum, Stage};
 
 use crate::{
     MIN_ADA_BUFFER, VALIDATOR, Variables, iou,
@@ -69,11 +70,11 @@ impl TryFrom<&Output> for Channel {
             return Err(FromOutputError::OwnHash);
         }
         let value = output.value();
-        let amount = match constants.currency() {
-            Currency::Ada => value.lovelace().saturating_sub(MIN_ADA_BUFFER),
-            Currency::Asset { hash, name } => value
+        let amount = match constants.asset() {
+            Asset::Lovelace => value.lovelace().saturating_sub(MIN_ADA_BUFFER),
+            Asset::Native { hash, name } => value
                 .assets()
-                .get(&Hash::<28>::from(*hash))
+                .get(&Hash::<28>::from(<[u8; 28]>::from(*hash)))
                 .and_then(|t| t.get(name))
                 .copied()
                 .unwrap_or(0),
@@ -98,6 +99,11 @@ impl Channel {
         &self.constants
     }
 
+    /// Shorthand for `self.constants().keytag()`.
+    pub fn keytag(&self) -> String {
+        self.constants.keytag()
+    }
+
     pub fn variables(&self) -> &Variables {
         &self.variables
     }
@@ -110,8 +116,11 @@ impl Channel {
     /// `amount` is near `u64::MAX`.
     pub fn buffered_value(&self) -> Value<u64> {
         let amount = self.variables().amount();
-        if let Currency::Asset { hash, name } = self.constants().currency() {
-            Value::new(MIN_ADA_BUFFER).with_assets([((*hash).into(), [(name.clone(), amount)])])
+        if let Asset::Native { hash, name } = self.constants().asset() {
+            Value::new(MIN_ADA_BUFFER).with_assets([(
+                Hash::<28>::from(<[u8; 28]>::from(*hash)),
+                [(name.clone(), amount)],
+            )])
         } else {
             Value::new(amount.saturating_add(MIN_ADA_BUFFER))
         }
@@ -123,6 +132,24 @@ impl Channel {
             constants: self.constants.clone(),
             stage: self.variables.stage().clone(),
         }
+    }
+
+    /// Estimated CBOR-encoded byte size of this channel's own output
+    /// (address + value + inline datum) as it would actually appear
+    /// in a transaction -- measured by building the real shape and
+    /// encoding it (network doesn't affect byte length, only the
+    /// address header's network nibble, so any network works here),
+    /// not a hand-picked guess. A native-asset channel's own
+    /// `Constants`/`Value` cost measurably more than lovelace's --
+    /// that's read off directly here, not special-cased.
+    pub fn size_estimate(&self) -> usize {
+        let address = crate::validator::address(
+            cardano_sdk::NetworkId::from(cardano_sdk::Network::Preprod),
+            None,
+        );
+        let output = Output::new(address.into(), self.buffered_value())
+            .with_datum(crate::to_plutus_data(self.datum()));
+        output.to_cbor().len()
     }
 
     pub fn can(&self) -> Vec<crate::step::Can> {
@@ -163,7 +190,11 @@ impl Channel {
     }
 
     fn try_verify(&self, iou: &Iou) -> Result<(), iou::Error> {
-        iou::verify(self.constants.iou_key(), self.constants.tag(), iou)
+        if subbit_core::crypto::verify_iou(self.constants.iou_key(), self.constants.tag(), iou) {
+            Ok(())
+        } else {
+            Err(iou::Error)
+        }
     }
 
     /// Boxes `self` up with `err`, converting `err` into `step::Error`

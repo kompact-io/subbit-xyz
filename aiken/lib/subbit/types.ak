@@ -4,23 +4,16 @@ use subbit/prelude.{Amount, Timestamp}
 pub type Tag =
   ByteArray
 
-pub type Currency {
-  Ada
-  Asset { hash: ScriptHash, name: ByteArray }
+pub type Asset {
+  Lovelace
+  Native { hash: ScriptHash, name: ByteArray }
 }
 
-// Unwrap with 
-// let (tag, currency, iou_key, consumer, provider, close_period) = constants
+// Unwrap with
+// let (tag, asset, iou_key, consumer, provider, close_period) = constants
 
 pub type Constants =
-  (
-    Tag,
-    Currency,
-    VerificationKey,
-    VerificationKeyHash,
-    VerificationKeyHash,
-    Int,
-  )
+  (Tag, Asset, VerificationKey, VerificationKeyHash, VerificationKeyHash, Int)
 
 // Flatten 
 // { own_hash: ScriptHash, constants: Constants, stage: Stage, }

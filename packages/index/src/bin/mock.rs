@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use url::Url;
 
-use subbit_index::client::Client;
+use subbit_index::gate::Gate;
 use subbit_index::wire::{Row, parse_row, parse_rows};
 
 /// Mock client for pushing (keytag -> backing) rows to the server.
@@ -43,7 +43,7 @@ impl Args {
             anyhow::bail!("pass --file <path> and/or --row \"hex,amount,subbed\"");
         }
         let rows = self.collect()?;
-        let result = Client::new(self.endpoint.clone()).send(rows).await?;
+        let result = Gate::new(self.endpoint.clone()).send(rows).await?;
         println!("{}", serde_json::to_string_pretty(&result)?);
         Ok(())
     }

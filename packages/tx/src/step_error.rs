@@ -1,4 +1,4 @@
-use subbit_core::Duration;
+use subbit_core::Instant;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum StepError {
@@ -7,7 +7,7 @@ pub enum StepError {
     #[error("Lower bound required but not set")]
     NoLower,
     #[error("Too early: Set {0}, Need > {0}")]
-    Early(Duration, Duration),
+    Early(Instant, Instant),
     #[error("Pair (Stage, Step) ({0}, {1}) are incompat")]
     Pair(String, String),
     #[error("Other :: {0}")]

@@ -6,15 +6,18 @@ description.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-homepage.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
 [features]
 default = ["serde"]
-serde = ["dep:serde", "cardano-sdk/serde", "subbit-core/serde"]
+serde = [
+  "dep:serde",
+  "cardano-sdk/serde",
+  "subbit-core/serde",
+  "subbit-l1-dto/serde",
+]
 web = ["dep:web-time"]
-
 
 [dependencies]
 anyhow.workspace = true
@@ -22,8 +25,10 @@ cardano-sdk = { workspace = true }
 hex.workspace = true
 serde_json.workspace = true
 subbit-core.workspace = true
+subbit-l1-dto.workspace = true
 minicbor = { workspace = true, features = ["half"] }
 minicbor_old.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 serde = { workspace = true, optional = true }
 web-time = { workspace = true, optional = true }

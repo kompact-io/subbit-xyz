@@ -1,5 +1,9 @@
 [toolchain]
-channel = "stable"
+# Matches `kompact-io/amaru`'s own pin (its `rust-toolchain.toml`) --
+# `amaru-kernel` (pulled in transitively via `floe-client`, and
+# directly for `amaru-uplc`/`amaru-plutus`) needs Polonius-era
+# borrowck behavior that stable doesn't have yet.
+channel = "nightly-2026-09-04"
 targets = [
   # # iOS
   # "aarch64-apple-ios",

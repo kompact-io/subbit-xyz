@@ -1,29 +1,29 @@
 use proptest::prelude::*;
 
 use crate::AikenFn;
-use subbit_core::{Constants, Currency, Datum, Redeemer, Stage};
+use subbit_l1_dto::{Asset, Constants, Datum, Redeemer, Stage};
 
-fn currency_fn() -> AikenFn {
-    AikenFn::from_shortcut("wire/currency")
+fn asset_fn() -> AikenFn {
+    AikenFn::from_shortcut("wire/asset")
 }
 
 #[test]
-fn currency_ada_conforms() {
-    assert!(currency_fn().eval_true(&Currency::Ada));
+fn asset_lovelace_conforms() {
+    assert!(asset_fn().eval_true(&Asset::Lovelace));
 }
 
 #[test]
-fn currency_by_class_conforms() {
-    assert!(currency_fn().eval_true(&Currency::Asset {
-        hash: [1u8; 28],
+fn asset_native_conforms() {
+    assert!(asset_fn().eval_true(&Asset::Native {
+        hash: [1u8; 28].into(),
         name: vec![1, 2, 3]
     }));
 }
 
 proptest! {
     #[test]
-    fn prop_currency_conforms(currency: Currency) {
-        assert!(currency_fn().eval_true(&currency));
+    fn prop_asset_conforms(asset: Asset) {
+        assert!(asset_fn().eval_true(&asset));
     }
 
     #[test]

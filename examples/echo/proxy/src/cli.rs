@@ -36,7 +36,14 @@ impl Cli {
 
         let config: Config = sources.load().expect("failed to load config");
 
-        let mut server = Server::new(None).expect("failed to create server");
+        let server_conf = pingora::server::configuration::ServerConf {
+            // Pingora's own default is 300s -- nothing here holds a
+            // long-lived connection worth draining that long for.
+            grace_period_seconds: Some(1),
+            graceful_shutdown_timeout_seconds: Some(1),
+            ..Default::default()
+        };
+        let mut server = Server::new_with_opt_and_conf(None, server_conf);
         server.bootstrap();
 
         #[cfg(feature = "subbit")]

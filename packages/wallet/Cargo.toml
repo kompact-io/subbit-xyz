@@ -1,0 +1,27 @@
+[package]
+name = "subbit-wallet"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "cardano-sdk/serde"]
+
+[dependencies]
+cardano-sdk = { workspace = true }
+floe-client = { workspace = true }
+floe-dto-http = { workspace = true, features = ["json"] }
+minicbor_old.workspace = true
+serde = { workspace = true, optional = true }
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

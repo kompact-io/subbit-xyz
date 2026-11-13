@@ -1,5 +1,6 @@
 use minicbor::{Decode, Encode};
-use subbit_core::{Duration, Stage};
+use subbit_core::{Duration, Instant};
+use subbit_l1_dto::Stage;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -55,7 +56,7 @@ impl Variables {
         Ok((variables, gain))
     }
 
-    pub fn close(&self, upper: &Duration, close_period: &Duration) -> Result<Self, Error> {
+    pub fn close(&self, upper: &Instant, close_period: &Duration) -> Result<Self, Error> {
         let Stage::Opened { subbed } = &self.stage else {
             return Err(Error::pair(self.stage.label(), "Close"));
         };
@@ -68,7 +69,7 @@ impl Variables {
         ))
     }
 
-    pub fn elapse(&self, lower: &Duration) -> Result<(), Error> {
+    pub fn elapse(&self, lower: &Instant) -> Result<(), Error> {
         let Stage::Closed { elapse_at, .. } = &self.stage else {
             return Err(Error::pair(self.stage.label(), "Elapse"));
         };
@@ -114,7 +115,7 @@ pub enum Error {
     #[error("zero funds available")]
     NoFunds,
     #[error("too early: {0} <= {1}")]
-    Early(Duration, Duration),
+    Early(Instant, Instant),
 }
 
 impl Error {

@@ -79,7 +79,7 @@
       "redeemer": {
         "title": "_0",
         "schema": {
-          "$ref": "#/definitions/subbit~1types~1Currency"
+          "$ref": "#/definitions/subbit~1types~1Asset"
         }
       },
       "compiledCode": "58a801010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748000c01cdd50014660026eb8c028c020dd500145284c01cdd5001a444b30013370e9000000c56600260166ea801a00516403115980099b8748008006264646644b300130120038034590101bae300f001375c601e004601e00260166ea801a2c804900922c8030600e00260066ea801e29344d95900101",
@@ -201,6 +201,32 @@
       "title": "Timestamp",
       "dataType": "integer"
     },
+    "subbit/types/Asset": {
+      "title": "Asset",
+      "anyOf": [
+        {
+          "title": "Lovelace",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Native",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "hash",
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            },
+            {
+              "title": "name",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
     "subbit/types/Constants": {
       "title": "Constants",
       "dataType": "list",
@@ -209,7 +235,7 @@
           "$ref": "#/definitions/subbit~1types~1Tag"
         },
         {
-          "$ref": "#/definitions/subbit~1types~1Currency"
+          "$ref": "#/definitions/subbit~1types~1Asset"
         },
         {
           "$ref": "#/definitions/aiken~1crypto~1VerificationKey"
@@ -267,32 +293,6 @@
             {
               "title": "sig",
               "$ref": "#/definitions/aiken~1crypto~1Signature"
-            }
-          ]
-        }
-      ]
-    },
-    "subbit/types/Currency": {
-      "title": "Currency",
-      "anyOf": [
-        {
-          "title": "Ada",
-          "dataType": "constructor",
-          "index": 0,
-          "fields": []
-        },
-        {
-          "title": "Asset",
-          "dataType": "constructor",
-          "index": 1,
-          "fields": [
-            {
-              "title": "hash",
-              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
-            },
-            {
-              "title": "name",
-              "$ref": "#/definitions/ByteArray"
             }
           ]
         }

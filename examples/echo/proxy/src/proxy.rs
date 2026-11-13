@@ -21,6 +21,18 @@ mod without_subbit {
         type CTX = ();
         fn new_ctx(&self) -> Self::CTX {}
 
+        async fn request_filter(
+            &self,
+            session: &mut Session,
+            _ctx: &mut Self::CTX,
+        ) -> Result<bool> {
+            let path = session.req_header().uri.path().to_string();
+            if let Some(result) = crate::static_assets::serve(session, &path).await {
+                return result;
+            }
+            Ok(false)
+        }
+
         async fn upstream_peer(
             &self,
             session: &mut Session,
@@ -65,7 +77,12 @@ mod with_subbit {
 
     #[derive(Default)]
     pub struct ProxyCtx {
-        subbit_header: Option<String>,
+        /// The consumer's own dialect auth header(s) from the spend
+        /// call, reused unchanged for this same request's refund.
+        auth_headers: http::HeaderMap,
+        /// `subbit-gate`'s own reply header(s) to the spend call,
+        /// relayed onto the real response.
+        relay_headers: http::HeaderMap,
     }
 
     #[async_trait]
@@ -76,21 +93,48 @@ mod with_subbit {
         }
 
         async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
+            let path = session.req_header().uri.path().to_string();
+            if let Some(result) = crate::static_assets::serve(session, &path).await {
+                return result;
+            }
             let Some(client) = &self.subbit else {
                 return Ok(false);
             };
-            match subbit::check(client, session).await {
-                subbit::Outcome::Ok(header) => {
-                    ctx.subbit_header = header;
+            if subbit::is_terms_path(session.req_header().uri.path()) {
+                let (status, body) = subbit::terms(client).await.unwrap_or((502, Vec::new()));
+                let mut resp = ResponseHeader::build(status, None)?;
+                resp.insert_header("content-type", "application/json")?;
+                session.set_keepalive(None);
+                session.write_response_header(Box::new(resp), false).await?;
+                session
+                    .write_response_body(Some(bytes::Bytes::from(body)), true)
+                    .await?;
+                return Ok(true);
+            }
+            let (auth_headers, outcome) = subbit::check(client, session).await;
+            match outcome {
+                subbit::Outcome::Ok(reply_headers) => {
+                    ctx.auth_headers = auth_headers;
+                    ctx.relay_headers = subbit::relay_headers(&reply_headers);
                     Ok(false)
                 }
-                subbit::Outcome::Ko { status, header } => {
+                subbit::Outcome::Ko {
+                    status,
+                    headers,
+                    body,
+                } => {
                     let mut resp = ResponseHeader::build(status, None)?;
-                    if let Some(v) = header {
-                        resp.insert_header(subbit::HEADER, v)?;
+                    for (name, value) in &subbit::relay_headers(&headers) {
+                        resp.insert_header(name.clone(), value.clone())?;
                     }
                     session.set_keepalive(None);
-                    session.write_response_header(Box::new(resp), true).await?;
+                    let send_body = body.map(bytes::Bytes::from);
+                    session
+                        .write_response_header(Box::new(resp), send_body.is_none())
+                        .await?;
+                    if let Some(body) = send_body {
+                        session.write_response_body(Some(body), true).await?;
+                    }
                     Ok(true)
                 }
             }
@@ -107,12 +151,34 @@ mod with_subbit {
 
         async fn response_filter(
             &self,
-            _session: &mut Session,
+            session: &mut Session,
             resp: &mut ResponseHeader,
             ctx: &mut Self::CTX,
         ) -> Result<()> {
-            if let Some(v) = &ctx.subbit_header {
-                resp.insert_header(subbit::HEADER, v.clone())?;
+            for (name, value) in &ctx.relay_headers {
+                resp.insert_header(name.clone(), value.clone())?;
+            }
+            if let Some(client) = &self.subbit {
+                let path = session.req_header().uri.path().to_string();
+                let mut settle_headers = ctx.auth_headers.clone();
+                if let Some(len) = resp.headers.get(http::header::CONTENT_LENGTH) {
+                    settle_headers.insert(http::header::CONTENT_LENGTH, len.clone());
+                }
+                if let Some(cost) = resp.headers.get(subbit_l2_dto::CLAIM_COST_HEADER) {
+                    settle_headers.insert(
+                        subbit_l2_dto::CLAIM_COST_HEADER
+                            .parse::<http::HeaderName>()
+                            .expect("valid header name"),
+                        cost.clone(),
+                    );
+                }
+                // Fire-and-forget: a failed refund never blocks or fails
+                // the response already being served to the consumer.
+                if let subbit::Outcome::Ko { status, .. } =
+                    client.refund(&path, &settle_headers).await
+                {
+                    tracing::warn!(status, "refund call failed");
+                }
             }
             Ok(())
         }

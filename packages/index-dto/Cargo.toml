@@ -1,0 +1,25 @@
+[package]
+name = "subbit-index-dto"
+description.workspace = true
+documentation.workspace = true
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "subbit_index_dto"
+path = "src/lib.rs"
+
+[features]
+default = ["std", "serde"]
+std = ["subbit-core/std"]
+serde = ["dep:serde", "subbit-core/serde", "subbit-l1-dto/serde"]
+
+[dependencies]
+subbit-core.workspace = true
+subbit-l1-dto.workspace = true
+serde = { workspace = true, optional = true }
+minicbor = { workspace = true, features = ["alloc", "derive"] }

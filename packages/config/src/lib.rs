@@ -2,9 +2,6 @@
 //!
 //! Layered config loading: TOML base, optional TOML overlay, optional env
 //! overrides. Precedence (later wins): `base` < `overlay` < env.
-//! Content-unaware — no `_FILE` convention, no key inspection; overlay is
-//! just "another TOML file merged after base" (e.g. a secrets file kept
-//! outside version control).
 
 use std::path::Path;
 
@@ -72,11 +69,11 @@ mod with_clap {
     /// No baked-in defaults. Consumer decides what "no flag given" resolves to via `into_sources`.
     #[derive(Debug, clap::Args)]
     pub struct ConfigArgs {
-        #[arg(long)]
+        #[arg(long, global = true)]
         pub config: Option<PathBuf>,
-        #[arg(long)]
+        #[arg(long, global = true)]
         pub secrets: Option<PathBuf>,
-        #[arg(long)]
+        #[arg(long, global = true)]
         pub env_prefix: Option<String>,
     }
 

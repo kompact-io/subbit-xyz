@@ -1,3 +1,6 @@
+# defacto standard config
+subbit-*-config.toml
+
 _demo
 secrets/
 
@@ -15,6 +18,10 @@ result
 # Rust
 debug/
 target/
+
+# wasm-pack output
+examples/echo/www/pkg/
+packages/console/www/pkg/
 
 # Envs
 .env

@@ -1,8 +1,10 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Address, Credential, Script}
+use cardano/assets
 use cardano/transaction.{
-  Datum, InlineDatum, Input, Output, OutputReference, Transaction,
+  Datum, InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
+use subbit/fixtures as fx
 use subbit/types as t
 
 /// In a standard tx, all but one of the script inputs is spent with `Defer`. More
@@ -31,4 +33,20 @@ fn get_own_hash(datum: Datum) {
   expect InlineDatum(inline): Datum = datum
   expect (own_hash, _, _): (ScriptHash, Data, Data) = inline
   own_hash
+}
+
+test defer_true_when_not_the_main_input() {
+  let stage = t.Opened { subbed: 0 }
+  let main_in = fx.own_input(fx.oref(0), stage, assets.from_lovelace(10))
+  let deferred_in = fx.own_input(fx.oref(1), stage, assets.from_lovelace(10))
+  let tx = Transaction { ..placeholder, inputs: [main_in, deferred_in] }
+  do(fx.datum(stage), fx.oref(1), tx)
+}
+
+test defer_false_when_is_the_main_input() {
+  let stage = t.Opened { subbed: 0 }
+  let main_in = fx.own_input(fx.oref(0), stage, assets.from_lovelace(10))
+  let deferred_in = fx.own_input(fx.oref(1), stage, assets.from_lovelace(10))
+  let tx = Transaction { ..placeholder, inputs: [main_in, deferred_in] }
+  !do(fx.datum(stage), fx.oref(0), tx)
 }

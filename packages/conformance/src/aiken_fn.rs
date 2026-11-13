@@ -1,8 +1,9 @@
+use amaru_kernel::{PROTOCOL_VERSION_11, PlutusVersion};
 use amaru_uplc::{
     arena::Arena,
     binder::{Binder, DeBruijn},
     data::PlutusData,
-    machine::{EvalResult, PlutusVersion},
+    machine::EvalResult,
     program::Program,
     term::Term,
 };
@@ -82,20 +83,21 @@ impl AikenFn {
     {
         let bytes = self.compiled_code_bytes();
         let flat_bytes = decode_cbor_bytestring(&bytes).expect("failed to unwrap code");
-        amaru_uplc::flat::decode::<V>(arena, &flat_bytes, PlutusVersion::V3, 1000).unwrap()
+        amaru_uplc::flat::decode::<V>(arena, &flat_bytes, PlutusVersion::V3, PROTOCOL_VERSION_11)
+            .unwrap()
+            .0
     }
 
     pub fn eval_with<T, F>(&self, value: &T, pred: F) -> bool
     where
         T: minicbor::Encode<()>,
-        F: for<'a> FnOnce(&EvalResult<'a, DeBruijn>) -> bool,
+        F: for<'a> FnOnce(EvalResult<'a, DeBruijn>) -> bool,
     {
         let arena = Arena::new();
         let program = self.program::<DeBruijn>(&arena);
         let arg = Term::data(&arena, try_into_plutus_data(&arena, value).unwrap());
-        let result = program.apply(&arena, arg).eval(&arena);
-        println!("here {:?}", result.term);
-        pred(&result)
+        let result = program.apply(&arena, arg).eval_default(&arena);
+        pred(result)
     }
 
     pub fn eval_true<T>(&self, value: &T) -> bool
@@ -137,33 +139,30 @@ where
 {
     let mut buf = Vec::new();
     minicbor::encode(value, &mut buf).unwrap();
-    println!("minicbor bytes: {}", hex::encode(&buf));
 
-    let result = PlutusData::from_cbor(arena, &buf).map_err(|e| e.to_string())?;
-    println!("plutus data: {:?}", result);
-    Ok(result)
+    PlutusData::from_cbor(arena, &buf).map_err(|e| e.to_string())
 }
 
-pub fn is_true<'a>(result: &EvalResult<'a, DeBruijn>) -> bool {
+pub fn is_true<'a>(result: EvalResult<'a, DeBruijn>) -> bool {
     matches!(
-        result.term,
+        result.into_term(),
         Ok(Term::Constant(amaru_uplc::constant::Constant::Boolean(
             true
         )))
     )
 }
 
-pub fn is_false<'a>(result: &EvalResult<'a, DeBruijn>) -> bool {
+pub fn is_false<'a>(result: EvalResult<'a, DeBruijn>) -> bool {
     matches!(
-        result.term,
+        result.into_term(),
         Ok(Term::Constant(amaru_uplc::constant::Constant::Boolean(
             false
         )))
     )
 }
 
-pub fn is_err<'a>(result: &EvalResult<'a, DeBruijn>) -> bool {
-    result.term.is_err()
+pub fn is_err<'a>(result: EvalResult<'a, DeBruijn>) -> bool {
+    result.into_term().is_err()
 }
 
 fn decode_cbor_bytestring(bytes: &[u8]) -> Result<Vec<u8>, minicbor::decode::Error> {

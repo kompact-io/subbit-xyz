@@ -21,6 +21,7 @@
       inputs.rust-overlay.follows = "rust-overlay";
     };
     aiken.url = "github:aiken-lang/aiken";
+    process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
   };
 
   outputs = inputs @ {
@@ -35,6 +36,7 @@
         inputs.treefmt-nix.flakeModule
         inputs.rust-flake.flakeModules.default
         inputs.rust-flake.flakeModules.nixpkgs
+        inputs.process-compose-flake.flakeModule
       ];
       systems = ["x86_64-linux" "aarch64-darwin"];
       perSystem = {
@@ -65,9 +67,12 @@
               config.rust-project.toolchain
               clang-unwrapped
               pkgs.cargo-machete
+              pkgs.wasm-pack
+              pkgs.wasm-bindgen-cli
               # PRE-COMMIT
               pkgs.prek
               pkgs.jless
+              pkgs.process-compose
             ]
             ++ lib.concatMap (crate: crate.crane.args.nativeBuildInputs) (lib.attrValues config.rust-project.crates);
 
@@ -79,7 +84,68 @@
 
           CC_wasm32_unknown_unknown = lib.getExe' clang-unwrapped "clang";
         };
+        aikenNix = import ./nix/aiken.nix {
+          inherit lib pkgs;
+          aikenBin = inputs'.aiken.packages.aiken;
+          projectDir = ./aiken;
+          lockFile = ./aiken/aiken.lock;
+        };
+        echoWwwNix = import ./nix/echo-www.nix {
+          inherit lib pkgs;
+          craneLib = config.rust-project.crane-lib;
+          src = config.rust-project.src;
+          wasmBindgenCli = pkgs.wasm-bindgen-cli;
+          ccWasm32 = lib.getExe' clang-unwrapped "clang";
+        };
+        consoleWwwNix = import ./nix/console-www.nix {
+          inherit lib pkgs;
+          craneLib = config.rust-project.crane-lib;
+          src = config.rust-project.src;
+          wasmBindgenCli = pkgs.wasm-bindgen-cli;
+          ccWasm32 = lib.getExe' clang-unwrapped "clang";
+        };
       in {
+        checks = {
+          aiken-lock-is-nix-compatible = aikenNix.lockIsNixCompatible;
+          aiken-check = aikenNix.check;
+          aiken-plutus-json-is-up-to-date = aikenNix.plutusJsonIsUpToDate;
+        };
+        packages.echo-www = echoWwwNix;
+        packages.console-www = consoleWwwNix.combined;
+        packages.subbit-console-wasm = consoleWwwNix.consoleWasm;
+        process-compose."echo-stack" = {
+          settings.processes = {
+            # Fresh config each run: `subbit-gate`'s and `echo-proxy`'s
+            # own `init` defaults are enough for this demo, no secrets
+            # needed (`subbit-gate`'s `Config::default` has no account
+            # key of its own to overlay).
+            setup = {
+              command = ''
+                rm -rf .echo-stack-run && mkdir -p .echo-stack-run
+                ${config.packages.subbit-gate}/bin/subbit-gate \
+                  --config .echo-stack-run/subbit-gate.toml init
+                ${config.packages.subbit-examples-echo-proxy}/bin/echo-proxy \
+                  --config .echo-stack-run/echo-proxy.toml init
+              '';
+            };
+            subbit-gate = {
+              command = "${config.packages.subbit-gate}/bin/subbit-gate --config .echo-stack-run/subbit-gate.toml serve --listen 0.0.0.0:7822";
+              depends_on.setup.condition = "process_completed_successfully";
+            };
+            echo-server = {
+              command = "${config.packages.subbit-examples-echo-server}/bin/echo-server --port 3246";
+              depends_on.setup.condition = "process_completed_successfully";
+            };
+            echo-proxy = {
+              command = "${config.packages.subbit-examples-echo-proxy}/bin/echo-proxy --config .echo-stack-run/echo-proxy.toml run";
+              depends_on = {
+                setup.condition = "process_completed_successfully";
+                subbit-gate.condition = "process_started";
+                echo-server.condition = "process_started";
+              };
+            };
+          };
+        };
         rust-project = {
           src = lib.fileset.toSource {
             root = ./.;
@@ -87,6 +153,7 @@
               (config.rust-project.crane-lib.fileset.commonCargoSources ./.)
               ./aiken/plutus.json
               ./packages/tx/plutus.json
+              ./examples/echo/www
             ];
           };
           defaults.perCrate.crane.args = {
@@ -100,6 +167,10 @@
                 pkgs.pkg-config
                 pkgs.perl
               ];
+              crane.args.prePatch = ''
+                mkdir -p examples/echo/www/pkg
+                cp -r ${echoWwwNix}/pkg/. examples/echo/www/pkg/
+              '';
             };
           };
         };
@@ -149,13 +220,20 @@
                 pass_filenames = false;
                 always_run = true;
               };
-              # Transitive deps mean default clippy ends up using a different cargo.
-              my-clippy = {
+              clippy = {
                 enable = true;
-                name = "clippy";
-                description = "Run clippy";
-                entry = "${config.rust-project.toolchain}/bin/cargo-clippy -- --manifest-path Cargo.toml";
-                pass_filenames = false;
+                # Without this, git-hooks-nix falls back to its own default
+                # cargo/clippy (plain nixpkgs), which drifts from the
+                # rust-overlay toolchain crane and CI build against.
+                packageOverrides = {
+                  cargo = config.rust-project.toolchain;
+                  clippy = config.rust-project.toolchain;
+                };
+                settings = {
+                  denyWarnings = true;
+                  offline = false;
+                  extraArgs = "--workspace";
+                };
               };
               cargo-machete = {
                 enable = true;

@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>subbit console</title>
+    <style>
+      body {
+        font-family: monospace;
+        max-width: 960px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      section {
+        border: 1px solid #888;
+        padding: 1rem;
+        margin-bottom: 1rem;
+      }
+      h2 {
+        margin-top: 0;
+      }
+      label {
+        display: block;
+        margin-top: 0.5rem;
+      }
+      input,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      input[type="checkbox"] {
+        width: auto;
+      }
+      pre {
+        background: #eee;
+        padding: 0.5rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      button {
+        margin-top: 0.5rem;
+        margin-right: 0.5rem;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+      }
+      th,
+      td {
+        border: 1px solid #ccc;
+        padding: 0.25rem 0.5rem;
+        text-align: left;
+        font-size: 0.9em;
+      }
+      .final {
+        color: #070;
+      }
+      .pending {
+        color: #960;
+      }
+      .terminal {
+        color: #888;
+      }
+      .channel-widget {
+        border-top: 3px solid #555;
+        padding-top: 0.75rem;
+        margin-top: 1rem;
+      }
+      .channel-widget .brief {
+        font-size: 0.9em;
+        color: #444;
+        margin: 0.25rem 0 0.5rem;
+      }
+      .channel-widget .brief div {
+        margin: 0.1rem 0;
+      }
+      .channel-widget details {
+        margin-top: 0.25rem;
+      }
+      .channel-widget summary {
+        cursor: pointer;
+        color: #555;
+      }
+      .row {
+        display: flex;
+        gap: 1rem;
+      }
+      .row > div {
+        flex: 1;
+      }
+      #log div {
+        border-bottom: 1px solid #ccc;
+        padding: 0.25rem 0;
+        font-size: 0.85em;
+      }
+
+      /* --- Tabs --- */
+      #tabs {
+        display: flex;
+        gap: 0.25rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #888;
+      }
+      #tabs button {
+        margin: 0;
+        border: 1px solid #888;
+        border-bottom: none;
+        border-radius: 4px 4px 0 0;
+        background: #eee;
+        padding: 0.5rem 1rem;
+      }
+      #tabs button.active {
+        background: #fff;
+        font-weight: bold;
+      }
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
+      #tx-badge {
+        font-weight: bold;
+      }
+
+      #connection-status {
+        font-weight: bold;
+      }
+      #connection-status.ok {
+        color: #070;
+      }
+      #connection-status.unset {
+        color: #960;
+        cursor: pointer;
+      }
+
+      section.danger {
+        border-color: #a33;
+      }
+      section.danger h2 {
+        color: #a33;
+      }
+
+      /* --- Input validation feedback --- */
+      input.invalid {
+        border: 1px solid #a33;
+        background: #fee;
+      }
+      .field-error {
+        display: none;
+        color: #a33;
+        font-size: 0.8em;
+        margin-top: 0.1rem;
+      }
+
+      /* --- Removable item lists (Keyring/Consumers/IouKeys/Providers/Whitelist) --- */
+      .item-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .item-list li {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0;
+        border-bottom: 1px solid #ccc;
+      }
+      .item-list li:last-child {
+        border-bottom: none;
+      }
+      .item-list .item-text {
+        flex: 1;
+        overflow-wrap: anywhere;
+        font-size: 0.9em;
+      }
+      .item-list button {
+        margin: 0;
+        flex: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>subbit console</h1>
+    <p>
+      Browser app for managing <code>subbit</code> channels as a consumer.
+      Browsing works with no wallet connected; staging/submit needs one.
+    </p>
+
+    <!-- Always-visible connection status -- Floe is the one thing every
+         tab depends on, so it's advertised here rather than only inside
+         Settings. Clicking it jumps to Settings to fix/change it. -->
+    <p id="connection-status"></p>
+
+    <nav id="tabs">
+      <button data-tab="channels" class="active">Channels</button>
+      <button data-tab="tx">Tx <span id="tx-badge"></span></button>
+      <button data-tab="settings">Settings</button>
+      <button data-tab="log">Log</button>
+    </nav>
+
+    <!-- Channels: what's out there, in full lineage. One widget per
+         Constants (index-dto's own organization, not re-grouped by
+         keytag -- a keytag recurring under a different Constants is an
+         anomaly, not the common case to design around). One Floe fetch
+         (`fetchHistory`) backs both this view and the live-item cache
+         "mine?"/actions below are computed from; there's no separate
+         live-only "dashboard" fetch any more (see `settings::floe`'s
+         own doc). -->
+    <div id="tab-channels" class="tab-panel active">
+      <section id="section-lineage">
+        <h2>Channels</h2>
+        <div class="row">
+          <div>
+            <label
+              >Default confirmation depth (used when no matching provider Terms)
+              <input id="lineage-default-depth" value="10" />
+            </label>
+          </div>
+          <div style="align-self: end">
+            <button id="lineage-fetch">Fetch from Floe</button>
+          </div>
+        </div>
+        <div id="lineage-out">(not fetched)</div>
+      </section>
+    </div>
+
+    <!-- Settings: identity (Keyring/Consumers/IouKeys), the providers you
+         know about, the validator whitelist, Floe/network config, the
+         CIP-30 connection, and the embedded wallet -- everything
+         `settings.rs` groups on the Rust side lives here on the UI side
+         too (see that module's own doc). -->
+    <div id="tab-settings" class="tab-panel">
+      <section id="section-floe">
+        <h2>Floe backend</h2>
+        <p>
+          Console's one connection to the chain -- every other tab reads through
+          it. Floe itself doesn't report which network it's serving, so say so
+          here; Console trusts this value for the embedded wallet's address and
+          for catching a connected wallet on the wrong network.
+        </p>
+        <div class="row">
+          <div>
+            <label
+              >Base URL
+              <input
+                id="floe-base-url"
+                placeholder="https://floe.example.com"
+              />
+            </label>
+          </div>
+          <div>
+            <label
+              >Network it serves
+              <select id="floe-network">
+                <option value="preprod">preprod</option>
+                <option value="mainnet">mainnet</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-whitelist">
+        <h2>Whitelisted validators</h2>
+        <label>Seeded with this build's own validator hash </label>
+        <div class="row">
+          <div>
+            <input id="whitelist-hash" placeholder="28-byte hex script hash" />
+          </div>
+          <div style="flex: 0"><button id="whitelist-add">Add</button></div>
+        </div>
+        <div id="whitelist-out">(none)</div>
+      </section>
+
+      <section id="section-wallet-connection">
+        <h2>Wallet connection (CIP-30)</h2>
+        <p>
+          A browser-extension wallet, used to submit and as your consumer
+          identity. For a key Console manages itself, see Embedded wallet below.
+        </p>
+        <div class="row">
+          <div>
+            <label
+              >Detected wallets
+              <select id="wallet-select"></select>
+            </label>
+          </div>
+          <div style="align-self: end">
+            <button id="wallet-connect">Connect</button>
+            <button id="wallet-disconnect">Disconnect</button>
+          </div>
+        </div>
+        <pre id="wallet-connection-out">(not connected)</pre>
+        <div class="row">
+          <div>
+            <input
+              id="wallet-consumer-label"
+              placeholder="label to save this vkh under"
+            />
+          </div>
+          <div style="flex: 0">
+            <button id="wallet-save-consumer">Save as Consumer</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-embedded-wallet">
+        <h2>Embedded wallet</h2>
+        <p>
+          This key is stored in Console's own data (this browser's local
+          storage, or a file you've exported) -- not a separate wallet app. It
+          stays on this device only; clearing this site's data deletes it
+          permanently. Don't use it for real funds on a shared computer.
+        </p>
+        <pre id="wallet-out">(no key configured)</pre>
+        <button id="wallet-use-for-submit">Use for submit</button>
+        <button id="wallet-generate">Generate new key</button>
+        <div class="row">
+          <div>
+            <input
+              id="wallet-import-hex"
+              placeholder="hex signing key to import"
+            />
+          </div>
+          <div style="flex: 0"><button id="wallet-import">Import</button></div>
+        </div>
+        <div class="row">
+          <div>
+            <input
+              id="wallet-delegation-hex"
+              placeholder="28-byte hex delegation credential (optional)"
+            />
+          </div>
+          <div style="flex: 0">
+            <button id="wallet-set-delegation">Set delegation</button>
+            <button id="wallet-clear-delegation">Clear</button>
+          </div>
+        </div>
+        <button id="wallet-reveal">Reveal key</button>
+        <button id="wallet-export">Export</button>
+        <button id="wallet-scrub">Scrub (delete key + delegation)</button>
+      </section>
+
+      <section id="section-reference-script">
+        <h2>Reference script</h2>
+        <p>
+          Building a tx against an existing channel needs the subbit validator
+          available on-chain as a reference script -- usually a provider already
+          publishes one (the Tx tab's submit picks that up automatically).
+          Upload your own here only if you want independence from any provider's
+          copy, or Tear down to reclaim the ADA it's locked up once you no
+          longer need it. Both act on whichever wallet is connected for submit,
+          above.
+        </p>
+        <div class="row">
+          <div>
+            <input
+              id="reference-script-address"
+              placeholder="target address (optional -- defaults to this wallet's own change address)"
+            />
+          </div>
+          <div style="flex: 0">
+            <button id="reference-script-upload">Upload</button>
+          </div>
+        </div>
+        <button id="reference-script-teardown">Tear down</button>
+        <pre id="reference-script-out"></pre>
+      </section>
+
+      <section id="section-keyring">
+        <h2>Keyring</h2>
+        <div class="row">
+          <div><input id="keyring-label" placeholder="label" /></div>
+          <div>
+            <input
+              id="keyring-key"
+              placeholder="hex signing key (leave blank to generate)"
+            />
+          </div>
+        </div>
+        <label
+          ><input type="checkbox" id="keyring-consumer" /> usable as
+          consumer</label
+        >
+        <label
+          ><input type="checkbox" id="keyring-iou" /> usable as iou_key</label
+        >
+        <button id="keyring-add">Add existing</button>
+        <button id="keyring-generate">Generate new</button>
+        <div id="keyring-out">(no keys)</div>
+      </section>
+
+      <div class="row">
+        <div>
+          <section id="section-consumers">
+            <h2>Consumers</h2>
+            <div class="row">
+              <div><input id="consumers-label" placeholder="label" /></div>
+              <div>
+                <input id="consumers-vkh" placeholder="28-byte hex vkh" />
+              </div>
+            </div>
+            <button id="consumers-add">Add</button>
+            <div id="consumers-out">(none)</div>
+          </section>
+        </div>
+        <div>
+          <section id="section-iou-keys">
+            <h2>IOU keys</h2>
+            <div class="row">
+              <div><input id="iou-label" placeholder="label" /></div>
+              <div>
+                <input id="iou-key" placeholder="32-byte hex verifying key" />
+              </div>
+            </div>
+            <button id="iou-add">Add</button>
+            <div id="iou-out">(none)</div>
+          </section>
+        </div>
+      </div>
+
+      <section id="section-providers">
+        <h2>Providers</h2>
+        <div class="row">
+          <div><input id="providers-label" placeholder="label" /></div>
+          <div>
+            <input
+              id="providers-base-url"
+              placeholder="https://provider.example.com"
+            />
+          </div>
+        </div>
+        <button id="providers-fetch">Fetch terms + save</button>
+        <details id="providers-manual-terms">
+          <summary>Manual Terms (no discovery endpoint to fetch from)</summary>
+          <p>
+            Only the fields Console itself acts on when opening a channel or
+            checking a txo against this provider -- network, validator script,
+            and pricing catalog are filled in with this build's own defaults,
+            not asked for here.
+          </p>
+          <div class="row">
+            <div>
+              <label
+                >Provider vkh (hex)
+                <input
+                  id="providers-terms-provider"
+                  placeholder="28-byte hex"
+                />
+              </label>
+            </div>
+            <div>
+              <label
+                >Asset
+                <select id="providers-terms-asset-kind">
+                  <option value="lovelace">Lovelace</option>
+                  <option value="native">Native token</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div
+            class="row"
+            id="providers-terms-native-row"
+            style="display: none"
+          >
+            <div>
+              <input
+                id="providers-terms-asset-hash"
+                placeholder="policy id (28-byte hex)"
+              />
+            </div>
+            <div>
+              <input
+                id="providers-terms-asset-name"
+                placeholder="asset name (hex)"
+              />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label
+                >Close period (secs)
+                <input id="providers-terms-close-period" value="900" />
+              </label>
+            </div>
+            <div>
+              <label
+                >Confirmation depth
+                <input id="providers-terms-confirmation-depth" value="10" />
+              </label>
+            </div>
+          </div>
+          <button id="providers-save-manual">Save without fetching</button>
+        </details>
+        <div id="providers-out">(none)</div>
+      </section>
+
+      <!-- A setting, but a destructive/whole-store one -- visually
+           flagged, not grouped in with the ordinary config above. -->
+      <section id="section-data" class="danger">
+        <h2>Data management</h2>
+        <button id="data-export">Export</button>
+        <label>Import <input type="file" id="data-import" /></label>
+        <button id="data-delete">Delete all data</button>
+      </section>
+    </div>
+
+    <!-- Tx: building (open form + basket + submit). -->
+    <div id="tab-tx" class="tab-panel">
+      <section id="section-open">
+        <h2>Open a channel</h2>
+        <div class="row">
+          <div>
+            <label
+              >Provider (pick a label, or leave blank for manual)
+              <input id="open-provider-label" placeholder="provider label" />
+            </label>
+          </div>
+          <div>
+            <label
+              >iou_key label (Keyring)
+              <input id="open-iou-label" placeholder="keyring label" />
+            </label>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Tag (hex) <input id="open-tag" /></label>
+          </div>
+          <div>
+            <label>Amount <input id="open-amount" value="5000000" /></label>
+          </div>
+          <div>
+            <label
+              >Close period (secs) <input id="open-close-period" value="900"
+            /></label>
+          </div>
+        </div>
+        <button id="open-generate-tag">Generate random tag</button>
+        <button id="open-stage">Stage open</button>
+        <pre id="open-out">(nothing staged)</pre>
+      </section>
+
+      <section id="section-basket">
+        <h2>Basket</h2>
+        <h3>Opens</h3>
+        <pre id="basket-opens-out">(none)</pre>
+        <h3>Intents against existing channels</h3>
+        <pre id="basket-wills-out">(none)</pre>
+        <button id="basket-drop-all-opens">Drop all opens</button>
+        <button id="basket-drop-all-intents">Drop all intents</button>
+        <button id="basket-submit" disabled>Submit</button>
+        <pre id="basket-submit-out">(not submitted)</pre>
+      </section>
+    </div>
+
+    <!-- Log: narration from every tab, kept out of the way until wanted. -->
+    <div id="tab-log" class="tab-panel">
+      <section id="section-log">
+        <h2>Log</h2>
+        <div id="log"></div>
+      </section>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
