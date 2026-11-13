@@ -227,7 +227,7 @@ mod tests {
         // The vkh comes from whatever key `generate` actually minted --
         // flagged `is_consumer` keys don't get to pick their own vkh.
         let consumer_vkh = keyring
-            .generate("k".to_string(), true, false, &consumers, &iou_keys)
+            .generate("k".to_string(), true, false, false, &consumers, &iou_keys)
             .unwrap()
             .consumer_hash();
         let c = constants(

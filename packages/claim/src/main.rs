@@ -1,11 +1,14 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::time::Duration as StdDuration;
 
 use anyhow::Context;
-use cardano_sdk::{Address, Credential, Hash, SigningKey, address::kind};
+use cardano_sdk::{Address, Credential, Hash, Input, SigningKey, address::kind};
 use clap::{Parser, Subcommand};
-use subbit_tx::tx::Tx;
+use subbit_tx::{
+    Bounds,
+    queue::{BuildError, Queue},
+};
 use tokio::time::{Duration as TokioDuration, interval};
 use tracing::{info, warn};
 
@@ -14,6 +17,7 @@ use subbit_claim::config::Config;
 use subbit_claim::decide::{self, DecisionConfig};
 use subbit_claim::floe;
 use subbit_claim::keytag::is_ours;
+use subbit_claim::pending::{Pending, Resolution};
 
 #[derive(Parser)]
 #[command(
@@ -45,6 +49,13 @@ fn now() -> subbit_core::Instant {
     subbit_core::Instant::from_millis(ms)
 }
 
+/// amaru's own wording for "I already have this exact tx" (confirmed live against
+/// preprod: `rejected by amaru: Transaction is a duplicate`) -- not a failure, just a
+/// sign this rebroadcast was redundant and should back off rather than repeat.
+fn is_duplicate_rejection(message: &str) -> bool {
+    message.to_lowercase().contains("duplicate")
+}
+
 impl Cli {
     async fn run(self) -> anyhow::Result<()> {
         let sources = self
@@ -61,11 +72,11 @@ impl Cli {
         let network_parameters = config.network_parameters();
         let network_id = network_parameters.network_id;
 
-        let fee_signing_key: SigningKey = config.fee_key.clone().into();
-        let fee_vkh = Hash::<28>::new(fee_signing_key.to_verification_key());
-        let fee_pay_hash = <[u8; 28]>::from(fee_vkh);
+        let wallet_signing_key: SigningKey = config.wallet_key.clone().into();
+        let wallet_vkh = Hash::<28>::new(wallet_signing_key.to_verification_key());
+        let wallet_pay_hash = <[u8; 28]>::from(wallet_vkh);
         let change_address: Address<kind::Any> =
-            Address::new(network_id, Credential::from_key(fee_vkh)).into();
+            Address::new(network_id, Credential::from_key(wallet_vkh)).into();
 
         let keyring = config.keyring.clone().build();
         anyhow::ensure!(
@@ -77,7 +88,7 @@ impl Cli {
 
         let host_pay_hash = match &config.ref_script_host {
             Some(host) => <[u8; 28]>::from(host.payment().select(|h| h, |h| h)),
-            None => fee_pay_hash,
+            None => wallet_pay_hash,
         };
         let ref_script = floe::find_ref_script(&mut floe, host_pay_hash)
             .await
@@ -92,7 +103,8 @@ impl Cli {
             min_single: config.min_single,
             panic_settle: subbit_core::Duration::from_millis(config.panic_settle_ms),
         };
-        let wait_interval = StdDuration::from_secs(config.wait_interval_secs);
+        let rebroadcast_interval = StdDuration::from_secs(config.wait_interval_secs);
+        let mut pending = Pending::default();
 
         let mut ticker = interval(TokioDuration::from_secs(config.poll_interval_secs));
         loop {
@@ -101,11 +113,11 @@ impl Cli {
             let utxos = match floe::search_all(&mut floe).await {
                 Ok(utxos) => utxos,
                 Err(e) => {
-                    warn!(error = %e, "searching Floe failed, will retry next tick");
+                    warn!(error = ?e, "searching Floe failed, will retry next tick");
                     continue;
                 }
             };
-            let channels: BTreeMap<_, _> = utxos
+            let all_channels: BTreeMap<_, _> = utxos
                 .iter()
                 .filter_map(|utxo| {
                     let channel = floe::channel_from_utxo(utxo).ok()?;
@@ -114,108 +126,198 @@ impl Cli {
                 })
                 .collect();
 
+            // Reconcile submissions from earlier ticks before deciding what
+            // is spendable now. A positive `ReadTx` means landed; a channel
+            // input missing from the live set means the tx can never land,
+            // because something else already spent that input.
+            let mut landed = BTreeSet::new();
+            for id in pending.ids().collect::<Vec<_>>() {
+                match floe::read_tx(&mut floe, id).await {
+                    Ok(true) => {
+                        landed.insert(id);
+                    }
+                    Ok(false) => {}
+                    Err(e) => warn!(
+                        %id,
+                        error = ?e,
+                        "checking an in-flight claim batch failed, leaving it pending"
+                    ),
+                }
+            }
+            let live_inputs: BTreeSet<Input> = all_channels.keys().cloned().collect();
+            for (id, resolution) in pending.advance(&landed, &live_inputs) {
+                match resolution {
+                    Resolution::Landed => info!(%id, "in-flight claim batch confirmed"),
+                    Resolution::Dead => warn!(
+                        %id,
+                        "in-flight claim batch can no longer land -- its channel input was spent \
+                         by another tx; freeing its inputs for a fresh attempt"
+                    ),
+                }
+            }
+
+            // Rebroadcast whatever is still pending, byte-for-byte. A tx Floe
+            // accepted but never observed is most likely to land by being
+            // offered again; a duplicate submission is harmless.
+            let observed_at = std::time::Instant::now();
+            let due = pending.due_for_rebroadcast(observed_at, rebroadcast_interval);
+            let mut rebroadcast = Vec::new();
+            let mut duplicate_rejected = Vec::new();
+            for (id, cbor) in &due {
+                match floe::submit_cbor(&mut floe, cbor).await {
+                    Ok(()) => {
+                        info!(%id, "rebroadcast in-flight claim batch");
+                        rebroadcast.push(*id);
+                    }
+                    // amaru already has this exact tx -- it's not failed, just not yet
+                    // reflected back through our own confirmation view. Back off this
+                    // one specifically rather than hammering it every tick for however
+                    // long that confirmation lag lasts (observed live: several minutes).
+                    Err(e) if is_duplicate_rejection(&e.to_string()) => {
+                        warn!(
+                            %id,
+                            error = ?e,
+                            "rebroadcast rejected as a duplicate -- already landed or still \
+                             pending under amaru's own view, backing off"
+                        );
+                        duplicate_rejected.push(*id);
+                    }
+                    Err(e) => warn!(
+                        %id,
+                        error = ?e,
+                        "rebroadcasting an in-flight claim batch failed, will retry"
+                    ),
+                }
+            }
+            pending.note_rebroadcast(&rebroadcast, observed_at);
+            pending.note_duplicate_rejected(&duplicate_rejected, observed_at);
+
+            // Anything an in-flight tx already spends must not be re-proposed
+            // or re-selected as fuel until that tx either lands or is dead.
+            let blocked = pending.inputs();
+            let channels: BTreeMap<_, _> = all_channels
+                .into_iter()
+                .filter(|(input, _)| !blocked.contains(input))
+                .collect();
+
             let summaries = match client.channel_summaries().await {
                 Ok(summaries) => summaries,
                 Err(e) => {
-                    warn!(error = %e, "fetching channel summaries failed, will retry next tick");
+                    warn!(error = ?e, "fetching channel summaries failed, will retry next tick");
                     continue;
                 }
             };
 
             let wants = decide::decide(&channels, &summaries, &decision_cfg, now());
             if wants.is_empty() {
-                info!("nothing to claim this tick");
+                info!(pending = pending.len(), "nothing to claim this tick");
                 continue;
             }
-            info!(count = wants.len(), "submitting claims this tick");
+            info!(
+                count = wants.len(),
+                pending = pending.len(),
+                "submitting claims this tick"
+            );
 
-            for chunk in wants.chunks(config.step_chunk) {
-                // One `?`-free unit per chunk, matching the
-                // search_all/channel_summaries fetches above: any
-                // failure anywhere in here (including a slow/stuck
-                // confirmation wait -- preprod confirmation lag is
-                // real-world variance, not a reason to take the whole
-                // daemon down) just warns and retries fresh next tick,
-                // rather than propagating out of `run` and exiting.
-                match submit_claim_batch(
+            let channel_outputs: BTreeMap<_, _> = utxos
+                .iter()
+                .filter_map(|utxo| floe::to_input_output(utxo).ok())
+                .filter(|(input, _)| channels.contains_key(input))
+                .collect();
+
+            let mut queue = Queue::new(network_parameters.clone(), config.build_config.clone());
+            queue
+                .settings_mut()
+                .set_change_address(change_address.clone());
+            if let Err(e) = queue
+                .settings_mut()
+                .set_reference_utxo(ref_script.0.clone(), ref_script.1.clone())
+            {
+                warn!(error = ?e, "reference utxo rejected, will retry next tick");
+                continue;
+            }
+            if let Err(e) = queue.add_utxos(channel_outputs) {
+                warn!(error = ?e, "staging channel utxos failed, will retry next tick");
+                continue;
+            }
+            for (input, want) in wants {
+                if let Err(e) = queue.propose(input.clone(), want) {
+                    warn!(%input, error = ?e, "a claim candidate no longer validates, skipping it");
+                }
+            }
+
+            // One submitted tx per `Queue::pick` -- drained by its own
+            // measured byte budget (`config.build_config.max_tx_size`),
+            // not a fixed-count chunk -- until nothing more is staged
+            // or something fails. A successful submission is tracked in
+            // `pending` rather than waited on here, so the next tick can
+            // keep rebroadcasting it while also making progress on other
+            // channels. Any failure just warns and retries next tick,
+            // rather than propagating out of `run` and exiting.
+            loop {
+                if let Err(e) = queue.pick(Bounds::default()) {
+                    if !matches!(e, BuildError::Empty) {
+                        warn!(error = ?e, "picking a claim batch failed, will retry next tick");
+                    }
+                    break;
+                }
+
+                let blocked = pending.inputs();
+                let fuel: BTreeMap<_, _> = match floe::search_by_pay_hash(
                     &mut floe,
-                    chunk,
-                    &network_parameters,
-                    &ref_script,
-                    &change_address,
-                    &keyring,
-                    &fee_signing_key,
-                    fee_pay_hash,
-                    config.wait_attempts,
-                    wait_interval,
+                    wallet_pay_hash,
+                    None,
                 )
                 .await
                 {
-                    Ok(id) => info!(%id, "claim batch confirmed"),
+                    Ok(utxos) => utxos
+                        .iter()
+                        .filter_map(|u| floe::to_input_output(u).ok())
+                        .filter(|(input, _)| !blocked.contains(input))
+                        .collect(),
                     Err(e) => {
-                        warn!(error = %e, "submitting claim batch failed, will retry next tick");
+                        warn!(error = ?e, "refetching fee-wallet utxos failed, will retry next tick");
+                        queue.unpick();
+                        break;
+                    }
+                };
+
+                let mut built = match queue.build(&fuel) {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        warn!(error = ?e, "building claim batch failed, will retry next tick");
+                        queue.unpick();
+                        break;
+                    }
+                };
+                let id = built.id();
+
+                if let Err(e) = keyring.sign(&mut built) {
+                    warn!(error = ?e, "signing claim batch failed, will retry next tick");
+                    queue.rollback(id);
+                    break;
+                }
+                built.sign(&wallet_signing_key);
+
+                match floe::submit(&mut floe, &built).await {
+                    Ok(submitted) => {
+                        let channel_inputs: BTreeSet<Input> = built
+                            .inputs()
+                            .filter(|input| channels.contains_key(input))
+                            .collect();
+                        info!(%submitted, "claim batch submitted; tracking until it lands");
+                        pending.insert(&built, channel_inputs);
+                        queue.finalize(submitted);
+                    }
+                    Err(e) => {
+                        warn!(error = ?e, "submitting claim batch failed, will retry next tick");
+                        queue.rollback(id);
                         break;
                     }
                 }
             }
         }
     }
-}
-
-/// Builds, signs, submits and waits-for-confirmation of one claim batch.
-/// Refetches `channel_utxos`/`fuel` fresh rather than reusing anything
-/// cached across chunks -- a prior chunk in this same tick may already
-/// have spent some of these, and Floe reads are cheap enough that
-/// there's no need to track staleness instead.
-#[allow(clippy::too_many_arguments)]
-async fn submit_claim_batch(
-    floe: &mut floe_client::grpc::Client,
-    chunk: &[(cardano_sdk::Input, subbit_tx::step::Want)],
-    network_parameters: &subbit_tx::NetworkParameters,
-    ref_script: &(cardano_sdk::Input, cardano_sdk::Output),
-    change_address: &cardano_sdk::Address<kind::Any>,
-    keyring: &subbit_claim::keyring::Keyring,
-    fee_signing_key: &SigningKey,
-    fee_pay_hash: [u8; 28],
-    wait_attempts: u32,
-    wait_interval: StdDuration,
-) -> anyhow::Result<Hash<32>> {
-    let channel_utxos = floe::search_all(floe)
-        .await
-        .context("refetching channel utxos")?
-        .iter()
-        .filter_map(|u| floe::to_input_output(u).ok())
-        .collect::<BTreeMap<_, _>>();
-    let fuel = floe::search_by_pay_hash(floe, fee_pay_hash, None)
-        .await
-        .context("refetching fee-wallet utxos")?
-        .iter()
-        .filter_map(|u| floe::to_input_output(u).ok())
-        .collect::<BTreeMap<_, _>>();
-
-    let mut tx = Tx::new(channel_utxos).context("staging tx")?;
-    for (input, want) in chunk {
-        tx.propose(input.clone(), want.clone())
-            .context("proposing step")?;
-    }
-    let mut built = tx
-        .build(
-            network_parameters,
-            Some(ref_script),
-            change_address.clone(),
-            &fuel,
-        )
-        .context("building tx")?;
-    keyring
-        .sign(&mut built)
-        .context("signing required signatories")?;
-    built.sign(fee_signing_key);
-
-    let id = floe::submit(floe, &built).await.context("submitting tx")?;
-    floe::wait_for_tx(floe, id, wait_attempts, wait_interval)
-        .await
-        .context("waiting for tx confirmation")?;
-    Ok(id)
 }
 
 #[tokio::main]

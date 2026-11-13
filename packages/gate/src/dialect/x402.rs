@@ -7,7 +7,7 @@
 use base64::Engine;
 use http::StatusCode;
 use subbit_l2_dto::{
-    ChannelStatus, CoreError, MacTtl, Terms,
+    ChannelStatus, Error, MacTtl, Terms,
     dialect::x402::{
         Payload, Request, Require, SCHEME, SubbitAccept, SubbitExtension, settlement,
         spec::ResourceInfo,
@@ -95,14 +95,14 @@ impl Dialect for X402 {
         )
     }
 
-    /// On `Unspendable` with a channel to report on, this is a
+    /// On `InsufficientFunds` with a channel to report on, this is a
     /// corrective `PAYMENT-REQUIRED` (same shape as `challenge`,
     /// `current` folded in) so the client can size its next attempt;
     /// anything else is a plain failed `Response`, no
     /// commitment identifier (nothing was committed).
-    fn error(&self, err: CoreError, quote: Quote, current: Option<ChannelStatus>) -> Wire {
+    fn error(&self, err: Error, quote: Quote, current: Option<ChannelStatus>) -> Wire {
         match (err, current) {
-            (CoreError::Unspendable, Some(status)) => required(quote, Some(status)),
+            (Error::InsufficientFunds, Some(status)) => required(quote, Some(status)),
             (err, current) => settlement_wire(
                 StatusCode::PAYMENT_REQUIRED,
                 String::new(),

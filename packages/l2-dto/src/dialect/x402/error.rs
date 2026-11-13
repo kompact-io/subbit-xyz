@@ -1,113 +1,90 @@
-//! `CoreError` is Subbit's own, dialect-agnostic error vocabulary
-//! (shared with `vanilla`, whose wire format serializes it as-is via
-//! its own `Display`). x402 defines a closed-looking but actually
-//! open `errorReason`/`invalidReason` string field (x402-specification-v2.md
-//! §5.3/§5.4: typed `string`, not an enum) with a documented standard
-//! vocabulary (§9) that generic clients special-case, plus room for a
-//! scheme to mint its own codes where none of the standard ones fit —
-//! the EVM `batch-settlement` binding already does this
-//! (`invalid_batch_settlement_evm_cumulative_amount_mismatch`).
-//!
-//! This is that translation for the Cardano `batch-settlement`
-//! binding: a closed `X402Error` enum (so a new `CoreError` variant
-//! fails to compile here until someone decides where it maps, rather
-//! than silently falling through) and the mapping from `CoreError`.
-//!
-//! `RateLimited` has no `X402Error` variant: rate limiting is an
-//! HTTP-layer concern (plain 429), not a payment-validity one, and
-//! callers SHOULD respond before constructing a `CoreError`-bearing
-//! `Response` at all. Nothing enforces that, though, so `from_core`
-//! stays total and falls back to `CoreError`'s own `Display` string
-//! for this one case, rather than mapping it to a code that would
-//! mislead a generic client or panicking on a reachable state.
+//! x402's `errorReason` is an open string (x402-specification-v2.md
+//! §5.3/§5.4), with a standard vocabulary (§9) plus room for a scheme
+//! to mint its own codes, as the EVM `batch-settlement` binding
+//! already does (`invalid_batch_settlement_evm_cumulative_amount_mismatch`).
+//! [`X402Error`] is that encoding for Cardano: a newtype over `Error`
+//! rather than a parallel enum, with `Display`/`FromStr` a faithful
+//! bijection -- one code per `Error` variant, in declaration order.
 
 use std::fmt;
+use std::str::FromStr;
 
-use crate::CoreError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// x402 `errorReason`/`invalidReason` codes this binding emits: the
-/// standard §9 vocabulary where it genuinely fits, and scheme-specific
-/// `invalid_batch_settlement_cardano_*` codes where nothing standard
-/// does.
+use crate::Error;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum X402Error {
-    /// `CoreError::Unspendable`.
-    InsufficientFunds,
-    /// `CoreError::NoChannel`, `NoIou`, `OldAuth`, `InvalidIou`. The
-    /// distinctions between these (no backing UTxO vs. no IOU yet vs.
-    /// a bad IOU signature) aren't ones any current client acts on
-    /// differently.
-    InvalidPayload,
-    /// `CoreError::InvalidAuth`: a bad liveness proof (`Pop`/`Mac`),
-    /// kept distinct from `InvalidPayload` because `subbit-stamp`'s
-    /// own x402 client matches on exactly this code to decide whether
-    /// to drop its cached `Mac` and fall back to a fresh `Pop`.
-    AuthInvalid,
-    /// `CoreError::Other`.
-    UnexpectedVerifyError,
-    /// `CoreError::OldIou`: the presented cumulative amount doesn't
-    /// exceed what's already committed. Mirrors the EVM binding's own
-    /// `invalid_batch_settlement_evm_cumulative_amount_mismatch`.
-    CumulativeAmountMismatch,
-    /// `CoreError::Inactive`: the channel is closed, settled, or
-    /// otherwise no longer usable.
-    ChannelInactive,
-    /// `CoreError::MutualNotSupported`.
-    MutualUnsupported,
-}
-
-impl X402Error {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            X402Error::InsufficientFunds => "insufficient_funds",
-            X402Error::InvalidPayload => "invalid_payload",
-            X402Error::AuthInvalid => "invalid_batch_settlement_cardano_auth_invalid",
-            X402Error::UnexpectedVerifyError => "unexpected_verify_error",
-            X402Error::CumulativeAmountMismatch => {
-                "invalid_batch_settlement_cardano_cumulative_amount_mismatch"
-            }
-            X402Error::ChannelInactive => "invalid_batch_settlement_cardano_channel_inactive",
-            X402Error::MutualUnsupported => "invalid_batch_settlement_cardano_mutual_unsupported",
-        }
-    }
-}
+pub struct X402Error(pub Error);
 
 impl fmt::Display for X402Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+        let s = match self.0 {
+            Error::Other => "unexpected_verify_error",
+            Error::NoChannel => "invalid_payload",
+            Error::Inactive => "invalid_batch_settlement_cardano_channel_inactive",
+            Error::OldAuth => "invalid_batch_settlement_cardano_auth_old",
+            Error::InvalidAuth => "invalid_batch_settlement_cardano_auth_invalid",
+            Error::NoIou => "invalid_batch_settlement_cardano_no_iou",
+            // Mirrors the EVM binding's own
+            // `invalid_batch_settlement_evm_cumulative_amount_mismatch`.
+            Error::OldIou => "invalid_batch_settlement_cardano_cumulative_amount_mismatch",
+            Error::InvalidIou => "invalid_batch_settlement_cardano_invalid_iou",
+            Error::InsufficientFunds => "insufficient_funds",
+            Error::RateLimited => "invalid_batch_settlement_cardano_rate_limited",
+            Error::MutualNotSupported => "invalid_batch_settlement_cardano_mutual_unsupported",
+        };
+        f.write_str(s)
     }
 }
 
-impl TryFrom<&CoreError> for X402Error {
-    /// `Err` only for `CoreError::RateLimited`, which has no code in
-    /// this binding's x402 vocabulary (see module docs).
-    type Error = ();
+/// The exact inverse of `Display`.
+impl FromStr for X402Error {
+    type Err = ();
 
-    fn try_from(err: &CoreError) -> Result<Self, Self::Error> {
-        match err {
-            CoreError::Unspendable => Ok(X402Error::InsufficientFunds),
-            CoreError::NoChannel
-            | CoreError::NoIou
-            | CoreError::OldAuth
-            | CoreError::InvalidIou => Ok(X402Error::InvalidPayload),
-            CoreError::InvalidAuth => Ok(X402Error::AuthInvalid),
-            CoreError::Other => Ok(X402Error::UnexpectedVerifyError),
-            CoreError::OldIou => Ok(X402Error::CumulativeAmountMismatch),
-            CoreError::Inactive => Ok(X402Error::ChannelInactive),
-            CoreError::MutualNotSupported => Ok(X402Error::MutualUnsupported),
-            CoreError::RateLimited => Err(()),
-        }
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let err = match s {
+            "unexpected_verify_error" => Error::Other,
+            "invalid_payload" => Error::NoChannel,
+            "invalid_batch_settlement_cardano_channel_inactive" => Error::Inactive,
+            "invalid_batch_settlement_cardano_auth_old" => Error::OldAuth,
+            "invalid_batch_settlement_cardano_auth_invalid" => Error::InvalidAuth,
+            "invalid_batch_settlement_cardano_no_iou" => Error::NoIou,
+            "invalid_batch_settlement_cardano_cumulative_amount_mismatch" => Error::OldIou,
+            "invalid_batch_settlement_cardano_invalid_iou" => Error::InvalidIou,
+            "insufficient_funds" => Error::InsufficientFunds,
+            "invalid_batch_settlement_cardano_rate_limited" => Error::RateLimited,
+            "invalid_batch_settlement_cardano_mutual_unsupported" => Error::MutualNotSupported,
+            _ => return Err(()),
+        };
+        Ok(X402Error(err))
     }
 }
 
-/// Total over every `CoreError`: this binding's x402 `errorReason`
-/// code where one exists, else `CoreError`'s own `Display` string
-/// (today, only for `RateLimited`) — never a panic on a reachable
-/// state.
-pub fn error_reason(err: &CoreError) -> String {
-    X402Error::try_from(err)
-        .map(|e| e.as_str().to_string())
-        .unwrap_or_else(|()| err.to_string())
+impl Serialize for X402Error {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for X402Error {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse()
+            .map_err(|()| serde::de::Error::custom(format!("unrecognized x402 error code: {s:?}")))
+    }
+}
+
+pub fn error_reason(err: &Error) -> String {
+    X402Error(*err).to_string()
+}
+
+/// The inverse of [`error_reason`]; an unrecognized code falls back
+/// to `Error::Other` rather than `None`.
+pub fn core_error(reason: &str) -> Error {
+    reason
+        .parse::<X402Error>()
+        .map(|x| x.0)
+        .unwrap_or(Error::Other)
 }
 
 #[cfg(test)]
@@ -115,62 +92,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unspendable_maps_to_insufficient_funds() {
-        assert_eq!(error_reason(&CoreError::Unspendable), "insufficient_funds");
-    }
-
-    #[test]
-    fn old_iou_maps_to_cumulative_amount_mismatch() {
-        assert_eq!(
-            error_reason(&CoreError::OldIou),
-            "invalid_batch_settlement_cardano_cumulative_amount_mismatch"
-        );
-    }
-
-    #[test]
-    fn inactive_maps_to_channel_inactive() {
-        assert_eq!(
-            error_reason(&CoreError::Inactive),
-            "invalid_batch_settlement_cardano_channel_inactive"
-        );
-    }
-
-    #[test]
-    fn mutual_not_supported_maps_to_mutual_unsupported() {
-        assert_eq!(
-            error_reason(&CoreError::MutualNotSupported),
-            "invalid_batch_settlement_cardano_mutual_unsupported"
-        );
-    }
-
-    #[test]
-    fn payload_shaped_errors_collapse_to_invalid_payload() {
+    fn every_error_round_trips_exactly_through_the_wire_string() {
         for err in [
-            CoreError::NoChannel,
-            CoreError::NoIou,
-            CoreError::OldAuth,
-            CoreError::InvalidIou,
+            Error::Other,
+            Error::NoChannel,
+            Error::Inactive,
+            Error::OldAuth,
+            Error::InvalidAuth,
+            Error::NoIou,
+            Error::OldIou,
+            Error::InvalidIou,
+            Error::InsufficientFunds,
+            Error::RateLimited,
+            Error::MutualNotSupported,
         ] {
-            assert_eq!(error_reason(&err), "invalid_payload");
+            assert_eq!(core_error(&error_reason(&err)), err);
         }
-    }
-
-    #[test]
-    fn invalid_auth_keeps_its_own_code() {
-        assert_eq!(
-            error_reason(&CoreError::InvalidAuth),
-            "invalid_batch_settlement_cardano_auth_invalid"
-        );
-    }
-
-    #[test]
-    fn other_maps_to_unexpected_verify_error() {
-        assert_eq!(error_reason(&CoreError::Other), "unexpected_verify_error");
-    }
-
-    #[test]
-    fn rate_limited_has_no_x402_code_and_falls_back_to_core_error_display() {
-        assert!(X402Error::try_from(&CoreError::RateLimited).is_err());
-        assert_eq!(error_reason(&CoreError::RateLimited), "rate limited");
     }
 }

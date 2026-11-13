@@ -8,7 +8,7 @@
 
 use http::{HeaderName, HeaderValue, StatusCode, header};
 use subbit_l2_dto::{
-    ChannelStatus, CoreError, MacTtl, Status,
+    ChannelStatus, Error, MacTtl, Status,
     dialect::vanilla::{Request, Response},
 };
 
@@ -74,14 +74,17 @@ impl Dialect for Vanilla {
         })
     }
 
-    /// No corrective shape of its own: `current` is ignored, always
-    /// just the bare error.
-    fn error(&self, err: CoreError, _quote: Quote, _current: Option<ChannelStatus>) -> Wire {
+    /// No corrective wire *shape* of its own (unlike x402's challenge),
+    /// but `current` still rides in `status.channel` same as a success
+    /// reply -- `Status::channel`'s own doc already covers this case
+    /// ("a failure that still has a channel to report on"), so the
+    /// client can resync instead of repeating a now-stale amount.
+    fn error(&self, err: Error, _quote: Quote, current: Option<ChannelStatus>) -> Wire {
         encode(Response {
             success: false,
             error: Some(err),
             status: Status {
-                channel: None,
+                channel: current,
                 mac: None,
             },
         })
@@ -269,6 +272,42 @@ mod tests {
         let wire = ctx.handle_spend(&headers_for(&payload), "/resource");
         let response = decode_wire(&wire);
         assert_eq!(response.status.channel.unwrap().spendable, Some(110));
+    }
+
+    #[test]
+    fn old_iou_rejection_still_carries_the_real_current_status() {
+        // Regression test: a stale (non-strictly-increasing) `Iou` amount
+        // used to get a bare `OldIou` error with `status.channel: None`
+        // (see `Vanilla::error`'s own doc, and `Ctx::dialect_error`'s --
+        // both used to special-case `InsufficientFunds` only). The client
+        // has no way to resync without this, so it just repeats the same
+        // stale amount forever -- see `plan-canary-l2-oldiou-backoff.md`.
+        let ctx = ctx();
+        let (sk, pk) = cryptoxide::ed25519::keypair(&[5u8; 32]);
+        let key = VerifyingKey::from(pk);
+        let tag = Tag::from(b"t".to_vec());
+        ctx.seed_channel_for_test(&Keytag::new(key, tag.clone()), 100);
+
+        // Same amount already committed -- `delta == 0`, `OldIou`.
+        let tbs = subbit_core::TagTbs::new(tag.clone(), 100).to_vec();
+        let signature = Signature::from(cryptoxide::ed25519::signature(&tbs, &sk));
+        let payload = Request::ById {
+            channel_id: ChannelId {
+                iou_key: key,
+                tag: tag.clone(),
+            },
+            commit: Commit::Iou(subbit_core::Iou::new(100, signature)),
+        };
+
+        let wire = ctx.handle_spend(&headers_for(&payload), "/resource");
+        assert_eq!(wire.status, StatusCode::PAYMENT_REQUIRED);
+        let response = decode_wire(&wire);
+        assert_eq!(response.error, Some(subbit_l2_dto::Error::OldIou));
+        let status = response
+            .status
+            .channel
+            .expect("a backed channel's rejection should still carry its real current status");
+        assert_eq!(status.iou.amount(), 100);
     }
 
     #[test]

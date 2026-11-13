@@ -37,7 +37,7 @@ fn sample_key(i: usize) -> Keytag {
 }
 
 /// Backed and committed for far more than `RUN_DURATION` could ever
-/// spend at `SPEND_COST` per op, so no thread ever hits `Unspendable`
+/// spend at `SPEND_COST` per op, so no thread ever hits `InsufficientFunds`
 /// and skews the measured throughput.
 fn funded_channel() -> Channel {
     Channel::new(

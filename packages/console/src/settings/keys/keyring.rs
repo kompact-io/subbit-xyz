@@ -74,6 +74,16 @@ struct Entry {
     key: SigningKeyHex,
     is_consumer: bool,
     is_iou: bool,
+    /// Flags this key as usable to sign a provider-required `Will`
+    /// (`Sub`/`Settle` -- see `subbit_tx::step::Will::signer`). Console was
+    /// originally consumer-only; this role exists purely so an admin
+    /// caller (`admin.rs`, gated behind the `admin` feature) can stage
+    /// *and* actually sign those, without forcing a provider identity into
+    /// the `is_consumer` namespace it doesn't belong in. `#[serde(default)]`
+    /// so a `Ctx` persisted before this field existed still deserializes
+    /// (as `false`).
+    #[serde(default)]
+    is_provider: bool,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -125,12 +135,14 @@ impl Keyring {
     /// the full "no duplicate keys and/or labels" invariant, checked
     /// eagerly here rather than left for `Consumers`/`IouKeys` to
     /// discover later.
+    #[allow(clippy::too_many_arguments)]
     pub fn insert(
         &mut self,
         label: String,
         key: SigningKeyHex,
         is_consumer: bool,
         is_iou: bool,
+        is_provider: bool,
         consumers: &Consumers,
         iou_keys: &IouKeys,
     ) -> Result<(), Error> {
@@ -152,6 +164,7 @@ impl Keyring {
                 key,
                 is_consumer,
                 is_iou,
+                is_provider,
             },
         );
         Ok(())
@@ -167,11 +180,13 @@ impl Keyring {
     /// key can't collide with another *signing* key by construction,
     /// but its derived identity can still collide with an independently
     /// added `consumers`/`iou_keys` entry.
+    #[allow(clippy::too_many_arguments)]
     pub fn generate(
         &mut self,
         label: String,
         is_consumer: bool,
         is_iou: bool,
+        is_provider: bool,
         consumers: &Consumers,
         iou_keys: &IouKeys,
     ) -> Result<SigningKeyHex, Error> {
@@ -192,6 +207,7 @@ impl Keyring {
                 key: key.clone(),
                 is_consumer,
                 is_iou,
+                is_provider,
             },
         );
         Ok(key)
@@ -221,6 +237,25 @@ impl Keyring {
             .map(|e| cardano_sdk::SigningKey::from(e.key.to_bytes()))
     }
 
+    /// The held signing key whose derived `consumer_hash()` matches
+    /// `vkh`, if any, and is flagged `is_provider` -- `submit`'s own
+    /// witness-aggregation step uses this the same way it uses
+    /// `signing_key_for_consumer`, just for a `Sub`/`Settle` Will's
+    /// provider-required signatory instead of a consumer one. The hash
+    /// itself is the same derivation either way (a vkh is a vkh); only
+    /// the role flag distinguishes which namespace a held key is being
+    /// used as.
+    pub fn signing_key_for_provider(
+        &self,
+        vkh: cardano_sdk::Hash<28>,
+    ) -> Option<cardano_sdk::SigningKey> {
+        let target = Hash28::from(<[u8; 28]>::from(vkh));
+        self.entries
+            .values()
+            .find(|e| e.is_provider && e.key.consumer_hash() == target)
+            .map(|e| cardano_sdk::SigningKey::from(e.key.to_bytes()))
+    }
+
     pub fn labels(&self) -> impl Iterator<Item = &String> {
         self.entries.keys()
     }
@@ -246,12 +281,20 @@ mod tests {
                 "alice".to_string(),
                 false,
                 false,
+                false,
                 &Consumers::default(),
                 &IouKeys::default(),
             )
             .unwrap();
         assert!(matches!(
-            keyring.generate("alice".to_string(), false, false, &Consumers::default(), &IouKeys::default()),
+            keyring.generate(
+                "alice".to_string(),
+                false,
+                false,
+                false,
+                &Consumers::default(),
+                &IouKeys::default()
+            ),
             Err(Error::LabelTaken(label)) if label == "alice"
         ));
     }
@@ -264,12 +307,21 @@ mod tests {
                 "alice".to_string(),
                 false,
                 false,
+                false,
                 &Consumers::default(),
                 &IouKeys::default(),
             )
             .unwrap();
         assert!(matches!(
-            keyring.insert("bob".to_string(), key, false, false, &Consumers::default(), &IouKeys::default()),
+            keyring.insert(
+                "bob".to_string(),
+                key,
+                false,
+                false,
+                false,
+                &Consumers::default(),
+                &IouKeys::default()
+            ),
             Err(Error::KeyTaken(label)) if label == "alice"
         ));
     }
@@ -283,6 +335,7 @@ mod tests {
         let key = Keyring::default()
             .generate(
                 "scratch".to_string(),
+                false,
                 false,
                 false,
                 &Consumers::default(),
@@ -302,6 +355,7 @@ mod tests {
                 key,
                 true,
                 false,
+                false,
                 &consumers,
                 &IouKeys::default()
             ),
@@ -317,6 +371,7 @@ mod tests {
                 "alice".to_string(),
                 true,
                 true,
+                false,
                 &Consumers::default(),
                 &IouKeys::default(),
             )
@@ -340,6 +395,7 @@ mod tests {
                 "alice".to_string(),
                 false,
                 false,
+                false,
                 &Consumers::default(),
                 &IouKeys::default(),
             )
@@ -355,6 +411,7 @@ mod tests {
         let key = keyring
             .generate(
                 "alice".to_string(),
+                false,
                 false,
                 false,
                 &Consumers::default(),

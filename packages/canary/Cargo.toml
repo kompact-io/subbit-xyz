@@ -15,14 +15,12 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 blake3.workspace = true
 clap = { workspace = true, features = ["derive"] }
 ed25519-dalek = { workspace = true, default-features = false, features = [
   "rand_core",
 ] }
 hex.workspace = true
-http.workspace = true
 rand.workspace = true
 reqwest.workspace = true
 reqwest-middleware.workspace = true
@@ -42,7 +40,10 @@ floe-client = { workspace = true, default-features = false, features = [
   "grpc",
 ] }
 subbit-claim = { workspace = true }
-subbit-console = { workspace = true, default-features = false }
+subbit-config = { workspace = true, features = ["clap"] }
+subbit-console = { workspace = true, default-features = false, features = [
+  "admin",
+] }
 subbit-core = { workspace = true, features = ["serde"] }
 subbit-index = { workspace = true, features = ["native"] }
 subbit-wallet = { workspace = true, default-features = false }
@@ -56,3 +57,6 @@ subbit-l1-dto = { workspace = true, features = ["serde"] }
 subbit-l2-dto = { workspace = true, features = ["vanilla", "x402", "serde"] }
 subbit-gate = { workspace = true, features = ["main", "vanilla", "x402"] }
 subbit-tx = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+subbit-cost = { workspace = true }

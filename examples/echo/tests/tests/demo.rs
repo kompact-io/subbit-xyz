@@ -101,7 +101,7 @@ async fn deposit(gate_addr: SocketAddr, seed: [u8; 32], tag: &[u8]) {
         subbed: Some(0),
     };
     let endpoint = format!("http://{gate_addr}/v1/a/backings").parse().unwrap();
-    subbit_index::client::Client::new(endpoint)
+    subbit_index::gate::Gate::new(endpoint)
         .send(vec![row])
         .await
         .expect("push backing");

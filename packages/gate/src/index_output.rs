@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use subbit_core::{Asset, Duration, Hash28};
-use subbit_index_dto::{Channel as IndexChannel, Item, Line, Output, OutputReference, Stagish};
+use subbit_index_dto::{Channel as IndexChannel, Channels, Item, Line, OutputReference, Stagish};
 use subbit_l1_dto::Constants;
 
 use crate::{Backing, Keytag};
@@ -144,8 +144,26 @@ fn choose_for_keytag(
         .filter_map(|line| line.0.last())
         .map(|item| item.txo_ref)
         .collect();
+    let backing = best_opened(lines(), tip_height, finality_depth, cumulative_owed);
+    // Diagnostic only (see `plan-canary-l2-oldiou-backoff.md`'s `NoChannel`-flapping
+    // investigation): whenever an `Opened` line exists but produced no backing, surface
+    // the exact heights involved -- `tip_height < item height` (a non-monotonic/regressed
+    // tip) is the one case `candidate`'s `saturating_sub` can never clear, regardless of
+    // `finality_depth`, and looks identical to "just not deep enough yet" without this.
+    if backing.is_none() {
+        for line in lines().filter(|line| matches!(tip_stagish(line), Some(Stagish::Opened { .. })))
+        {
+            let heights: Vec<u64> = line.0.iter().map(|item| item.created_at.height).collect();
+            tracing::debug!(
+                tip_height,
+                finality_depth,
+                item_heights = ?heights,
+                "choose_for_keytag: opened line has no candidate clearing depth"
+            );
+        }
+    }
     Decision {
-        backing: best_opened(lines(), tip_height, finality_depth, cumulative_owed),
+        backing,
         safe_to_settle,
     }
 }
@@ -162,7 +180,7 @@ fn choose_for_keytag(
 /// it off whatever's already stored before this new `Output` changes
 /// anything).
 pub fn choose_backings(
-    output: &Output,
+    output: &Channels,
     filter: &ProviderFilter,
     finality_depth: u64,
     cumulative_owed: &BTreeMap<Keytag, u64>,
@@ -346,8 +364,8 @@ mod tests {
         }
     }
 
-    fn output(channels: Vec<IndexChannel>) -> Output {
-        Output {
+    fn output(channels: Vec<IndexChannel>) -> Channels {
+        Channels {
             tip: point(100),
             channels,
         }

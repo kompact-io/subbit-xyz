@@ -18,6 +18,7 @@ name = "mock-index"
 path = "src/bin/mock.rs"
 required-features = ["native"]
 
+# DEPRECATE?
 [[bin]]
 name = "naive-index"
 path = "src/bin/naive.rs"
@@ -30,20 +31,7 @@ required-features = ["native"]
 
 [features]
 default = ["native"]
-# `cardano`'s own I/O (`search`/`search_all`/`search_history`) is
-# generic over `floe_client::Backend`, not tied to a transport -- this
-# picks which of `floe-client`'s own transport features backs it.
-# Deliberately NOT mirrored by a `wasm` feature forwarding to
-# `floe-client/wasm` itself: that feature pins an internal
-# `wasm-bindgen` version conflicting with ours. `subbit-console`
-# instead supplies its own `Backend` impl under our pin
-# (`wasm/transport.rs`) and calls `search_all`/`search_history` here
-# directly -- no JSON hand-off, no separate floe-client wasm bundle.
 grpc = ["floe-client/grpc"]
-# Everything the 3 bins + `client`'s gate-ingest HTTP POST need: a
-# native async runtime, a native HTTP stack, CLI parsing, logging. Not
-# needed by a pure read-and-reconstruct consumer (`cardano`/`lineage`
-# alone), which is exactly what makes those two reusable from wasm32.
 native = [
   "grpc",
   "dep:tokio",

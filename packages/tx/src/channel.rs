@@ -99,6 +99,11 @@ impl Channel {
         &self.constants
     }
 
+    /// Shorthand for `self.constants().keytag()`.
+    pub fn keytag(&self) -> String {
+        self.constants.keytag()
+    }
+
     pub fn variables(&self) -> &Variables {
         &self.variables
     }
@@ -127,6 +132,24 @@ impl Channel {
             constants: self.constants.clone(),
             stage: self.variables.stage().clone(),
         }
+    }
+
+    /// Estimated CBOR-encoded byte size of this channel's own output
+    /// (address + value + inline datum) as it would actually appear
+    /// in a transaction -- measured by building the real shape and
+    /// encoding it (network doesn't affect byte length, only the
+    /// address header's network nibble, so any network works here),
+    /// not a hand-picked guess. A native-asset channel's own
+    /// `Constants`/`Value` cost measurably more than lovelace's --
+    /// that's read off directly here, not special-cased.
+    pub fn size_estimate(&self) -> usize {
+        let address = crate::validator::address(
+            cardano_sdk::NetworkId::from(cardano_sdk::Network::Preprod),
+            None,
+        );
+        let output = Output::new(address.into(), self.buffered_value())
+            .with_datum(crate::to_plutus_data(self.datum()));
+        output.to_cbor().len()
     }
 
     pub fn can(&self) -> Vec<crate::step::Can> {

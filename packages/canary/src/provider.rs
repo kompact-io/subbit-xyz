@@ -1,57 +1,42 @@
-//! `Provider`: the three real sibling processes a provider actually is -- `gate`, `index`,
-//! `claim` -- orchestrated together as one unit with one combined lifetime. `index`/`claim`
-//! are spawned once `gate` is up and `claim`'s fee wallet is funded, so they start as `None`.
+//! `Provider`: the three sibling processes a provider actually is -- `gate`, `index`,
+//! `claim` -- orchestrated together as one unit with one combined lifetime.
 
 mod claim;
 mod gate;
 mod index;
 
-use claim::ClaimProcess;
-use gate::GateProcess;
-use index::IndexProcess;
-
 use anyhow::Context;
+use cardano_sdk::{Address, address::kind};
+use subbit_core::Duration;
 
 use crate::identity::Identity;
 
-pub struct Provider {
-    gate: GateProcess,
-    _index: Option<IndexProcess>,
-    _claim: Option<ClaimProcess>,
+/// Everything needed to build the provider's three child-process configs.
+pub struct Config {
+    pub(crate) provider_identity: Identity,
+    pub(crate) claim_wallet: Identity,
+    pub(crate) ref_script_host: Address<kind::Shelley>,
+    pub(crate) unit_cost: u64,
+    pub(crate) close_period: Duration,
+    pub(crate) finality_depth: u64,
+    pub(crate) floe_endpoint: String,
 }
 
-impl Provider {
-    pub async fn spawn(config: subbit_gate::Config) -> anyhow::Result<Self> {
-        Ok(Self {
-            gate: GateProcess::spawn(config).await?,
-            _index: None,
-            _claim: None,
-        })
-    }
-
-    pub fn base_url(&self) -> String {
-        self.gate.base_url()
-    }
-
-    /// Spawns a real `subbit-gate` configured for this run's own demo `Terms`.
-    pub async fn spawn_demo(
-        flat_cost: u64,
-        provider_identity: Identity,
-        close_period: subbit_core::Duration,
-        finality_depth: u64,
-    ) -> anyhow::Result<Self> {
+impl Config {
+    /// The `subbit-gate` config for this run's demo `Terms`.
+    pub fn gate(&self) -> subbit_gate::Config {
         let mut config = subbit_gate::Config::default();
-        config.terms.provider = provider_identity.hash28;
+        config.terms.provider = self.provider_identity.hash28;
         config.terms.asset = subbit_l2_dto::Asset::Lovelace;
-        config.terms.close_period = close_period;
+        config.terms.close_period = self.close_period;
         config.terms.script =
             subbit_core::Hash28::from(<[u8; 28]>::from(subbit_tx::VALIDATOR.hash));
-        config.terms.catalog = demo_catalog(flat_cost);
-        config.finality_depth = finality_depth;
+        config.terms.catalog = crate::catalog::dto(self.unit_cost);
+        config.finality_depth = self.finality_depth;
         // Latency investigation (results-ii.md): the defaults' cumulative
-        // thresholds are tiny relative to real ADA amounts, so they --
+        // thresholds are tiny relative to ADA amounts, so they --
         // not the 1s/30s timers -- are what's actually triggering
-        // flush/checkpoint under canary's load. Bumped to real ADA
+        // flush/checkpoint under canary's load. Bumped to ADA
         // scale to let the timers dominate instead and see if that
         // changes the measured L2 latency.
         config.db.buffer.max_pending = 10_000_000; // 10 ADA
@@ -59,68 +44,83 @@ impl Provider {
         config.db.exposure.single_write_threshold = 1_000_000; // 1 ADA
         config.db.exposure.max_cumulative_exposure = 10_000_000; // 10 ADA
         config.db.exposure.max_checkpoint_interval = std::time::Duration::from_secs(1);
-        println!("canary: spawning provider");
-        let provider = Self::spawn(config).await?;
-        println!("canary: provider up at {}", provider.base_url());
-        Ok(provider)
+        config
     }
 
-    /// Spawns the real `lineage-index`/`subbit-claim` binaries alongside this already-running
-    /// gate, completing the three-process `Provider`. `claim_fee_seed`'s own wallet must already
-    /// be funded on-chain before this is called.
-    pub async fn spawn_support_processes(
-        &mut self,
-        floe_endpoint: &str,
-        network: cardano_sdk::Network,
-        claim_fee_seed: [u8; 32],
-        ref_script_host: cardano_sdk::Address<cardano_sdk::address::kind::Shelley>,
-        provider_signing_key: [u8; 32],
-    ) -> anyhow::Result<()> {
-        let base_url = self.base_url();
+    /// The `lineage-index` config for a running gate at `base_url`.
+    pub fn index(&self, base_url: &str) -> anyhow::Result<subbit_index::Config> {
+        Ok(subbit_index::Config {
+            cardano: subbit_index::cardano::Config {
+                endpoint: self.floe_endpoint.clone(),
+            },
+            gate: format!("{base_url}/v1/a/index").parse()?,
+            // Short poll so the scenario doesn't sit idle waiting on it.
+            poll_interval_secs: 5,
+        })
+    }
 
-        println!("canary: spawning the real lineage-index binary");
-        self._index = Some(
-            IndexProcess::spawn(floe_endpoint, &base_url)
-                .await
-                .context("spawning lineage-index")?,
+    /// The `subbit-claim` config for a running gate at `base_url`.
+    pub fn claim(&self, base_url: &str) -> anyhow::Result<subbit_claim::config::Config> {
+        let mut keys = std::collections::BTreeMap::new();
+        keys.insert(
+            "provider".to_string(),
+            subbit_claim::keyring::KeyHex::from(self.provider_identity.seed()),
         );
-
-        println!("canary: spawning the real subbit-claim binary");
-        self._claim = Some(
-            ClaimProcess::spawn(
-                floe_endpoint,
-                &base_url,
-                network,
-                claim_fee_seed,
-                ref_script_host,
-                provider_signing_key,
-            )
-            .await
-            .context("spawning subbit-claim")?,
-        );
-
-        println!(
-            "canary: real subbit-claim/lineage-index now running as child processes -- \
-             claiming/indexing is fully asynchronous from here"
-        );
-        Ok(())
+        Ok(subbit_claim::config::Config {
+            floe: subbit_claim::floe::Config {
+                endpoint: self.floe_endpoint.clone(),
+            },
+            network: cardano_sdk::Network::Preprod,
+            wallet_key: subbit_claim::keyring::KeyHex::from(self.claim_wallet.seed()),
+            ref_script_host: Some(self.ref_script_host.clone()),
+            keyring: subbit_claim::keyring::Config { keys },
+            server_endpoint: format!("{base_url}/v1/a/channels").parse()?,
+            // Short poll + generous waits -- the scenario, not a
+            // deployment economizing on request volume.
+            poll_interval_secs: 5,
+            min_total: 5_000_000,
+            min_single: 500_000,
+            panic_settle_ms: 3_600_000,
+            build_config: Default::default(),
+            wait_interval_secs: 10,
+        })
     }
 }
 
-/// This run's own demo cost catalog: a flat per-request cost for `/v1/spend/echo`.
-fn demo_catalog(flat_cost: u64) -> subbit_l2_dto::Catalog {
-    subbit_l2_dto::Catalog {
-        resources: vec![(
-            "/{*rest}".to_string(),
-            subbit_l2_dto::ResourceInfo {
-                cost: subbit_l2_dto::Cost::ByRequest(flat_cost),
-                description: "Canary smoke-test resource".to_string(),
-                mime_type: "text/plain".to_string(),
-                max_timeout_seconds: 60,
-                service_name: None,
-                tags: None,
-                icon_url: None,
-            },
-        )],
+pub struct Provider {
+    gate: gate::Process,
+    _index: index::Process,
+    _claim: claim::Process,
+}
+
+impl Provider {
+    /// Spawns `subbit-gate`, then `lineage-index`/`subbit-claim` against it.
+    /// `config.claim_wallet` must already be funded on-chain.
+    pub async fn spawn(config: Config) -> anyhow::Result<Self> {
+        println!("canary: spawning the subbit-gate binary");
+        let gate = gate::Process::spawn(config.gate())
+            .await
+            .context("spawning subbit-gate")?;
+        let base_url = gate.base_url();
+
+        println!("canary: spawning the lineage-index binary");
+        let index = index::Process::spawn(config.index(&base_url)?)
+            .await
+            .context("spawning lineage-index")?;
+
+        println!("canary: spawning the subbit-claim binary");
+        let claim = claim::Process::spawn(config.claim(&base_url)?)
+            .await
+            .context("spawning subbit-claim")?;
+
+        Ok(Self {
+            gate,
+            _index: index,
+            _claim: claim,
+        })
+    }
+
+    pub fn base_url(&self) -> String {
+        self.gate.base_url()
     }
 }

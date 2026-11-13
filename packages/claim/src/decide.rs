@@ -22,11 +22,12 @@ fn output_ref(input: &Input) -> OutputReference {
 }
 
 pub struct DecisionConfig {
-    /// Skip a tick's tx entirely unless the sum of its Sub/Settle
-    /// candidates' claimable deltas clears this.
+    /// Drop this tick's `Sub` candidates entirely unless the sum of their
+    /// claimable deltas clears this. Never applies to a `Settle` -- see
+    /// `decide`'s own doc comment.
     pub min_total: u64,
-    /// Drop a channel from this tick's Sub/Settle candidates if its own
-    /// claimable delta doesn't clear this.
+    /// Drop a channel from this tick's `Sub` candidates if its own
+    /// claimable delta doesn't clear this. Never applies to a `Settle`.
     pub min_single: u64,
     /// See this function's own doc comment.
     pub panic_settle: Duration,
@@ -57,20 +58,24 @@ pub struct DecisionConfig {
 /// since `End` reclaims whatever deposit remains back to the consumer,
 /// not the provider. A provider-only key can't sign it, so it isn't
 /// this function's job to propose it.
+///
+/// `min_single`/`min_total` gate `Sub` candidates only. An eligible
+/// `Settle` is always proposed once the channel is actually `Closed` and
+/// safe to settle (this function's own doc above) -- a channel's final
+/// claim isn't optional economic upside the way an in-flight `Sub` is,
+/// it's the one chance to recover whatever's left before `Elapse` can
+/// take it instead, so it bypasses both thresholds regardless of size.
 pub fn decide(
     channels: &BTreeMap<Input, Channel>,
     summaries: &BTreeMap<Keytag, ChannelSummary>,
     cfg: &DecisionConfig,
     now: Instant,
 ) -> Vec<(Input, Want)> {
-    // `economic`: Sub/Settle candidates whose own claimable delta is
-    // what justifies spending a tick's tx on them -- gated by
-    // `min_single`/`min_total` below. `mandatory`: a `Closed` channel
-    // eligible to settle (see this function's doc comment) but whose
-    // delta doesn't clear `min_single` -- `Variables::settle` treats a
-    // zero/small gain as a legitimate Closed -> Settled transition in
-    // its own right, so these bypass both thresholds entirely rather
-    // than getting stuck waiting for `panic_settle` to force them.
+    // `economic`: `Sub` candidates whose own claimable delta is what
+    // justifies spending a tick's tx on them -- gated by
+    // `min_single`/`min_total` below. `mandatory`: every eligible
+    // `Settle` (see this function's doc comment), unconditionally --
+    // never gated by either threshold, regardless of its own delta.
     let mut economic: Vec<(Input, Want, u64)> = Vec::new();
     let mut mandatory: Vec<(Input, Want)> = Vec::new();
 
@@ -90,18 +95,13 @@ pub fn decide(
                     economic.push((input.clone(), Want::Sub { iou: iou.clone() }, delta));
                 }
             }
-            Stage::Closed { subbed, elapse_at } => {
-                let delta = iou.amount().saturating_sub(*subbed);
+            Stage::Closed { elapse_at, .. } => {
                 let confirmed_safe = summary.backing.is_none()
                     || summary.safe_to_settle.contains(&output_ref(input));
                 let past_panic = elapse_at.saturating_sub(now) <= cfg.panic_settle;
                 let eligible = confirmed_safe || !summary.is_active || past_panic;
                 if eligible {
-                    if delta >= cfg.min_single {
-                        economic.push((input.clone(), Want::Settle { iou: iou.clone() }, delta));
-                    } else {
-                        mandatory.push((input.clone(), Want::Settle { iou: iou.clone() }));
-                    }
+                    mandatory.push((input.clone(), Want::Settle { iou: iou.clone() }));
                 }
             }
             Stage::Settled => {}
@@ -328,6 +328,34 @@ mod tests {
             summary.safe_to_settle = vec![output_ref(&input(9))];
         }
         let wants = decide(&channels, &summaries, &cfg(0, 1, 60), Instant::from_secs(0));
+        assert_eq!(wants.len(), 1);
+        assert!(matches!(wants[0].1, Want::Settle { .. }));
+    }
+
+    #[test]
+    fn a_settle_ignores_min_total_and_min_single_entirely() {
+        // A large delta that would clear both thresholds on its own, but with
+        // no `Sub` candidate in play to let `economic`'s total ever clear
+        // `min_total` -- under the old "Settle is economic like Sub" rule
+        // this would've been dropped. A channel's final claim must not be
+        // held hostage by a threshold tuned for in-flight `Sub` economics.
+        let elapse_at = Instant::from_secs(1_000);
+        let (channels, mut summaries) = channels_summaries(
+            channel(Stage::Closed {
+                subbed: 0,
+                elapse_at,
+            }),
+            summary(true, 10_000_000),
+        );
+        for summary in summaries.values_mut() {
+            summary.backing = None;
+        }
+        let wants = decide(
+            &channels,
+            &summaries,
+            &cfg(5_000_000, 500_000, 60),
+            Instant::from_secs(0),
+        );
         assert_eq!(wants.len(), 1);
         assert!(matches!(wants[0].1, Want::Settle { .. }));
     }

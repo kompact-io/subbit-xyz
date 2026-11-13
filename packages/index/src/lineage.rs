@@ -1,26 +1,11 @@
-//! Lineage reconstruction: see `packages/index/README.md`'s "Lineage"
-//! and "Validation" sections for the design this implements.
-//!
-//! Each poll recomputes every tracked channel's full history from
-//! scratch (no cached state across polls -- see the README's
-//! "stateless" design assumption).
-//!
-//! Deliberately doesn't attempt the README's multi-input cross-channel
-//! safety fallback (if one input in a multi-channel tx is ill-formed,
-//! deem every lineage that tx touched Ended): that needs the whole Tx
-//! (`ReadTx`), and Floe prunes TxOs by spend time, not creation time --
-//! a tx's own inputs can already be gone by the time we'd look them up.
-//! The single-input mutual-tx case is still covered, for free, by the
-//! `(constants, stake_hash)` partition below: a mutual spend's output
-//! either doesn't match the partition key or doesn't exist, so no
-//! continuing edge is ever found for it.
-
+/// TODO :: Rationalize this file
+/// It is a mixture of cardano/ floe/ subbit logic (but not all of it)
 use std::collections::{BTreeMap, BTreeSet};
 
 use floe_dto_http::query::{ChainPoint, Utxo};
 use subbit_core::Hash28;
 use subbit_index_dto::{
-    Channel, ConstantsExt, Item, Line, Output, OutputReference, Point, Stagish,
+    Channel, Channels, ConstantsExt, Item, Line, OutputReference, Point, Stagish,
 };
 use subbit_l1_dto::{Constants, Stage};
 
@@ -166,15 +151,15 @@ fn build_lines(items: Vec<Parsed>) -> Vec<Line> {
 /// of `Utxo`s (live or spent -- see `cardano::search_history`'s own
 /// doc) plus the ledger tip observed alongside them. Pure and
 /// synchronous: no I/O, no `floe_client::Backend`, nothing wasm-unsafe
-/// -- this is deliberately the reusable half of `build_output` below,
+/// -- this is deliberately the reusable half of `build_channels` below,
 /// so a consumer that already has `Utxo`/`ChainPoint` data by some
 /// other means (e.g. `subbit-console`'s wasm build, handed JSON from
 /// `floe-client`'s *separately built* wasm bundle over plain JS -- see
 /// this crate's `[features]` doc on why that bundle is never a Cargo
 /// dependency edge from in here) gets the exact same reconstruction
-/// `build_output` uses natively, without needing a live `Backend` at
+/// `build_channels` uses natively, without needing a live `Backend` at
 /// all.
-pub fn reconstruct(utxos: Vec<Utxo>, ledger_tip: ChainPoint) -> Output {
+pub fn reconstruct(utxos: Vec<Utxo>, ledger_tip: ChainPoint) -> Channels {
     let mut by_key: BTreeMap<(Constants, Option<Hash28>), Vec<Parsed>> = BTreeMap::new();
 
     let tip = chain_point_to_point(&ledger_tip);
@@ -196,13 +181,13 @@ pub fn reconstruct(utxos: Vec<Utxo>, ledger_tip: ChainPoint) -> Output {
         })
         .collect();
 
-    Output { tip, channels }
+    Channels { tip, channels }
 }
 
 /// Fetches and reconstructs every channel at the subbit validator,
 /// from any provider -- provider/asset/close_period filtering is the
 /// server's job, not this one (`subbit_gate::index_output`'s own
-/// doc), since this `Output` may genuinely be provider-agnostic: more
+/// doc), since this `Channels` may genuinely be provider-agnostic: more
 /// than one provider's server can consume the same lineage report.
 ///
 /// Generic over `impl floe_client::Backend`, not tied to `grpc::Client`
@@ -210,7 +195,9 @@ pub fn reconstruct(utxos: Vec<Utxo>, ledger_tip: ChainPoint) -> Output {
 /// reusable against any transport. (Not reusable from `subbit-console`'s
 /// wasm build specifically, though -- see `reconstruct`'s own doc for
 /// why, and use that instead there.)
-pub async fn build_output(client: &mut impl floe_client::Backend) -> floe_client::Result<Output> {
+pub async fn build_channels(
+    client: &mut impl floe_client::Backend,
+) -> floe_client::Result<Channels> {
     let pay_hash = <[u8; 28]>::from(subbit_tx::VALIDATOR.hash);
     let (utxos, ledger_tip) = cardano::search_history(client, pay_hash, None).await?;
     Ok(reconstruct(utxos, ledger_tip))

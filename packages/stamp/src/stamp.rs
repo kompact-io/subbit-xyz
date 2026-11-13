@@ -137,10 +137,25 @@ impl Stamp {
     /// Mints an `Iou` covering `cost` on top of what's already spent,
     /// committing/spending it eagerly (see `apply_status`'s own doc
     /// comment on why that's safe).
+    ///
+    /// The `Iou` doubles as the request's authorization (`ById` carries
+    /// no `Pop`/`Mac`), so it must be *strictly newer* than the one the
+    /// server already holds or it's an `OldIou` reject. Whenever what's
+    /// already committed covers `spent + cost` (a resync off a server
+    /// status can leave `spent` well below `committed`), the amount is
+    /// bumped to `committed + 1` instead: one lovelace over-commit buys
+    /// a fresh signature, and the runway it covers is still consumed by
+    /// `spent` as normal.
     fn commit(&mut self, cost: u64) -> Commit {
         let required = self.spent() + cost;
-        let iou = self.id.iou(required);
-        self.cache.set_committed(required);
+        let committed = self.committed().unwrap_or(0);
+        let amount = if required > committed {
+            required
+        } else {
+            committed + 1
+        };
+        let iou = self.id.iou(amount);
+        self.cache.set_committed(amount);
         self.cache.set_spent(required);
         Commit::Iou(iou)
     }
@@ -277,6 +292,40 @@ mod tests {
             } => assert_eq!(iou.amount(), 120),
             other => panic!("expected ById Iou, got {other:?}"),
         }
+    }
+
+    /// The loop `canary` hit live (`plan-canary-l2-oldiou-backoff.md`,
+    /// 2026-11-12): a resync leaves `spent < committed`, and the next
+    /// `ById` mint of `spent + cost` lands exactly on `committed`, which
+    /// the server rejects as `OldIou` -- forever, since the rejection's
+    /// status resyncs `spent` to the same place again.
+    #[test]
+    fn by_id_mints_a_strictly_newer_iou_when_committed_already_covers_the_cost() {
+        let mut stamp = Stamp::new(id(1), Duration::from_secs(60)).by_id();
+        // Server holds 200, of which 100 is spent.
+        let status = status_for(stamp.id(), 200, Some(100));
+        stamp.apply_status(status, None).unwrap();
+        assert_eq!(stamp.spent(), 100);
+        let payload = stamp.next_request(100);
+        match payload {
+            Request::ById {
+                commit: Commit::Iou(iou),
+                ..
+            } => assert_eq!(iou.amount(), 201),
+            other => panic!("expected ById Iou, got {other:?}"),
+        }
+        assert_eq!(stamp.committed(), Some(201));
+        // The runway is consumed, not re-minted: spent tracks cost.
+        assert_eq!(stamp.spent(), 200);
+        // Once the runway is gone, the mint is sized by spent + cost again.
+        match stamp.next_request(100) {
+            Request::ById {
+                commit: Commit::Iou(iou),
+                ..
+            } => assert_eq!(iou.amount(), 300),
+            other => panic!("expected ById Iou, got {other:?}"),
+        }
+        assert_eq!(stamp.spent(), 300);
     }
 
     #[test]

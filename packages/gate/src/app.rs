@@ -65,6 +65,7 @@ pub fn router(state: AppState) -> Router {
         .nest(
             "/a",
             Router::<AppState>::new()
+                // TODO :: Deprecate in favour of index
                 .route("/backings", post(handle_backings))
                 .route("/index", post(handle_index))
                 .route("/ious", get(handle_ious))
@@ -80,22 +81,6 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Both handlers below hand the whole `HeaderMap` to `Ctx` as-is, not
-/// a fixed set of fields read out of it first: which headers matter
-/// (`Content-Length` for `ByEgress`, `SUBBIT_COST` for `ByClaim`, ...)
-/// is a cost-model concern, decided by `Catalog` (see
-/// `Catalog::actual_cost`), not something this boundary pins down.
-/// That's what keeps this signature stable as cost models change.
-///
-/// Run on `spawn_blocking` rather than called inline: `Ctx::handle_spend`/
-/// `Ctx::handle_refund` are synchronous all the way down (crypto
-/// verify, the `Db` write), and tokio's async worker pool is small and
-/// fixed (roughly core count) -- an inline call there blocks that
-/// worker from servicing any other task for the call's duration.
-/// `benches/worker_threads.rs`'s Test B measured this as a real,
-/// consistent ~40% throughput improvement -- not the dominant factor
-/// in any real-world ceiling measured so far, but worth taking for
-/// free.
 async fn handle_spend(
     State(state): State<AppState>,
     Path(path): Path<String>,
@@ -126,14 +111,17 @@ async fn handle_refund(
     .await
 }
 
-/// Shared body of `handle_spend`/`handle_refund`: acquire a
-/// `blocking_limit` permit, root `path` (axum's `{*path}` wildcard
-/// strips the leading slash -- matching matchit's own catch-all
-/// semantics, see `subbit_cost::Catalog`'s own doc comment -- but
-/// every resource path `Ctx`/`Catalog` deal in is leading-slash-
-/// rooted; this is the one boundary responsible for that conversion),
-/// then run `f` on `spawn_blocking`. See `handle_spend`'s own doc
-/// comment on why this runs off the async worker pool at all.
+/// Run on `spawn_blocking` rather than called inline.
+///
+/// `Ctx::handle_spend`/ `Ctx::handle_refund` are synchronous and
+/// tokio's async worker pool is small and fixed (roughly core count).
+/// An inline call blocks the worker from servicing any other task for
+/// the call's duration.
+///
+/// `benches/worker_threads.rs`'s Test B measured this as a real,
+/// consistent ~40% throughput improvement. Not measured IRL.
+///
+/// but should be a "free" win.
 async fn run_spend_blocking(
     state: AppState,
     path: String,
@@ -148,6 +136,7 @@ async fn run_spend_blocking(
         .await
         .expect("blocking_limit semaphore never closes");
     let ctx = state.ctx;
+    // Glue axum reportde path with what matchit requires (must start with `/`)
     let path = format!("/{path}");
     into_axum_response(
         tokio::task::spawn_blocking(move || {
@@ -211,14 +200,12 @@ async fn handle_backings(State(state): State<AppState>, body: Bytes) -> AxumResp
     }
 }
 
-/// The real index pipeline's target: a full `subbit_index_dto::Output`
-/// lineage report, from which this server does its own "Downstream"
-/// choosing (see `index_output`'s module doc). `/backings` stays
-/// mounted alongside this, unchanged, for the simpler naive-index
-/// path (no lineage, no server-side choosing needed).
+/// Apply Index
+/// FIXME :: streamline handling. Does not need to be a standalone function.
+/// Naming is poor, typing is poor.
 #[tracing::instrument(skip_all, fields(channels), err(Debug))]
 fn decode_and_apply_index(state: &AppState, body: &Bytes) -> Result<usize, AdminError> {
-    let output = minicbor::decode::<subbit_index_dto::Output>(body)?;
+    let output = minicbor::decode::<subbit_index_dto::Channels>(body)?;
     let channels = output.channels.len();
     tracing::Span::current().record("channels", channels);
     state.ctx.apply_output(output)?;

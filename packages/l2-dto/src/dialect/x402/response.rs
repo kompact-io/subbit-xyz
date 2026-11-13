@@ -1,21 +1,10 @@
-/// Subbit's own name for `spec::SettlementResponse`, concretely typed
-/// over `extensions` the one way Subbit ever fills it in (the spec's
-/// own generic name is reachable at `super::spec::SettlementResponse`).
 pub type Response = super::spec::SettlementResponse<SubbitExtension>;
 
-/// The crate root's `Status`: x402's own name for it as the payload
-/// riding in `extensions`.
 pub type SubbitExtension = crate::Status;
 
-/// `response.success`/`.error` are hoisted straight onto the
-/// envelope's own fields; `response.status` is the part x402 has no
-/// field of its own for, so it rides in `extensions`. `transaction`
-/// is `batch-settlement`'s own commitment identifier. No `payer`:
-/// Subbit already identifies the payer by the channel's own
-/// `Keytag`, which `transaction` already carries on success.
-///
-/// `error_reason` is this binding's x402 vocabulary (`super::error`),
-/// not `CoreError`'s own `Display` string — see that module for why.
+/// `status` rides in `extensions`, x402 has no field for it.
+/// `transaction` is `batch-settlement`'s commitment identifier; no
+/// `payer` field, Subbit identifies the payer by `Keytag` already.
 pub fn settlement(response: crate::Response, transaction: String, network: String) -> Response {
     let error_reason = response.error.as_ref().map(super::error_reason);
     Response {
@@ -37,7 +26,7 @@ pub fn extension(response: &Response) -> Option<SubbitExtension> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ChannelStatus, CoreError, MacTtl};
+    use crate::{ChannelStatus, Error, MacTtl};
     use subbit_core::{Iou, Signature};
 
     fn status() -> ChannelStatus {
@@ -101,7 +90,7 @@ mod tests {
         let response = settlement(
             crate::Response {
                 success: false,
-                error: Some(CoreError::InvalidAuth),
+                error: Some(Error::InvalidAuth),
                 status: SubbitExtension {
                     channel: None,
                     mac: None,
@@ -123,7 +112,7 @@ mod tests {
         let response = settlement(
             crate::Response {
                 success: false,
-                error: Some(CoreError::Unspendable),
+                error: Some(Error::InsufficientFunds),
                 status: SubbitExtension {
                     channel: Some(status()),
                     mac: None,

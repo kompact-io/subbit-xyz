@@ -1,4 +1,6 @@
+mod catalog;
 mod chain;
+mod config;
 mod consumer;
 mod identity;
 mod orchestrator;
@@ -7,56 +9,35 @@ mod provider;
 mod status;
 mod time;
 
-use std::sync::Arc;
+use std::path::Path;
 
 use anyhow::Context;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
-use consumer::{Consumer, Dialect};
+use consumer::{AgentConfig, Consumer};
 use orchestrator::Orchestrator;
+
+const CLAIM_FEE_LOVELACE: u64 = 5_000_000;
 
 #[derive(Parser)]
 struct Cli {
-    /// One roster line, `<name>[:<modifier>]=<count>` -- e.g. `alice=5`, `richy:x402=3`.
-    #[arg(long = "persona")]
-    personas: Vec<String>,
+    #[command(flatten)]
+    sources: subbit_config::Args,
 
-    /// The catalog is a single route of fixed cost.
-    #[arg(long, default_value_t = 100)]
-    flat_cost: u64,
+    #[command(subcommand)]
+    command: Command,
+}
 
-    /// Resume an interrupted run from this round instead of round 0.
-    #[arg(long, default_value_t = 0)]
-    resume: usize,
-
+#[derive(Subcommand)]
+enum Command {
+    /// Write a starter config to --config and exit.
+    Init,
+    /// Run the scenario.
+    Run,
+    /// Print current status (channels, stages, _etc_).
+    Status,
     /// Abandon the current scenario and tear down every channel.
-    #[arg(long)]
-    tidy: bool,
-
-    /// Print current status (channels, stages, _etc_)
-    #[arg(long)]
-    status: bool,
-
-    /// Upper bound on consumer *index* to scan for `--status`/`--tidy`.
-    #[arg(long, default_value_t = 256)]
-    scan_consumers: usize,
-
-    /// Floe gRPC endpoint.
-    #[arg(long, default_value = "https://grpc.floe.kompact.io")]
-    floe_endpoint: String,
-
-    /// Block depth the spawned server requires before treating a lineage item as backing.
-    #[arg(long, default_value_t = 1)]
-    finality_depth: u64,
-
-    /// Skip the `Elapse` demo; every consumer settles normally via `subbit-claim` instead.
-    #[arg(long)]
-    no_elapse: bool,
-
-    /// Fixed lovelace target each `:burst` persona commits to, overriding the
-    /// default full-deposit stop condition -- e.g. `1000000` for exactly 1 ADA.
-    #[arg(long)]
-    burst_target_lovelace: Option<u64>,
+    Tidy,
 }
 
 #[tokio::main]
@@ -76,92 +57,115 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    let l2_seed_hex = std::env::var("L2_SEED_HEX")
-        .context("L2_SEED_HEX (hex-encoded 32-byte root seed) must be set")?;
-    let l2_seed: [u8; 32] = hex::decode(l2_seed_hex.trim())
-        .context("L2_SEED_HEX is not valid hex")?
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("L2_SEED_HEX must decode to 32 bytes"))?;
+    let mut sources = cli
+        .sources
+        .into_sources(Path::new("subbit-canary-config.toml"));
+    // The existing `L2_SEED_HEX`/`WALLET_SKEY` env vars are unprefixed.
+    sources.env_prefix = Some(sources.env_prefix.unwrap_or(""));
 
-    let signing_key_hex = std::env::var("WALLET_SKEY").context(
-        "WALLET_SKEY (hex-encoded 32-byte signing key of an already-funded preprod wallet) \
-         must be set",
-    )?;
-    let signing_key: [u8; 32] = hex::decode(signing_key_hex.trim())
-        .context("WALLET_SKEY is not valid hex")?
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("WALLET_SKEY must decode to 32 bytes"))?;
+    if matches!(cli.command, Command::Init) {
+        config::Config::write_default(sources.base)?;
+        println!("wrote starter config to {}", sources.base.display());
+        return Ok(());
+    }
 
-    println!("canary: building preprod chain session (real Floe, real wallet)");
-    let floe_endpoint = cli.floe_endpoint.clone();
-    let chain = chain::Chain::build_preprod(floe_endpoint.clone(), signing_key).await?;
-    dispatch(cli, l2_seed, chain, floe_endpoint).await
+    let config = config::Config::load(&sources)?;
+    let command = cli.command;
+
+    let l2_seed = config.l2_seed()?;
+    let signing_key = config.wallet_skey()?;
+
+    println!("canary: building preprod chain session (Floe, wallet)");
+    let chain = chain::Chain::build_preprod(config.floe_endpoint.clone(), signing_key).await?;
+    dispatch(config, command, l2_seed, chain).await
 }
 
 /// Picks `tidy`/`status`/the default `orchestrator::run`.
 async fn dispatch(
-    cli: Cli,
+    config: config::Config,
+    command: Command,
     l2_seed: [u8; 32],
     mut chain: chain::Chain,
-    floe_endpoint: String,
 ) -> anyhow::Result<()> {
-    if cli.status {
-        return status::run(l2_seed, cli.scan_consumers, chain).await;
+    if matches!(command, Command::Status) {
+        return status::run(l2_seed, config.scan_consumers, chain).await;
     }
 
-    let provider_identity = identity::Identity::from_seed(identity::provider_seed(&l2_seed));
-    chain.register("provider", provider_identity.seed())?;
+    let elapse_margin = subbit_core::Duration::from_secs(config.elapse_margin_secs);
+    let close_period = subbit_core::Duration::from_secs(config.close_period_secs);
 
-    if cli.tidy {
-        let mut consumers = Vec::with_capacity(cli.scan_consumers);
-        for i in 0..cli.scan_consumers {
+    let provider_identity = identity::Identity::from_seed(identity::provider_seed(&l2_seed));
+    chain.register("provider", provider_identity.seed(), chain::Role::Provider)?;
+    let claim_wallet = identity::Identity::from_seed(identity::claim_wallet_seed(&l2_seed));
+    chain.register("claim-wallet", claim_wallet.seed(), chain::Role::Consumer)?;
+
+    if matches!(command, Command::Tidy) {
+        let mut consumers = Vec::with_capacity(config.scan_consumers);
+        for i in 0..config.scan_consumers {
             let (identity, seed, tag) = consumer::identity_for(&l2_seed, i);
-            chain.register(format!("consumer-{i}"), identity.seed())?;
-            consumers.push(Arc::new(Consumer::new(
-                seed,
-                tag,
-                None,
-                Dialect::Vanilla,
-                "",
-            )?));
+            chain.register(
+                format!("consumer-{i}"),
+                identity.seed(),
+                chain::Role::Consumer,
+            )?;
+            consumers.push(Consumer::init(seed, tag, None, elapse_margin).await?);
         }
-        let mut orchestrator = Orchestrator::new_teardown(chain, provider_identity, consumers);
+        let mut orchestrator = Orchestrator::new_tidy(
+            chain,
+            provider_identity,
+            consumers,
+            config.floe_endpoint,
+            claim_wallet,
+            close_period,
+        );
         return orchestrator.tidy().await;
     }
 
-    let provider = provider::Provider::spawn_demo(
-        cli.flat_cost,
+    // subbit-claim pays its own fees/collateral, so its wallet is funded before it's spawned.
+    chain
+        .fund_address(claim_wallet.address(chain.network_id()), CLAIM_FEE_LOVELACE)
+        .await
+        .context("funding the spawned subbit-claim's own wallet")?;
+
+    let provider_config = config.provider_config(
         provider_identity,
-        orchestrator::close_period(),
-        cli.finality_depth,
-    )
-    .await?;
-    let roster = consumer::plan_roster(&l2_seed, &cli.personas, cli.burst_target_lovelace)?;
+        claim_wallet,
+        chain.change_address_shelley(),
+    );
+    let provider = provider::Provider::spawn(provider_config).await?;
+    let roster = consumer::plan_roster(&l2_seed, &config.personas, config.burst_target_lovelace)?;
     let mut consumers = Vec::with_capacity(roster.len());
-    for (i, seat) in roster.into_iter().enumerate() {
-        chain.register(format!("consumer-{i}"), seat.identity.seed())?;
-        let consumer = consumer::build_consumer(
-            seat.seed,
-            seat.tag,
-            provider.base_url(),
-            seat.persona_name,
-            seat.behavior,
+    for (i, consumer) in roster.into_iter().enumerate() {
+        chain.register(
+            format!("consumer-{i}"),
+            consumer.identity.seed(),
+            chain::Role::Consumer,
+        )?;
+        let consumer = Consumer::init(
+            consumer.seed,
+            consumer.tag,
+            Some(AgentConfig {
+                provider_base_url: provider.base_url(),
+                behavior: consumer.behavior,
+            }),
+            elapse_margin,
         )
         .await?;
-        consumers.push(Arc::new(consumer));
+        consumers.push(consumer);
     }
 
-    let claim_fee_identity = identity::Identity::from_seed(identity::claim_fee_seed(&l2_seed));
-    chain.register("claim-fee", claim_fee_identity.seed())?;
     let mut orchestrator = Orchestrator::new(
         chain,
         provider,
         provider_identity,
         consumers,
-        cli.resume,
-        floe_endpoint,
-        claim_fee_identity,
-        !cli.no_elapse,
+        config.resume,
+        config.max_rounds,
+        config.round_poll_upper_bound_secs,
+        config.floe_endpoint,
+        claim_wallet,
+        config.require_claim_win,
+        close_period,
     );
     if let Err(e) = orchestrator.check() {
         println!("canary: {e:#} -- tidying this run's own consumers before continuing");

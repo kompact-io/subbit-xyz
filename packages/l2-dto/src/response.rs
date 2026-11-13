@@ -2,9 +2,9 @@ use minicbor::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{ChannelStatus, CoreError, MacTtl};
+use crate::{ChannelStatus, Error, MacTtl};
 
-/// The part of a `Response` x402 has no field of its own for, so it
+/// The part of `Response` x402 has no field of its own for, so it
 /// rides in `extensions` there; vanilla carries it inline.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -13,20 +13,18 @@ pub struct Status {
     /// to report on (e.g. exceeded capacity).
     #[n(0)]
     pub channel: Option<ChannelStatus>,
-    /// Present only after a `Pop`-authenticated request: a session
-    /// shortcut for the client's next one.
+    /// Present only after a `Pop`-authenticated request.
     #[n(1)]
     pub mac: Option<MacTtl>,
 }
 
-/// What a provider reports back after a spend/refund.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Response {
     #[n(0)]
     pub success: bool,
     #[n(1)]
-    pub error: Option<CoreError>,
+    pub error: Option<Error>,
     #[n(2)]
     pub status: Status,
 }
@@ -59,7 +57,7 @@ mod tests {
     fn failure_roundtrips_over_cbor() {
         let response = Response {
             success: false,
-            error: Some(CoreError::InvalidAuth),
+            error: Some(Error::InvalidAuth),
             status: Status {
                 channel: None,
                 mac: None,

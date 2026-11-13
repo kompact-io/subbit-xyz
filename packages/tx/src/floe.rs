@@ -30,13 +30,9 @@ pub enum OutputError {
 }
 
 /// Full-fidelity conversion of a Floe `TxOutput` into the
-/// `cardano_sdk::Output` the tx builder (`crate::tx::Tx`) actually needs
-/// -- address, value (incl. native assets), datum and (when present) a
-/// reference script, byte-for-byte off the wire. See `subbit_claim::
-/// floe::to_output`'s own doc for why this must round-trip `script`
-/// faithfully and why bech32 text (not `amaru_kernel::address::Address`
-/// directly) is the bridge between Floe's wire DTOs and `cardano_sdk`'s
-/// own (still pallas-backed) `Address`.
+/// `cardano_sdk::Output` the tx builder (`crate::tx::Queue`) actually
+/// needs -- address, value (incl. native assets), datum and (when
+/// present) a reference script, byte-for-byte off the wire.
 pub fn to_output(output: &floe_dto_http::cardano::TxOutput) -> Result<Output, OutputError> {
     let bech32 = output.address.0.to_bech32().ok_or(OutputError::Address)?;
     let address = Address::<kind::Any>::from_str(&bech32).map_err(|_| OutputError::Address)?;

@@ -17,8 +17,10 @@
 
 use base64::Engine;
 use subbit_l2_dto::ChannelStatus;
+use subbit_l2_dto::Error as CoreError;
 use subbit_l2_dto::dialect::x402::{
-    KnownExtra, Payload, Request, Require, Response, SCHEME, SubbitAccept, SubbitExtra, extension,
+    KnownExtra, Payload, Request, Require, Response, SCHEME, SubbitAccept, SubbitExtra, core_error,
+    extension,
 };
 
 use crate::Stamp;
@@ -79,8 +81,8 @@ pub static PAYMENT_RESPONSE_HEADER: &str = "PAYMENT-RESPONSE";
 pub enum Error {
     #[error("failed to decode response header")]
     Decode,
-    #[error("server error: {0}")]
-    Protocol(String),
+    #[error("server error: {0:?}")]
+    Protocol(CoreError),
     #[error(transparent)]
     Core(#[from] ResponseError),
 }
@@ -150,16 +152,19 @@ fn apply_settlement(stamp: &mut Stamp, resp: Response) -> Result<(), Error> {
     if let Some(status) = ext.and_then(|e| e.channel) {
         stamp.apply_status(status, None)?;
     }
-    // x402's `error_reason` is this binding's own vocabulary
-    // (`subbit_l2_dto::dialect::x402::error`), not `CoreError`'s raw
-    // `Display` string -- `vanilla` matches `CoreError` directly
-    // instead, since it has no such translation.
-    if error_reason.as_deref()
-        == Some(subbit_l2_dto::dialect::x402::X402Error::AuthInvalid.as_str())
-    {
+    // `error_reason` rides the wire as this binding's own x402
+    // vocabulary (`subbit_l2_dto::dialect::x402::error`); `core_error`
+    // translates it back to `CoreError` so this matches exactly the
+    // same way `vanilla::apply` does, on the real typed value rather
+    // than a dialect-specific string.
+    let err = error_reason
+        .as_deref()
+        .map(core_error)
+        .unwrap_or(CoreError::Other);
+    if err == CoreError::InvalidAuth {
         stamp.clear_mac();
     }
-    Err(Error::Protocol(error_reason.unwrap_or_default()))
+    Err(Error::Protocol(err))
 }
 
 fn apply_required(
@@ -181,11 +186,17 @@ fn apply_required(
     if let Some(status) = accept.as_ref().and_then(channel_status) {
         stamp.apply_status(status, None)?;
     }
-    Err(Error::Protocol(
-        required
-            .error
-            .unwrap_or_else(|| "payment required".to_string()),
-    ))
+    // `required.error` is free text today (gate always leaves it
+    // unset -- see its own doc), not necessarily this binding's
+    // vocabulary; `core_error` still gives a best-effort classification
+    // (falling back to `Other`) rather than this module keeping its
+    // own separate "payment required" string.
+    let err = required
+        .error
+        .as_deref()
+        .map(core_error)
+        .unwrap_or(CoreError::Other);
+    Err(Error::Protocol(err))
 }
 
 fn channel_status(accept: &SubbitAccept) -> Option<ChannelStatus> {
@@ -296,9 +307,9 @@ mod tests {
     }
 
     /// Parity with `dialect::vanilla`'s own
-    /// `response_clears_the_cached_mac_on_invalid_auth` -- x402 only
-    /// has `error_reason` (a stringified `CoreError`) to recognize this
-    /// from, not a typed match, but the reaction must be the same.
+    /// `response_clears_the_cached_mac_on_invalid_auth` -- `core_error`
+    /// recovers the same typed `CoreError` from x402's own wire
+    /// vocabulary, so the reaction is driven by an identical match.
     #[test]
     fn response_clears_the_cached_mac_on_invalid_auth() {
         let mut stamp = stamp();
@@ -336,7 +347,7 @@ mod tests {
         let failure_body = encode(&settlement(
             subbit_l2_dto::Response {
                 success: false,
-                error: Some(subbit_l2_dto::CoreError::InvalidAuth),
+                error: Some(subbit_l2_dto::Error::InvalidAuth),
                 status: subbit_l2_dto::dialect::x402::SubbitExtension {
                     channel: None,
                     mac: None,
@@ -362,7 +373,7 @@ mod tests {
         let body = encode(&settlement(
             subbit_l2_dto::Response {
                 success: false,
-                error: Some(subbit_l2_dto::CoreError::InvalidIou),
+                error: Some(subbit_l2_dto::Error::InvalidIou),
                 status: subbit_l2_dto::dialect::x402::SubbitExtension {
                     channel: None,
                     mac: None,
@@ -373,10 +384,9 @@ mod tests {
         ));
         let err =
             response(&mut stamp, &mut accepted, &accept_always, Some(&body), None).unwrap_err();
-        assert!(matches!(
-            err,
-            Error::Protocol(msg) if msg == "invalid_payload"
-        ));
+        // The x402 wire mapping is a faithful bijection now, so this
+        // round-trips to the exact original variant.
+        assert!(matches!(err, Error::Protocol(CoreError::InvalidIou)));
         assert_eq!(stamp.committed(), None);
     }
 
@@ -387,7 +397,7 @@ mod tests {
         let body = encode(&settlement(
             subbit_l2_dto::Response {
                 success: false,
-                error: Some(subbit_l2_dto::CoreError::Unspendable),
+                error: Some(subbit_l2_dto::Error::InsufficientFunds),
                 status: subbit_l2_dto::dialect::x402::SubbitExtension {
                     channel: Some(status_for(&stamp, 7_000, Some(0))),
                     mac: None,
@@ -423,7 +433,11 @@ mod tests {
         let body = encode(&required);
         let err =
             response(&mut stamp, &mut accepted, &accept_always, None, Some(&body)).unwrap_err();
-        assert!(matches!(err, Error::Protocol(msg) if msg == "cumulative mismatch"));
+        // "cumulative mismatch" isn't this binding's own wire
+        // vocabulary (gate never actually sets `Require.error` today
+        // -- see `core_error`'s own doc), so it falls back to `Other`
+        // rather than misclassifying as something specific.
+        assert!(matches!(err, Error::Protocol(CoreError::Other)));
         assert_eq!(stamp.committed(), Some(7_000));
         assert!(accepted.is_some());
     }

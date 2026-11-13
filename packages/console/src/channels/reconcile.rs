@@ -6,7 +6,7 @@
 //! should stay that way; this is where declared data (`Terms`) and
 //! observed data (`Constants`, from `subbit-l1-dto`, not `subbit-tx` --
 //! same "depend on the pure DTO, not the tx-building crate" boundary
-//! `subbit-tx`'s own `floe` feature already uses) get compared.
+//! this crate's own `floe.rs` uses) get compared.
 //!
 //! Mirrors `subbit-index`'s `naive.rs` precedent: a declared-config type
 //! (`naive::Config`) and an observed type are kept separate and joined

@@ -2,13 +2,14 @@
 
 use rand::SeedableRng;
 use rand::rngs::StdRng;
+use subbit_core::Tag;
 
 use crate::identity::{self, Identity};
 
 use super::persona::{self, Behavior};
 
-/// Consumer index `i`'s identity material, used by both a real roster seat and a teardown placeholder.
-pub(crate) fn identity_for(l2_seed: &[u8; 32], i: usize) -> (Identity, [u8; 32], Vec<u8>) {
+/// Consumer index `i`'s identity material, used by both a roster seat and a tidy placeholder.
+pub(crate) fn identity_for(l2_seed: &[u8; 32], i: usize) -> (Identity, [u8; 32], Tag) {
     let seed = identity::consumer_seed(l2_seed, i);
     let tag = identity::tag_for(l2_seed, i);
     (Identity::from_seed(seed), seed, tag)
@@ -24,8 +25,7 @@ fn rng_from_seed(l2_seed: &[u8; 32]) -> StdRng {
 pub(crate) struct PlannedConsumer {
     pub identity: Identity,
     pub seed: [u8; 32],
-    pub tag: Vec<u8>,
-    pub persona_name: String,
+    pub tag: Tag,
     pub behavior: Behavior,
 }
 
@@ -53,22 +53,26 @@ pub(crate) fn plan_roster(
         .map(|(i, persona)| {
             let (identity, seed, tag) = identity_for(l2_seed, i);
             let mut behavior = persona.generate(&mut rng);
-            if let (Some(target), Some(burst)) = (burst_target_lovelace, behavior.burst.as_mut()) {
-                burst.commit_max = target;
+            if let (Some(target), Some(cutoff)) =
+                (burst_target_lovelace, behavior.amount_cutoff.as_mut())
+            {
+                *cutoff = target;
             }
             println!(
-                "canary: [{i}] {} -- dialect={:?} deposit={} adds={:?} spend_counts={:?}",
+                "canary: [{i}] {} -- dialect={:?} level={:?} deposit={} adds={:?} pace={:?} \
+                 amount_cutoff={:?}",
                 persona.name,
                 behavior.dialect,
+                behavior.level,
                 behavior.deposit,
                 behavior.add_amounts,
-                behavior.spend_counts
+                behavior.pace,
+                behavior.amount_cutoff,
             );
             Ok(PlannedConsumer {
                 identity,
                 seed,
                 tag,
-                persona_name: persona.name.clone(),
                 behavior,
             })
         })

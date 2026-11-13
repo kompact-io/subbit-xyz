@@ -3,7 +3,7 @@
 //! equivalent of this module is `subbit-gate`'s `dialect::vanilla`.
 
 use subbit_core::base64::{from_base64, to_base64};
-use subbit_l2_dto::{CoreError, Status, dialect::vanilla::Response};
+use subbit_l2_dto::{Error as CoreError, Status, dialect::vanilla::Response};
 
 use crate::Stamp;
 use crate::stamp::ResponseError;
@@ -53,6 +53,22 @@ fn apply(stamp: &mut Stamp, result: Response) -> Result<(), Error> {
     let err = result.error.unwrap_or(CoreError::Other);
     if err == CoreError::InvalidAuth {
         stamp.clear_mac();
+    }
+    // A rejection can still carry the channel's real current status
+    // (gate attaches one whenever there's a real, backed channel behind
+    // the error -- see `Ctx::dialect_error`'s own doc). Adopt it the
+    // same way a success reply would (`apply_status` verifies the
+    // iou's signature before trusting it) so the next attempt is sized
+    // off gate's truth instead of repeating this same stale amount
+    // forever. Concurrent requests from other seats racing this same
+    // channel aren't this crate's concern -- `apply_status` already
+    // only ever moves `committed` forward, never back.
+    if let Status {
+        channel: Some(status),
+        mac,
+    } = result.status
+    {
+        stamp.apply_status(status, mac)?;
     }
     Err(Error::Protocol(err))
 }
@@ -119,6 +135,29 @@ mod tests {
         let result = success(status_for(&stamp, 7_000, Some(3_000)));
         let bytes = minicbor::to_vec(&result).unwrap();
         response_bytes(&mut stamp, &bytes).unwrap();
+        assert_eq!(stamp.committed(), Some(7_000));
+    }
+
+    #[test]
+    fn response_resyncs_committed_from_an_old_iou_rejection() {
+        // Parity with x402's own
+        // `response_still_commits_the_status_carried_by_a_capacity_failure`:
+        // a rejection that still carries the channel's real current status
+        // (now true of `OldIou` too, see `Vanilla::error`'s gate-side own
+        // doc) must be adopted, not discarded, so the next mint is sized
+        // off gate's truth instead of repeating the same stale amount.
+        let mut stamp = stamp();
+        let result = Response {
+            success: false,
+            error: Some(CoreError::OldIou),
+            status: Status {
+                channel: Some(status_for(&stamp, 7_000, Some(3_000))),
+                mac: None,
+            },
+        };
+        let envelope = subbit_core::base64::to_base64(&result);
+        let err = response(&mut stamp, &envelope).unwrap_err();
+        assert!(matches!(err, Error::Protocol(CoreError::OldIou)));
         assert_eq!(stamp.committed(), Some(7_000));
     }
 

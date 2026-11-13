@@ -1,6 +1,7 @@
 //! Consumer-side L1 actions via `subbit_console::Ctx` + `submit`/`upload_reference_script`/
 //! `send_payment` over a `subbit_wallet::Embedded` wallet.
 
+use anyhow::Context;
 use subbit_console::{Ctx, SigningKeyHex};
 use subbit_core::Hash28;
 use subbit_tx::{
@@ -40,6 +41,16 @@ macro_rules! retry_transient {
             }
         }
     }};
+}
+
+/// Which keyring namespace `Chain::register` flags an identity under --
+/// `Consumer` for every consumer (and the claim wallet, which
+/// only ever needs to sign its own fuel inputs), `Provider` for the one
+/// provider identity, so `Chain::stage_settle`'s admin Will can actually
+/// find a local key covering its required signer.
+pub enum Role {
+    Consumer,
+    Provider,
 }
 
 pub struct Chain {
@@ -90,10 +101,39 @@ impl Chain {
         Ok(chain)
     }
 
-    /// Registers `seed`'s derived identity as a consumer-flagged keyring entry under `label`.
-    pub fn register(&mut self, label: impl Into<String>, seed: [u8; 32]) -> anyhow::Result<()> {
+    /// Registers `seed`'s derived identity as a keyring entry under `label`, flagged
+    /// `is_consumer` or `is_provider` per `role` -- never both, since no canary identity is
+    /// ever genuinely both at once.
+    pub fn register(
+        &mut self,
+        label: impl Into<String>,
+        seed: [u8; 32],
+        role: Role,
+    ) -> anyhow::Result<()> {
+        let (is_consumer, is_provider) = match role {
+            Role::Consumer => (true, false),
+            Role::Provider => (false, true),
+        };
         self.ctx
-            .keyring_add(label.into(), SigningKeyHex::from(seed), true, false)
+            .keyring_add(
+                label.into(),
+                SigningKeyHex::from(seed),
+                is_consumer,
+                false,
+                is_provider,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))
+    }
+
+    /// Admin-only: stages a `Settle` for `keytag` using an already-signed `iou` -- the one
+    /// chain action canary performs directly as the provider, rather than via the spawned
+    /// `subbit-claim`. Used by `tidy`'s own sweep, which can't rely on `subbit-claim`/
+    /// `subbit-gate`'s IOU record (ephemeral, per-run -- see `simplify.md`) once those
+    /// processes have already exited. Submitting is the caller's job, same as `want`/`flush`.
+    pub fn stage_settle(&mut self, keytag: &str, iou: subbit_core::Iou) -> anyhow::Result<()> {
+        self.ctx
+            .settle(keytag, None, iou.amount(), *iou.signature())
+            .map(|_| ())
             .map_err(|e| anyhow::anyhow!("{e}"))
     }
 
@@ -103,7 +143,7 @@ impl Chain {
         let items = retry_transient!(
             subbit_index::cardano::search_all(&mut self.discovery, pay_hash, None).await
         );
-        self.ctx.basket_refresh_txos(items);
+        self.ctx.basket_refresh_txos(self.network, items);
 
         let funding_pay_hash = credential_hash28(&self.funding_credential);
         let funding_utxos = retry_transient!(
@@ -148,6 +188,41 @@ impl Chain {
             subbit_console::send_payment(&mut self.wallet, self.network, address, lovelace).await?;
         self.wait_for_landing(hash).await?;
         Ok(hash)
+    }
+
+    /// `fund_address`'s reverse: sweeps whatever lovelace `wallet_seed`'s own address
+    /// currently holds back into the main funding wallet, signed by `wallet_seed` itself
+    /// (`Chain`'s own wallet has no spending authority over it). Opens a fresh connection to
+    /// `floe_endpoint` to build that one-off signer -- `Chain`'s own `wallet`/`discovery`
+    /// connections are tied to its own signing key. Batches across as many transactions as
+    /// it takes (`MAX_INPUTS_PER_TX` utxos at a time) -- a long-running deployment's claim
+    /// wallet can easily accumulate far more utxos (one change output per Sub/Settle batch)
+    /// than fit in a single tx. Returns how many sweep transactions it took, `0` if there
+    /// was nothing worth reclaiming.
+    pub async fn reclaim_wallet(
+        &mut self,
+        floe_endpoint: &str,
+        wallet_seed: [u8; 32],
+    ) -> anyhow::Result<usize> {
+        // Generous headroom under `default_max_tx_size` for plain (datum-free) inputs --
+        // each costs ~40B, so even 150 of them (~6KB) leaves plenty of room for the one
+        // output, one witness, and fee.
+        const MAX_INPUTS_PER_TX: usize = 150;
+        const RECLAIM_MARGIN: u64 = 1_000_000;
+
+        let signing_key = cardano_sdk::SigningKey::from(wallet_seed);
+        let backend = Backend::connect(floe_endpoint).await?;
+        let mut wallet = Embedded::new(backend, signing_key, self.network_id, None);
+        let target = self.change_address_shelley().into();
+        Ok(subbit_console::sweep(
+            &mut wallet,
+            self.network,
+            target,
+            MAX_INPUTS_PER_TX,
+            RECLAIM_MARGIN,
+            subbit_wallet::LandingPolicy::PATIENT,
+        )
+        .await?)
     }
 
     /// The one channel matching `(iou_key, tag, consumer)` exactly.
@@ -198,12 +273,77 @@ impl Chain {
         self.ctx.basket_propose(input, want).is_ok()
     }
 
+    /// Stages `want` against whichever utxo currently backs the channel
+    /// identified by `keytag` -- re-resolved fresh at pick time, robust to
+    /// that channel's own utxo moving underneath it between this round's
+    /// `refresh` and this flush/submit (e.g. a concurrent `subbit-claim`
+    /// Sub/Settle landing on the same channel). `true` if accepted.
+    pub fn want_by_id(&mut self, keytag: impl Into<String>, want: Want) -> bool {
+        self.ctx.basket_propose_by_id(keytag, want).is_ok()
+    }
+
     /// Submits every currently staged Open/Will, batched/retried, then refreshes.
     pub async fn flush(&mut self) -> anyhow::Result<()> {
         if self.ctx.basket_opens().is_empty() && self.ctx.basket_wills().is_empty() {
             return Ok(());
         }
-        subbit_console::submit(&mut self.wallet, &mut self.ctx, self.network).await?;
+        // Snapshot the channel inputs this flush is about to target *before*
+        // `submit` consumes/rolls back the basket. `submit`'s own internal
+        // `wait_for_landing` only ever watches the one hash it itself submitted --
+        // it has no way to notice a genuinely contending tx (most likely
+        // `subbit-claim`'s own concurrent `Sub`/`Settle` on the very same
+        // channel, which is expected to happen, not a bug to prevent) consuming
+        // one of these same inputs and landing its effect under a different
+        // hash entirely. `subbit-claim` already handles this for its own
+        // submissions via `Pending::advance`'s Dead-on-missing-input rule
+        // (`packages/claim/src/pending.rs`) -- this mirrors that: report,
+        // rollback (nothing more to do -- `submit` already rolled back its own
+        // attempt on error), and let the *next* round's fresh `refresh`/`want`
+        // re-pick and resubmit, rather than treating "my tx didn't
+        // land" as proof the operation never happened.
+        let targeted_channel_inputs: std::collections::BTreeSet<cardano_sdk::Input> =
+            self.ctx.basket_wills().keys().cloned().collect();
+        // `NothingStaged` can surface *mid-submit* too, not just from the empty-basket
+        // check above: a staged want can turn out stale (its channel moved under it,
+        // racing a concurrent step) and get dropped once `submit` is already underway,
+        // leaving nothing left to actually send. That's the race resolving itself, not
+        // a failure -- same as the precondition above, just discovered later.
+        if let Err(e) = subbit_console::submit(&mut self.wallet, &mut self.ctx).await {
+            if !matches!(e, subbit_console::Error::NothingStaged) {
+                self.refresh()
+                    .await
+                    .context("refreshing to check for contention after a lifecycle-step error")?;
+                let live = self.channels();
+                let contended: Vec<cardano_sdk::Input> = targeted_channel_inputs
+                    .iter()
+                    .filter(|i| !live.contains_key(i))
+                    .cloned()
+                    .collect();
+                if contended.is_empty() {
+                    return Err(e.into());
+                }
+                println!(
+                    "canary: a lifecycle step didn't confirm landing under its own tx, but \
+                     {}/{} targeted channel input(s) were already spent by something \
+                     else (most likely subbit-claim's own concurrent activity) -- treating this \
+                     step's effect as resolved rather than erroring ({e:#})",
+                    contended.len(),
+                    targeted_channel_inputs.len(),
+                );
+                // `submit` errored out before ever calling `ctx.basket_finalize` for this
+                // attempt, so these wants are still sitting in the basket, now stale (their
+                // own input is confirmed gone). Left alone, the *next* `flush` would re-pick
+                // them and `Queue::pick` would legitimately find nothing eligible to build --
+                // a hard, uncaught `BuildError::Empty` (confirmed live: this exact crash
+                // happened immediately after an earlier version of this recovery path logged
+                // success but never dropped the stale intent). Drop them explicitly, same as
+                // `submit`'s own stale-intent-drop branch does for a rejection caught before
+                // the landing wait.
+                for input in &contended {
+                    self.ctx.basket_drop_intent(input);
+                }
+            }
+        }
         self.refresh().await
     }
 
@@ -227,8 +367,16 @@ impl Chain {
         self.flush().await
     }
 
-    /// Polls `wallet.utxos(None)` until `hash`'s own utxo appears.
+    /// Polls `wallet.utxos(None)` until `hash`'s own utxo appears. Canary is not a
+    /// latency-sensitive caller, so it opts into the patient policy rather than the
+    /// shared default.
     async fn wait_for_landing(&mut self, hash: cardano_sdk::Hash<32>) -> anyhow::Result<()> {
-        Ok(subbit_wallet::wait_for_landing(&mut self.wallet, hash, tokio::time::sleep).await?)
+        Ok(subbit_wallet::wait_for_landing_with(
+            &mut self.wallet,
+            hash,
+            tokio::time::sleep,
+            subbit_wallet::LandingPolicy::PATIENT,
+        )
+        .await?)
     }
 }

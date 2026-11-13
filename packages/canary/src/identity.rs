@@ -2,7 +2,7 @@
 
 use cardano_sdk::{Address, NetworkId, address::kind};
 use subbit_console::SigningKeyHex;
-use subbit_core::Hash28;
+use subbit_core::{Hash28, Tag};
 use subbit_wallet::wallet::embedded::{credential_of, derive_address};
 
 /// One identity's L1 material: public key hash plus the raw seed.
@@ -33,7 +33,7 @@ impl Identity {
     }
 }
 
-/// `Constants.consumer`/`.provider`'s real Cardano key hash for `seed`.
+/// `Constants.consumer`/`.provider`'s Cardano key hash for `seed`.
 pub fn hash28_from_seed(seed: &[u8; 32]) -> Hash28 {
     SigningKeyHex::from(*seed).consumer_hash()
 }
@@ -54,11 +54,11 @@ pub fn consumer_seed(l2_seed: &[u8; 32], i: usize) -> [u8; 32] {
 }
 
 /// A separately-funded wallet for the spawned `subbit-claim` process's own fee/collateral.
-pub fn claim_fee_seed(l2_seed: &[u8; 32]) -> [u8; 32] {
+pub fn claim_wallet_seed(l2_seed: &[u8; 32]) -> [u8; 32] {
     derive_seed(l2_seed, "claim-fee-wallet")
 }
 
 /// Consumer `i`'s on-chain channel tag, namespaced by `l2_seed`.
-pub fn tag_for(l2_seed: &[u8; 32], i: usize) -> Vec<u8> {
-    format!("{}{i}", hex::encode(&l2_seed[..2])).into_bytes()
+pub fn tag_for(l2_seed: &[u8; 32], i: usize) -> Tag {
+    Tag::from(format!("{}{i}", hex::encode(&l2_seed[..2])).into_bytes())
 }

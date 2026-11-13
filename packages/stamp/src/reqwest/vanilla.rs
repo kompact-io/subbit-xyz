@@ -59,7 +59,9 @@ impl<P: MissPolicy + 'static> Middleware for Stamp<P> {
                 .resolve_charge(req.url().path(), &self.policy)
                 .map_err(|e| MwError::Middleware(e.into()))?
         };
-        let cost = match charge_outcome(charge, req.url().path())? {
+        let cost = match charge_outcome(charge, req.url().path())
+            .map_err(|e| MwError::Middleware(e.into()))?
+        {
             // Send as-is, no payment envelope at all: nothing for the
             // server to echo back, so skip straight to returning its
             // reply untouched.
@@ -86,9 +88,7 @@ impl<P: MissPolicy + 'static> Middleware for Stamp<P> {
             {
                 let mut stamp = self.stamp.lock().unwrap();
                 if let Err(e) = vanilla::response(&mut stamp, s) {
-                    return Err(MwError::Middleware(anyhow::anyhow!(
-                        "stamp failed to process response envelope: {e}"
-                    )));
+                    return Err(MwError::Middleware(e.into()));
                 }
             }
             // FIXME :: handle unexpect no-reply
@@ -105,9 +105,7 @@ impl<P: MissPolicy + 'static> Middleware for Stamp<P> {
         {
             let mut stamp = self.stamp.lock().unwrap();
             if let Err(e) = vanilla::response_bytes(&mut stamp, &bytes) {
-                return Err(MwError::Middleware(anyhow::anyhow!(
-                    "stamp failed to process response envelope: {e}"
-                )));
+                return Err(MwError::Middleware(e.into()));
             }
         }
         let mut builder = http::Response::builder().status(status).url(url);

@@ -138,7 +138,7 @@ pub fn find_reference_script_json(utxos_json: &str) -> Result<Option<String>, Js
         serde_json::from_str(utxos_json).map_err(js_err)?;
     let typed: BTreeMap<Input, Output> = utxos
         .iter()
-        .filter_map(|u| subbit_tx::floe::to_input_output(u).ok())
+        .filter_map(|u| crate::floe::to_input_output(u).ok())
         .collect();
     let Some((input, _)) = subbit_tx::validator::find_reference_script(&typed) else {
         return Ok(None);
@@ -345,10 +345,11 @@ impl JsConsole {
         key_hex: &str,
         is_consumer: bool,
         is_iou: bool,
+        is_provider: bool,
     ) -> Result<(), JsError> {
         let key = SigningKeyHex::from_str(key_hex).map_err(js_err)?;
         self.ctx
-            .keyring_add(label.to_string(), key, is_consumer, is_iou)
+            .keyring_add(label.to_string(), key, is_consumer, is_iou, is_provider)
             .map_err(js_err)
     }
 
@@ -358,10 +359,11 @@ impl JsConsole {
         label: &str,
         is_consumer: bool,
         is_iou: bool,
+        is_provider: bool,
     ) -> Result<String, JsError> {
         let key = self
             .ctx
-            .keyring_generate(label.to_string(), is_consumer, is_iou)
+            .keyring_generate(label.to_string(), is_consumer, is_iou, is_provider)
             .map_err(js_err)?;
         self.logs.info(format!("generated key under label {label}"));
         Ok(hex::encode(key.to_bytes()))
@@ -530,10 +532,14 @@ impl JsConsole {
     // --- Basket --------------------------------------------------------
 
     #[wasm_bindgen(js_name = basketRefreshTxosJson)]
-    pub fn basket_refresh_txos_json(&mut self, utxos_json: &str) -> Result<(), JsError> {
+    pub fn basket_refresh_txos_json(
+        &mut self,
+        network: &str,
+        utxos_json: &str,
+    ) -> Result<(), JsError> {
         let utxos: Vec<floe_dto_http::query::Utxo> =
             serde_json::from_str(utxos_json).map_err(js_err)?;
-        self.ctx.basket_refresh_txos(utxos);
+        self.ctx.basket_refresh_txos(network, utxos);
         Ok(())
     }
 
@@ -577,7 +583,7 @@ impl JsConsole {
 
     #[wasm_bindgen(js_name = basketWillsJson)]
     pub fn basket_wills_json(&self) -> String {
-        let pairs: Vec<_> = self.ctx.basket_wills().iter().collect();
+        let pairs: Vec<_> = self.ctx.basket_wills().into_iter().collect();
         serde_json::to_string(&pairs).expect("Will serialization is infallible")
     }
 
@@ -696,7 +702,6 @@ impl JsConsole {
     #[wasm_bindgen(js_name = basketBuild)]
     pub fn basket_build(
         &mut self,
-        network: &str,
         change_address: &str,
         fuel_cbor_hex: Vec<String>,
     ) -> Result<String, JsError> {
@@ -705,10 +710,11 @@ impl JsConsole {
             .iter()
             .map(|hex| decode_unspent_output(hex))
             .collect::<Result<_, _>>()?;
+        self.ctx.basket_set_change_address(change_address);
 
         let tx = self
             .ctx
-            .basket_build(network, change_address, &fuel)
+            .basket_pick_and_build(subbit_tx::Bounds::default(), &fuel)
             .map_err(js_err)?;
         Ok(hex::encode(tx.to_cbor()))
     }
@@ -827,14 +833,12 @@ impl JsConsole {
     /// own module doc for the three stages. Fails immediately if
     /// `basketSetReferenceUtxo` hasn't been called yet.
     #[wasm_bindgen(js_name = submit)]
-    pub async fn submit(&mut self, network: &str) -> Result<String, JsError> {
+    pub async fn submit(&mut self) -> Result<String, JsError> {
         let wallet = self
             .wallet
             .as_mut()
             .ok_or_else(|| js_err("no wallet connected"))?;
-        let hash = crate::submit(wallet, &mut self.ctx, network)
-            .await
-            .map_err(js_err)?;
+        let hash = crate::submit(wallet, &mut self.ctx).await.map_err(js_err)?;
         Ok(hash.to_string())
     }
 

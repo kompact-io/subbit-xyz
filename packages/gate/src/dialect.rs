@@ -7,7 +7,7 @@
 //! here knows about `Ctx` at all.
 
 use http::HeaderMap;
-use subbit_l2_dto::{ChannelStatus, CoreError, MacTtl, Request, Terms};
+use subbit_l2_dto::{ChannelStatus, Error, MacTtl, Request, Terms};
 
 use crate::{Keytag, catalog::ResourceInfo, wire::Wire};
 
@@ -83,10 +83,10 @@ pub trait Dialect: Send + Sync {
 
     /// Any other outcome but success. `current` is the channel's
     /// standing right now, when `Ctx` could find one, only ever
-    /// present alongside `CoreError::Unspendable`, so a dialect that
+    /// present alongside `Error::InsufficientFunds`, so a dialect that
     /// can rebuild a `challenge`-shaped response around it (x402's
     /// corrective 402) does; a dialect with no such shape (vanilla)
     /// ignores `quote` and `current` both, and just reports the bare
     /// error.
-    fn error(&self, err: CoreError, quote: Quote, current: Option<ChannelStatus>) -> Wire;
+    fn error(&self, err: Error, quote: Quote, current: Option<ChannelStatus>) -> Wire;
 }

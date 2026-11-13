@@ -78,6 +78,12 @@ enum KeyringCmd {
         /// Flags this key's verifying key as usable for `Constants.iou_key`.
         #[arg(long)]
         iou: bool,
+        /// Flags this key's derived vkh as usable to sign a provider-
+        /// required `Will` (`Sub`/`Settle`). Only meaningful with the
+        /// `admin` feature -- console's `submit` is otherwise never
+        /// asked to cover a provider signatory.
+        #[arg(long)]
+        provider: bool,
     },
     /// Mint a fresh signing key and store it; prints the new key's hex
     /// seed once, for exporting into a `subbit-stamp` config.
@@ -87,6 +93,8 @@ enum KeyringCmd {
         consumer: bool,
         #[arg(long)]
         iou: bool,
+        #[arg(long)]
+        provider: bool,
     },
     /// Remove a key fom keyring
     Remove { label: String },
@@ -263,16 +271,18 @@ pub fn run() -> Result<(), Error> {
                 key,
                 consumer,
                 iou,
+                provider,
             } => {
-                ctx.keyring_add(label, key, consumer, iou)?;
+                ctx.keyring_add(label, key, consumer, iou, provider)?;
                 save(&ctx, &cli.path)?;
             }
             KeyringCmd::Generate {
                 label,
                 consumer,
                 iou,
+                provider,
             } => {
-                let key = ctx.keyring_generate(label.clone(), consumer, iou)?;
+                let key = ctx.keyring_generate(label.clone(), consumer, iou, provider)?;
                 save(&ctx, &cli.path)?;
                 println!("{}", hex::encode(key.to_bytes()));
                 logs.info(format!("generated key under label {label}"));
@@ -543,7 +553,7 @@ mod tests {
         let mut ctx = load(&path).unwrap();
         assert!(ctx.keyring_labels().is_empty());
 
-        ctx.keyring_generate("alice".to_string(), false, false)
+        ctx.keyring_generate("alice".to_string(), false, false, false)
             .unwrap();
         save(&ctx, &path).unwrap();
 

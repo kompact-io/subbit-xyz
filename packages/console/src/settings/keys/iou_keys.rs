@@ -87,6 +87,7 @@ mod tests {
                 "alice".to_string(),
                 false,
                 true,
+                false,
                 &crate::Consumers::default(),
                 &IouKeys::default(),
             )
@@ -116,6 +117,7 @@ mod tests {
                 "alice".to_string(),
                 false,
                 true,
+                false,
                 &crate::Consumers::default(),
                 &IouKeys::default(),
             )
@@ -136,6 +138,7 @@ mod tests {
                 "alice".to_string(),
                 false,
                 true,
+                false,
                 &crate::Consumers::default(),
                 &IouKeys::default(),
             )

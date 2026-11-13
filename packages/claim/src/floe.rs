@@ -279,8 +279,25 @@ pub async fn submit(
     client: &mut grpc::Client,
     tx: &Transaction<ReadyForSigning>,
 ) -> anyhow::Result<Hash<32>> {
-    client.submit_tx(tx.to_cbor()).await?;
+    submit_cbor(client, &tx.to_cbor()).await?;
     Ok(tx.id())
+}
+
+/// Submits already-serialized transaction bytes. Used both by `submit` and to
+/// rebroadcast a still-pending tx byte-for-byte from `pending::Pending`.
+pub async fn submit_cbor(client: &mut grpc::Client, cbor: &[u8]) -> anyhow::Result<()> {
+    client.submit_tx(cbor.to_vec()).await?;
+    Ok(())
+}
+
+/// Whether Floe has observed `hash` (i.e. seen it included in a block).
+pub async fn read_tx(client: &mut grpc::Client, hash: Hash<32>) -> anyhow::Result<bool> {
+    Ok(client
+        .read_tx(ReadTxRequest {
+            hash: <[u8; 32]>::from(hash),
+        })
+        .await?
+        .is_some())
 }
 
 /// Polls `ReadTx` until Floe has indexed `hash` (i.e. seen it included
@@ -293,13 +310,8 @@ pub async fn wait_for_tx(
     max_attempts: u32,
     interval: Duration,
 ) -> anyhow::Result<()> {
-    let hash_bytes = <[u8; 32]>::from(hash);
     for attempt in 0..max_attempts {
-        if client
-            .read_tx(ReadTxRequest { hash: hash_bytes })
-            .await?
-            .is_some()
-        {
+        if read_tx(client, hash).await? {
             return Ok(());
         }
         if attempt + 1 == max_attempts {

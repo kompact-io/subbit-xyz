@@ -16,8 +16,14 @@ pub enum Error {
     OldIou,
     #[error("iou invalid")]
     InvalidIou,
-    #[error("cost exceeds what is spendable (deactived, insufficient funds, _etc_)")]
-    Unspendable,
+    /// No on-chain backing known for this channel (yet): nothing to cover
+    /// any iou with. The wire's `NoChannel`.
+    #[error("no backing")]
+    NoBacking,
+    /// The iou or spend exceeds what's backed/committed. The wire's own
+    /// `InsufficientFunds`.
+    #[error("insufficient funds")]
+    InsufficientFunds,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode, PartialEq)]
@@ -33,8 +39,10 @@ impl Backing {
         Self { amount, subbed }
     }
 
+    /// Whether a cumulative `committed` is covered by what's on chain: the
+    /// part not already `subbed` must sit strictly inside `amount`.
     pub fn backs(&self, committed: u64) -> bool {
-        committed - self.subbed < self.amount
+        committed.saturating_sub(self.subbed) < self.amount
     }
 }
 
@@ -174,6 +182,12 @@ impl Channel {
         if delta == 0 {
             return Err(Error::OldIou);
         }
+        let Some(backing) = self.backing() else {
+            return Err(Error::NoBacking);
+        };
+        if !backing.backs(iou.amount()) {
+            return Err(Error::InsufficientFunds);
+        }
         self.iou = Some(iou);
         Ok(delta)
     }
@@ -182,7 +196,7 @@ impl Channel {
     pub fn apply_spend(&mut self, cost: u64) -> Result<(), Error> {
         self.try_active()?;
         if !self.can_spend(cost) {
-            return Err(Error::Unspendable);
+            return Err(Error::InsufficientFunds);
         }
         self.spent += cost;
         Ok(())
@@ -254,5 +268,53 @@ impl RedbValue for Channel {
     }
     fn type_name() -> TypeName {
         TypeName::new("server::Channel")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn iou(amount: u64) -> Iou {
+        Iou::new(amount, subbit_core::Signature::from([0u8; 64]))
+    }
+
+    fn channel(backing: Option<Backing>) -> Channel {
+        Channel::new(
+            backing,
+            None,
+            0,
+            Default::default(),
+            Default::default(),
+            None,
+        )
+    }
+
+    #[test]
+    fn apply_iou_rejects_without_a_backing() {
+        let mut channel = channel(None);
+        assert!(matches!(channel.apply_iou(iou(1)), Err(Error::NoBacking)));
+        assert!(channel.iou().is_none());
+    }
+
+    #[test]
+    fn apply_iou_accepts_up_to_the_backed_amount_and_no_further() {
+        // 1_000 on chain of which 200 already subbed: an iou may commit
+        // strictly less than 1_200 cumulative (`Backing::backs`).
+        let mut channel = channel(Some(Backing::new(1_000, 200)));
+        assert_eq!(channel.apply_iou(iou(1_199)).unwrap(), 1_199);
+        assert!(matches!(
+            channel.apply_iou(iou(1_200)),
+            Err(Error::InsufficientFunds)
+        ));
+        // The rejected iou is not remembered.
+        assert_eq!(channel.iou().map(|x| x.amount()), Some(1_199));
+    }
+
+    #[test]
+    fn apply_iou_still_rejects_a_non_increasing_amount_first() {
+        let mut channel = channel(Some(Backing::new(1_000, 0)));
+        channel.apply_iou(iou(500)).unwrap();
+        assert!(matches!(channel.apply_iou(iou(500)), Err(Error::OldIou)));
     }
 }

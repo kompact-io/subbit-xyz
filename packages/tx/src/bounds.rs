@@ -48,6 +48,24 @@ impl Bounds {
         Self { lower, upper }
     }
 
+    /// `false` once `lower`/`upper` can never both hold at once -- the
+    /// one way combining two individually-fine bounds (via `intersect`)
+    /// can go wrong: each `Will`'s own bounds are always individually
+    /// feasible (`lower`/`upper` only ever come from one side), so this
+    /// only turns up once two *different* `Will`s end up in the same
+    /// batch with disjoint windows.
+    pub fn is_feasible(&self) -> bool {
+        !matches!((self.lower, self.upper), (Some(l), Some(u)) if l > u)
+    }
+
+    /// `true` once this bound's own `upper` has already passed `now` --
+    /// unlike plain infeasibility (`is_feasible`), this can never
+    /// resolve itself later: `upper` doesn't move, so a `Will` this is
+    /// true for is permanently undoable, not just unlucky this batch.
+    pub fn has_expired(&self, now: Instant) -> bool {
+        self.upper.is_some_and(|upper| upper < now)
+    }
+
     pub fn twenty_mins() -> Self {
         // TODO :: Either use std time, or upstream methods
         let lower = Instant::from_secs(

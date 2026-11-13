@@ -1,5 +1,4 @@
-//! Wire types for the payload the index service reports to the subbit
-//! server: see `subbit-index`'s README for the design this mirrors.
+//! Dto for subbit-index
 
 mod point;
 pub use point::{OutputReference, Point};
@@ -10,5 +9,5 @@ pub use line::{Item, Line, Stagish};
 mod channel;
 pub use channel::{Channel, ConstantsExt};
 
-mod output;
-pub use output::Output;
+mod channels;
+pub use channels::Channels;

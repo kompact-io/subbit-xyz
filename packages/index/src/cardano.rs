@@ -1,4 +1,4 @@
-use amaru_kernel::{Address as KernelAddress, Credential, StakeReference};
+use amaru_kernel::{Address, Credential, StakeReference};
 use floe_client::Backend;
 #[cfg(feature = "grpc")]
 use floe_client::grpc;
@@ -28,17 +28,6 @@ impl Config {
     }
 }
 
-/// Every live (unspent) UTxO matching `pay_hash`/`stake_hash`, paginating
-/// Floe's `SearchUtxos` until `next_token` is exhausted. No `since` is
-/// passed, so Floe returns only the current live set (no `spent_by`
-/// items) -- exactly what the naive (non-lineage) poller needs.
-///
-/// Generic over `impl Backend`, not tied to `grpc::Client` -- the same
-/// code already works against any transport implementing it, native
-/// (`grpc`, a future `http-json`/`http-cbor`) or wasm32
-/// (`subbit_console::wasm::transport::Client`, Console's own fetch
-/// impl -- not `floe-client`'s own `wasm` feature, see this crate's
-/// `[features]` doc).
 pub async fn search_all(
     client: &mut impl Backend,
     pay_hash: [u8; 28],
@@ -48,19 +37,11 @@ pub async fn search_all(
     Ok(items)
 }
 
-/// Every TxO (live or spent) ever matching `pay_hash`/`stake_hash`, as
-/// far back as Floe's own retention goes -- unlike `search_all`, this
-/// includes `spent_by` items, which lineage reconstruction needs.
-/// Also returns the ledger tip observed while paginating.
 pub async fn search_history(
     client: &mut impl Backend,
     pay_hash: [u8; 28],
     stake_hash: Option<[u8; 28]>,
 ) -> floe_client::Result<(Vec<Utxo>, ChainPoint)> {
-    // `since_slot: Some(0)` is a permissive "slot > 0" filter (no
-    // chain-validity check, see `SearchUtxosRequest::since_hash`'s own
-    // doc) -- the cheapest way to ask for "every row, from genesis"
-    // while still setting `since` so Floe includes spent items.
     search(client, pay_hash, stake_hash, Some(0)).await
 }
 
@@ -105,9 +86,6 @@ pub enum ChannelError {
     OwnHash,
 }
 
-/// The fields a channel's well-formedness check yields, before they're
-/// assembled into a `subbit_tx::Channel` (which drops `stake_hash` --
-/// `lineage` needs it, `channel_from_utxo`'s callers don't).
 pub struct ParsedChannel {
     pub stake_hash: Option<[u8; 28]>,
     pub constants: Constants,
@@ -119,26 +97,13 @@ fn hash28(h: impl AsRef<[u8]>) -> Option<[u8; 28]> {
     h.as_ref().try_into().ok()
 }
 
-struct ShelleyCredentials {
-    /// `None` unless the payment part is specifically a *Script*
-    /// credential -- see `shelley_credentials`.
+struct Credentials {
     pay_hash: Option<[u8; 28]>,
     stake_hash: Option<[u8; 28]>,
 }
 
-/// Payment and delegation credential hashes of `addr`. Unlike
-/// `floe_client::address_hashes` (which returns a bare hash either
-/// way), the payment part must specifically be a *Script* credential:
-/// our validator's address always locks funds behind its script hash,
-/// never a key. Collapsing that distinction would let someone
-/// construct an address whose payment part is flagged `Key` but
-/// numerically equal to our validator's script hash -- the ledger
-/// would then never invoke the validator to spend it, so it isn't
-/// really a backing no matter what its datum claims. Cheap to
-/// exclude, so we do; the delegation part has no such requirement
-/// (a consumer's own stake credential may legitimately be either).
-fn shelley_credentials(addr: &KernelAddress) -> Option<ShelleyCredentials> {
-    let KernelAddress::Shelley(s) = addr else {
+fn shelley_credentials(addr: &Address) -> Option<Credentials> {
+    let Address::Shelley(s) = addr else {
         return None;
     };
     let pay_hash = match s.payment() {
@@ -151,17 +116,14 @@ fn shelley_credentials(addr: &KernelAddress) -> Option<ShelleyCredentials> {
         }
         Some(StakeReference::Pointer(_)) | None => None,
     };
-    Some(ShelleyCredentials {
+    Some(Credentials {
         pay_hash,
         stake_hash,
     })
 }
 
-/// Parses channel fields out of a Floe `Utxo`. Mirrors
-/// `subbit_tx::Channel`'s `TryFrom<&cardano_sdk::Output>`, reading the
-/// same fields off Floe's wire DTO instead.
 pub fn parse_channel_utxo(utxo: &Utxo) -> Result<ParsedChannel, ChannelError> {
-    let ShelleyCredentials {
+    let Credentials {
         pay_hash,
         stake_hash,
     } = shelley_credentials(&utxo.output.address.0).ok_or(ChannelError::Address)?;
@@ -201,8 +163,6 @@ pub fn parse_channel_utxo(utxo: &Utxo) -> Result<ParsedChannel, ChannelError> {
     })
 }
 
-/// Parses a channel out of a Floe `Utxo`, dropping the stake hash --
-/// see `parse_channel_utxo`.
 pub fn channel_from_utxo(utxo: &Utxo) -> Result<Channel, ChannelError> {
     let ParsedChannel {
         constants,

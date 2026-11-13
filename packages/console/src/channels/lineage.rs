@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 
 use cardano_sdk::{Hash, Input};
-use subbit_index_dto::{Channel, Item, Line, Output, OutputReference};
+use subbit_index_dto::{Channel, Channels, Item, Line, OutputReference};
 use subbit_l1_dto::Constants;
 use subbit_tx::step::Can;
 
@@ -87,7 +87,7 @@ fn input_of(txo_ref: OutputReference) -> Input {
 /// those stores itself, so this stays pure and independently
 /// testable.
 pub fn group(
-    output: Output,
+    output: Channels,
     confirmation_depth_of: impl Fn(&Constants) -> u32,
     brief_of: impl Fn(&Constants) -> Brief,
     live: &BTreeMap<Input, subbit_tx::Channel>,
@@ -187,8 +187,8 @@ mod tests {
         }
     }
 
-    fn output(channels: Vec<Channel>, tip_height: u64) -> Output {
-        Output {
+    fn output(channels: Vec<Channel>, tip_height: u64) -> Channels {
+        Channels {
             tip: Point {
                 slot: tip_height,
                 hash: subbit_core::Hash32::from([0u8; 32]),

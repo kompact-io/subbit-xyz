@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// from `channels` is implied Terminated.
 #[derive(Debug, Clone, PartialEq, Eq, minicbor::Encode, minicbor::Decode)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Output {
+pub struct Channels {
     #[n(0)]
     pub tip: Point,
     #[n(1)]

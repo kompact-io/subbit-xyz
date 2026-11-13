@@ -12,13 +12,13 @@ members = [
   "packages/gate",
   "packages/gate-client",
   "packages/stamp",
-  "packages/session",
-  "packages/cli",
+  #"packages/cli",
   "packages/index",
   "packages/claim",
   "packages/canary",
   "packages/console",
   "packages/wallet",
+  "xtask",
   ######### CARDANO ############
   # "packages/cardano-session",
   ######### EXAMPLE ############
@@ -59,11 +59,7 @@ bytes = "1"
 axum = { version = "0.8.9" }
 base64 = "0.22.1"
 blake3 = "1.8.6"
-cardano-connector = { git = "https://github.com/cardano-lightning/konduit", branch = "main" }
-cardano-connector-direct = { git = "https://github.com/cardano-lightning/konduit", branch = "main" }
 cardano-sdk = { git = "https://github.com/cardano-lightning/konduit.git", branch = "main" }
-cardano-session = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
-cardano-wallet = { git = "https://github.com/cardano-lightning/konduit", branch = "main", default-features = false }
 clap = { version = "4.6.1", features = ["env", "derive"] }
 floe-client = { git = "https://github.com/kompact-io/floe", branch = "main", default-features = false }
 floe-dto-http = { git = "https://github.com/kompact-io/floe", branch = "main", default-features = false }
@@ -123,7 +119,6 @@ subbit-index = { path = "packages/index", default-features = false }
 subbit-index-dto = { path = "packages/index-dto", default-features = false }
 subbit-stamp = { path = "packages/stamp", default-features = false }
 subbit-gate = { path = "packages/gate", default-features = false }
-subbit-session = { path = "packages/session", default-features = false }
 subbit-tx = { path = "packages/tx", default-features = false }
 # Self-contained embedded-wallet crate (plan-embedded-wallet.md) -- a
 # `Wallet` trait + an `Embedded` backend (keys supplied by the caller,

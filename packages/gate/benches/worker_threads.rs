@@ -90,7 +90,7 @@ fn terms() -> Terms {
 }
 
 /// Backed and committed for far more than any run here could spend,
-/// so no request ever hits `Unspendable`.
+/// so no request ever hits `InsufficientFunds`.
 fn funded_channel() -> Channel {
     Channel::new(
         Some(Backing::new(u64::MAX / 2, 0)),

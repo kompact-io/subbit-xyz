@@ -184,9 +184,10 @@ mod tests {
     use std::collections::BTreeMap;
     use subbit_core::{Duration, Hash28, Tag, TagTbs, VerifyingKey};
     use subbit_l1_dto::Asset;
-    use subbit_tx::{Channel, NetworkParameters, Variables};
-
-    use crate::Basket;
+    use subbit_tx::{
+        Channel, NetworkParameters, Variables,
+        queue::{BuildConfig, Queue},
+    };
 
     fn network_id() -> NetworkId {
         NetworkParameters::for_network("preprod")
@@ -221,7 +222,8 @@ mod tests {
 
     /// A fake-but-real existing-channel `Output`: encodes `channel`'s
     /// own `datum()` and round-trips it into a `PlutusData`, the
-    /// exact same pair `subbit_tx::tx::Tx::outputs` uses for a real
+    /// exact same pair `subbit_tx::queue::Queue`'s own output
+    /// assembly uses for a real
     /// continuing output -- nothing admin-specific, this is just how
     /// a channel's utxo is shaped on-chain.
     fn output_for(channel: &Channel) -> Output {
@@ -230,6 +232,19 @@ mod tests {
         let data: cardano_sdk::PlutusData =
             minicbor_old::decode(&bytes).expect("datum round-trips into PlutusData");
         Output::new(address, channel.buffered_value()).with_datum(data)
+    }
+
+    /// Test-only: a `Queue` seeded directly with `utxos`, skipping the
+    /// Floe-`Utxo`-decoding round trip real callers go through.
+    fn queue_from_outputs(utxos: BTreeMap<Input, Output>) -> Queue {
+        let mut queue = Queue::new(
+            NetworkParameters::for_network("preprod").unwrap(),
+            BuildConfig::default(),
+        );
+        queue
+            .add_utxos(utxos)
+            .expect("test utxos always parse as channels");
+        queue
     }
 
     fn ctx_with_channels(channels: Vec<(u8, Variables)>) -> Ctx {
@@ -242,7 +257,7 @@ mod tests {
                 (input, output_for(&channel))
             })
             .collect();
-        Ctx::test_with_basket(Basket::from_outputs(utxos))
+        Ctx::test_with_queue(queue_from_outputs(utxos))
     }
 
     fn keytag(tag_byte: u8) -> String {
@@ -298,7 +313,7 @@ mod tests {
                 output_for(&Channel::new(constants(1), closed(2_000_000))),
             ),
         ]);
-        let mut ctx = Ctx::test_with_basket(Basket::from_outputs(utxos));
+        let mut ctx = Ctx::test_with_queue(queue_from_outputs(utxos));
 
         let results = ctx.claim(&keytag(1), None, 1_000, sign(1, 1_000));
         assert_eq!(results.len(), 2, "both matches must be staged");
@@ -349,7 +364,7 @@ mod tests {
                 output_for(&Channel::new(constants(1), opened(2_000_000))),
             ),
         ]);
-        let mut ctx = Ctx::test_with_basket(Basket::from_outputs(utxos));
+        let mut ctx = Ctx::test_with_queue(queue_from_outputs(utxos));
 
         let err = ctx
             .sub(&keytag(1), None, 1_000, sign(1, 1_000))

@@ -221,11 +221,14 @@ impl Db {
     /// this flush's commit is in flight, the drained generation sits
     /// in `Buffer::draining` as the one and only fallback a concurrent
     /// `merge` has between the (now-empty) live generation and `redb`
-    /// itself (which doesn't have this data yet). A second, overlapping
-    /// `take` would silently replace that fallback before this flush's
-    /// data ever reached `redb`. `mark_drained` only runs after a
-    /// successful commit -- on failure `draining` is left populated,
-    /// since it's the only place this flush's data still exists.
+    /// itself (which doesn't have this data yet). `mark_drained` only
+    /// runs after a successful commit -- on failure `draining` is left
+    /// populated, since it's the only place this flush's data still
+    /// exists; `flush_lock`'s guard still drops on that `Err` return
+    /// though, same as on success, so a later, overlapping `take` is
+    /// always possible here -- `Buffer::take` itself (not this lock)
+    /// is what guarantees that one carries this flush's still-unwritten
+    /// data forward instead of discarding it (see its own doc).
     fn flush_with(&self, durability: Durability) -> Result<(), BackendError> {
         let _flush_guard = self.flush_lock.lock().unwrap();
         let drained = self.buffer.take();

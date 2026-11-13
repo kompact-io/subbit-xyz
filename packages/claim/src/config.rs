@@ -19,15 +19,15 @@ pub struct Config {
     /// from), so this is a hardcoded per-network snapshot; if a hard
     /// fork changes them, this needs a manual bump (and a redeploy).
     pub network: Network,
-    /// The fee-paying wallet's own signing key: pays tx fees, supplies
-    /// collateral, receives change, and provides the tx-level witness.
-    /// Distinct from `keyring`, which only signs `specified_signatories`
-    /// (the provider identity authorizing Sub/Settle) -- in principle
-    /// the same key could serve both roles, but the two concerns are
-    /// kept separate here the same way they always have been.
-    pub fee_key: KeyHex,
+    /// The wallet's own signing key: pays tx fees, supplies collateral,
+    /// receives change, and provides the tx-level witness. Distinct
+    /// from `keyring`, which only signs `specified_signatories` (the
+    /// provider identity authorizing Sub/Settle) -- in principle the
+    /// same key could serve both roles, but the two concerns are kept
+    /// separate here the same way they always have been.
+    pub wallet_key: KeyHex,
     /// Where the subbit validator's reference script lives, if not at
-    /// the fee wallet's own address (the default assumption).
+    /// the wallet's own address (the default assumption).
     pub ref_script_host: Option<cardano_sdk::Address<kind::Shelley>>,
     pub keyring: crate::keyring::Config,
     /// `subbit-gate`'s `GET /v1/a/channels` endpoint.
@@ -37,16 +37,19 @@ pub struct Config {
     pub min_total: u64,
     pub min_single: u64,
     pub panic_settle_ms: u64,
-    /// How many `Want`s to batch per submitted transaction. A flat
-    /// conservative cap, not a measured ceiling -- matches
-    /// `Basket::MAX_OPENS_PER_TX`'s own reasoning. TODO: make this
-    /// dynamic (shrink/retry on `MaxTxSizeUTxO`, the way `console::
-    /// submit`'s own Opens batching already does) instead of a fixed
-    /// number.
-    pub step_chunk: usize,
-    /// How many times to poll Floe's `ReadTx` for a submitted tx before
-    /// giving up, and how long to wait between attempts.
-    pub wait_attempts: u32,
+    /// How `Queue::pick` batches claims per submitted transaction --
+    /// a measured byte budget (`max_tx_size`, see `subbit_tx::
+    /// accounting::Accounting`), not the flat per-kind headcount this
+    /// used to be (`step_chunk: usize`, matching `Basket::
+    /// MAX_OPENS_PER_TX`'s old reasoning). Also carries collateral/
+    /// fee-buffer policy -- see `subbit_tx::queue::BuildConfig`.
+    #[serde(default)]
+    pub build_config: subbit_tx::queue::BuildConfig,
+    /// How long between rebroadcasts of a submitted-but-unconfirmed tx.
+    /// `subbit-claim` tracks its own in-flight submissions across ticks and
+    /// keeps offering a still-pending one at this cadence until Floe observes
+    /// it or its inputs are known to be spent -- see
+    /// `subbit_claim::pending`.
     pub wait_interval_secs: u64,
 }
 
@@ -55,7 +58,7 @@ impl Default for Config {
         Self {
             floe: Default::default(),
             network: Network::Preprod,
-            fee_key: [0; 32].into(),
+            wallet_key: [0; 32].into(),
             ref_script_host: None,
             keyring: Default::default(),
             server_endpoint: Url::parse("http://127.0.0.1:7822/v1/a/channels")
@@ -64,8 +67,7 @@ impl Default for Config {
             min_total: 1_000_000,
             min_single: 100_000,
             panic_settle_ms: 5 * 60 * 1000,
-            step_chunk: 40,
-            wait_attempts: 30,
+            build_config: Default::default(),
             wait_interval_secs: 10,
         }
     }

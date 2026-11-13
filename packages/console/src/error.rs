@@ -31,6 +31,13 @@ pub enum Error {
     Network(String),
     #[error("{0}")]
     Basket(String),
+    /// Distinct from `Basket`: the basket was (or became, mid-`submit`, once a
+    /// stale intent racing a concurrent step got dropped) genuinely empty --
+    /// not a failure, just nothing left to do. Kept as its own variant rather
+    /// than a `Basket(String)` payload so a caller can match on it directly
+    /// instead of string-comparing messages (see this module's own doc).
+    #[error("nothing staged to submit")]
+    NothingStaged,
     #[error("{0}")]
     Wallet(String),
     #[error("invalid JSON: {0}")]

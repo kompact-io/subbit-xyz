@@ -1,4 +1,4 @@
-//! Spawns the real `subbit-gate` binary.
+//! Spawns the `subbit-gate` binary.
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -8,13 +8,13 @@ use tokio::process::Child;
 
 use crate::process::spawn_with_config;
 
-pub(crate) struct GateProcess {
+pub(crate) struct Process {
     _child: Child,
     _dir: tempfile::TempDir,
     addr: SocketAddr,
 }
 
-impl GateProcess {
+impl Process {
     pub(crate) async fn spawn(mut config: subbit_gate::Config) -> anyhow::Result<Self> {
         let addr = free_local_addr()?;
         let addr_arg = addr.to_string();

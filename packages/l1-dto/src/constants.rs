@@ -54,6 +54,14 @@ impl Constants {
         }
     }
 
+    /// A channel's own `iou_key`+`tag` identity, as a single string --
+    /// the convention used wherever a want needs to be paired to
+    /// "whichever utxo currently backs this channel" rather than one
+    /// frozen input (e.g. `subbit_tx::queue::Ref::ById`).
+    pub fn keytag(&self) -> String {
+        self.iou_key.to_string() + &self.tag.to_string()
+    }
+
     pub fn verify(&self, max_tag_length: usize, min_close_period: u64) -> bool {
         self.tag.len() <= max_tag_length
             && self.close_period.as_millis() >= min_close_period as u128

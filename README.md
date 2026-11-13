@@ -28,6 +28,7 @@ $ tree -L 1
 ├── docs      # ADRs, design notes, glossary
 ├── examples  # Example integrations (echo demo, vanilla + x402)
 ├── packages  # Rust workspace: gate, cli, console, canary, etc.
+├── xtask     # Workspace build/run helper tasks
 ├── flake.lock
 └── flake.nix
 ```
@@ -53,6 +54,28 @@ $ tree -L 1
   terminology).
 - **`examples/echo`** -- a minimal echo service, with and without Subbit
   wrapping it, in both the vanilla and x402 dialects.
+
+## Building and running `canary`
+
+`canary` spawns sibling binaries (`subbit-gate`, `lineage-index`,
+`subbit-claim`) from its own target profile directory. Use the `xtask` alias to
+build all four together:
+
+```sh
+cargo xtask build
+cargo xtask build --release
+```
+
+`cargo xtask canary` builds first, then runs `canary` with any arguments after
+`--` forwarded:
+
+```sh
+cargo xtask canary -- --help
+cargo xtask canary -- init --config canary-config.toml
+cargo xtask canary --release -- status --config canary-config.toml
+```
+
+See `cargo xtask --help` for the available options.
 
 ## Using Subbit.xyz
 

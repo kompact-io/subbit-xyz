@@ -76,7 +76,9 @@ impl<P: MissPolicy + 'static, T: TermsPolicy + 'static> Middleware for Stamp<P, 
                     .resolve_charge(req.url().path(), &self.policy)
                     .map_err(|e| MwError::Middleware(e.into()))?
             };
-            let cost = match charge_outcome(charge, req.url().path())? {
+            let cost = match charge_outcome(charge, req.url().path())
+                .map_err(|e| MwError::Middleware(e.into()))?
+            {
                 ChargeOutcome::Unpriced => return next.run(req, extensions).await,
                 ChargeOutcome::Priced(cost) => cost,
             };
@@ -114,9 +116,7 @@ impl<P: MissPolicy + 'static, T: TermsPolicy + 'static> Middleware for Stamp<P, 
                 settlement.as_deref(),
                 required.as_deref(),
             ) {
-                return Err(MwError::Middleware(anyhow::anyhow!(
-                    "stamp failed to process response header: {e}"
-                )));
+                return Err(MwError::Middleware(e.into()));
             }
         }
         let mut builder = http::Response::builder().status(status).url(url);

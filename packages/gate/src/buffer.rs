@@ -28,12 +28,22 @@
 //! or a stale pre-update value and silently lose whatever the drained
 //! batch was about to commit. `draining` exists to close exactly that
 //! window: `Db::flush_with` parks the detached generation there for
-//! as long as its commit is in flight, `merge`/`get` check it as a
-//! fallback between `map` and `redb`, and `Db` is responsible for
-//! never letting two flushes have a generation parked in `draining` at
-//! once (see its own `flush_lock`) -- otherwise a second `take` could
-//! overwrite the first flush's still-uncommitted generation here
-//! before anyone reads it.
+//! as long as its commit is in flight (or, on a failed commit,
+//! indefinitely -- see its own doc), and `merge`/`get` check it as a
+//! fallback between `map` and `redb`.
+//!
+//! A second `take` arriving before the first flush's commit has landed
+//! -- whether still in flight, or stuck there because that commit
+//! failed outright -- does not get to simply discard it: `take` itself
+//! carries anything still sitting in `draining` forward into the
+//! generation it just took (for any key the newer one doesn't already
+//! have a fresher copy of), before replacing `draining` with that
+//! merged result. A failed commit's data is retried by the very next
+//! flush instead of being silently lost. The only data this buffer
+//! ever truly loses is whatever was still unflushed if the whole
+//! process exits -- the volatile-memory risk buffering something
+//! before committing it always accepts, never a correctness bug on
+//! top of that risk.
 
 use std::{
     sync::{
@@ -170,10 +180,25 @@ impl Buffer {
     /// generation can be caught mid-write by the swap -- by the time
     /// this returns, the old generation is final and safe to iterate.
     ///
-    /// Callers (just `Db::flush_with`) must serialize their own calls
-    /// to `take`: this doesn't itself stop a second `take` from
-    /// overwriting `draining` before a first flush's commit finishes
-    /// and calls `mark_drained`.
+    /// If a previous generation is still parked in `draining` (an
+    /// earlier flush whose commit never landed -- see `Db::flush_with`'s
+    /// own doc on why a failure leaves it there deliberately), this
+    /// carries its entries forward into the newly-taken generation
+    /// first, for any key the newer generation doesn't already have a
+    /// fresher copy of. Without that, a second `take` would simply
+    /// discard the first flush's still-uncommitted data outright --
+    /// not the volatile-memory-on-a-crash risk this buffer is upfront
+    /// about accepting, but silent data loss during otherwise-normal
+    /// operation, which is never an acceptable trade for the throughput
+    /// this buffer exists to buy. A key present in both always keeps
+    /// the newer generation's value: every live `merge` already reads
+    /// `draining` as its own fallback baseline whenever `map` is
+    /// vacant for that key (see `merge`'s own doc), so anything in the
+    /// newly-taken generation is guaranteed at least as fresh as
+    /// whatever the old one had for the same key. A failed commit's
+    /// data is retried by the very next flush's own write instead of
+    /// being lost -- it only ever stops being carried forward once some
+    /// flush actually commits it and calls `mark_drained`.
     pub fn take(&self) -> Arc<DashMap<Keytag, Channel>> {
         // `draining` must be populated *before* the write guard drops:
         // once it drops, a `merge` can immediately see the fresh empty
@@ -184,7 +209,17 @@ impl Buffer {
         // own doc comment describes `draining` as closing.
         let mut guard = self.map.write().unwrap();
         let drained = std::mem::replace(&mut *guard, Arc::new(DashMap::new()));
-        *self.draining.write().unwrap() = Some(Arc::clone(&drained));
+        {
+            let mut draining_guard = self.draining.write().unwrap();
+            if let Some(previous) = draining_guard.as_ref() {
+                for entry in previous.iter() {
+                    if !drained.contains_key(entry.key()) {
+                        drained.insert(entry.key().clone(), entry.value().clone());
+                    }
+                }
+            }
+            *draining_guard = Some(Arc::clone(&drained));
+        }
         drop(guard);
         self.pending.store(0, Ordering::Relaxed);
         let now_millis = self.start.elapsed().as_millis() as u64;
@@ -288,6 +323,49 @@ mod tests {
 
         buffer.mark_drained();
         assert_eq!(buffer.get(&key(1)), None);
+    }
+
+    #[test]
+    fn a_second_take_carries_forward_a_key_untouched_since_the_first() {
+        // Regression test for the data-loss bug this module's own doc
+        // comment now describes fixing: a failed flush leaves `draining`
+        // populated (never calling `mark_drained`); if a *second* `take`
+        // simply overwrote `draining`, the untouched key from the first
+        // generation would vanish from everywhere -- not in `map` (swapped
+        // away twice), not in the new `draining` (overwritten), and never
+        // committed to `redb` (the first commit failed). `take` must carry
+        // it forward into the new generation instead.
+        let buffer = Buffer::new();
+        merge_set(&buffer, &key(1), 50, channel(50));
+        let first = buffer.take();
+        assert_eq!(first.get(&key(1)).map(|g| g.clone()), Some(channel(50)));
+        // Simulate the first flush's commit failing: never call
+        // `mark_drained`, so `draining` is left holding `first` -- then a
+        // second flush's own write activity (a different key) triggers
+        // another `take` before the first one ever got retried/committed.
+        merge_set(&buffer, &key(2), 10, channel(10));
+        let second = buffer.take();
+
+        // Key 1 was never touched again -- it must still be present in
+        // the newly-taken generation, carried forward from `draining`.
+        assert_eq!(second.get(&key(1)).map(|g| g.clone()), Some(channel(50)));
+        assert_eq!(second.get(&key(2)).map(|g| g.clone()), Some(channel(10)));
+        // And it must still be visible to readers via the new `draining`.
+        assert_eq!(buffer.get(&key(1)), Some(channel(50)));
+    }
+
+    #[test]
+    fn a_second_take_prefers_the_newer_generations_value_on_overlap() {
+        // The flip side of the above: a key touched *again* before the
+        // second `take` must keep its newer value, not the stale one
+        // still sitting in `draining` from the first.
+        let buffer = Buffer::new();
+        merge_set(&buffer, &key(1), 50, channel(50));
+        let _first = buffer.take(); // commit "fails": draining stays populated.
+        merge_set(&buffer, &key(1), 10, channel(60));
+        let second = buffer.take();
+
+        assert_eq!(second.get(&key(1)).map(|g| g.clone()), Some(channel(60)));
     }
 
     #[test]

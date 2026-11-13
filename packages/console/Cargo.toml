@@ -45,11 +45,12 @@ subbit-l2-dto = { workspace = true, features = ["serde"] }
 # `floe_client::http::json::Client` works too) + `lineage::reconstruct`.
 subbit-index = { workspace = true, default-features = false }
 subbit-index-dto = { workspace = true, features = ["std", "serde"] }
-subbit-tx = { workspace = true, default-features = false, features = [
-  "serde",
-  "floe",
-] }
+subbit-tx = { workspace = true, default-features = false, features = ["serde"] }
 floe-dto-http = { workspace = true, features = ["json"] }
+# `src/floe.rs`'s own Floe-wire-DTO -> `cardano_sdk::PlutusData` datum
+# conversion -- the same decode `subbit_tx::tx::Tx::outputs` uses in
+# production for a continuing output's own datum.
+minicbor_old.workspace = true
 # Bare here (just the `Backend` trait + DTOs); the `[target.'cfg(
 # target_arch = "wasm32")'.dependencies]` entry below adds `http-json`
 # on top for wasm32 specifically, giving `floe_client::http::json::
@@ -126,13 +127,13 @@ gloo-net = { workspace = true, features = ["http"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }
-# `admin`'s own tests: encode a `Channel`'s datum (`minicbor`) and
-# round-trip it into a `cardano_sdk::PlutusData` (`minicbor_old`) to
-# fabricate a real existing-channel `Output` -- the exact same
-# encode/decode pair `subbit_tx::tx::Tx::outputs` uses in production
-# for a continuing output, never used outside tests here.
+# `admin`'s own tests: encode a `Channel`'s datum and round-trip it into
+# a `cardano_sdk::PlutusData` to fabricate a real existing-channel
+# `Output` -- the exact same encode/decode pair `subbit_tx::tx::Tx::
+# outputs` uses in production for a continuing output, never used
+# outside tests here. `minicbor_old` itself is a real (non-dev)
+# dependency already, for `src/floe.rs`'s own use.
 minicbor = { workspace = true, features = ["alloc"] }
-minicbor_old.workspace = true
 # Signs a real IOU for `admin`'s tests, so `try_verify` (real Ed25519)
 # actually passes -- same crate `subbit-core`'s own crypto tests sign
 # with directly.

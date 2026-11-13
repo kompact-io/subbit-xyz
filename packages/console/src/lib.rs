@@ -25,7 +25,9 @@ pub use channels::{
 };
 
 mod tx;
-pub use tx::{Basket, send_payment, submit, teardown_reference_script, upload_reference_script};
+pub use tx::{send_payment, submit, sweep, teardown_reference_script, upload_reference_script};
+
+mod floe;
 
 mod logs;
 pub use logs::{Entry, Level, Logs};

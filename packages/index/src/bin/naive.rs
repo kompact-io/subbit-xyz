@@ -6,7 +6,7 @@ use tokio::time::{Duration as TokioDuration, interval};
 use tracing::{info, warn};
 
 use subbit_index::cardano;
-use subbit_index::client::Client;
+use subbit_index::gate::Gate;
 use subbit_index::naive::{Config, rows_from_utxos};
 
 /// Naive client: polls chain state and posts every matching channel's
@@ -48,7 +48,7 @@ impl Cli {
 
         let config: Config = sources.load()?;
         let mut cardano = config.cardano.connect().await?;
-        let client = Client::new(config.endpoint.clone());
+        let client = Gate::new(config.endpoint.clone());
         let pay_hash = <[u8; 28]>::from(VALIDATOR.hash);
         let mut ticker = interval(TokioDuration::from_secs(config.poll_interval_secs));
         loop {

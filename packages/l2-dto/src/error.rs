@@ -2,49 +2,47 @@ use minicbor::{Decode, Encode};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Subbit's own, dialect-agnostic error vocabulary. `vanilla`
+/// serializes it as-is (CBOR `#[n(_)]` tags); `x402` wraps it in
+/// [`crate::dialect::x402::X402Error`] for its own wire codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, thiserror::Error)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum CoreError {
+pub enum Error {
     #[n(0)]
     #[error("other")]
     Other,
-    /// A UTxO may exist at tip but be too shallow, carry a bad datum,
-    /// or the wrong currency.
+    /// UTxO at tip too shallow, bad datum, or wrong currency.
     #[n(1)]
-    #[error("no such channel")]
+    #[error("no channel")]
     NoChannel,
-    /// Set for any reason the provider decides; always set once it
-    /// has observed the channel close, even if that transaction later
-    /// rolls back.
+    /// Sticky once the provider has observed the close, even if that
+    /// transaction later rolls back.
     #[n(2)]
-    #[error("channel not active")]
+    #[error("inactive channel")]
     Inactive,
     #[n(3)]
-    #[error("stale proof of possession")]
+    #[error("old auth")]
     OldAuth,
     #[n(4)]
     #[error("invalid auth")]
     InvalidAuth,
+    /// An initial IOU may be required even for a free request.
     #[n(5)]
     #[error("channel has no iou")]
     NoIou,
-    /// An Iou's amount must be strictly greater than what's already
-    /// committed.
+    /// Amount must strictly exceed what's already committed.
     #[n(6)]
     #[error("iou is old")]
     OldIou,
-    /// Doesn't parse, or its signature doesn't verify.
     #[n(7)]
     #[error("iou invalid")]
     InvalidIou,
     #[n(8)]
     #[error("cost exceeds what is spendable (deactivated, insufficient funds, _etc_)")]
-    Unspendable,
+    InsufficientFunds,
     #[n(9)]
     #[error("rate limited")]
     RateLimited,
-    /// No `MutualService` exists yet to validate, co-sign, or
-    /// broadcast a cooperative close.
     #[n(10)]
     #[error("mutual close not supported")]
     MutualNotSupported,

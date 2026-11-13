@@ -1,4 +1,4 @@
-//! The two generic sibling-binary spawns every real process (gate, lineage-index, subbit-claim)
+//! The two generic sibling-binary spawns every process (gate, lineage-index, subbit-claim)
 //! goes through -- see `provider::Provider`.
 
 use std::process::Stdio;
@@ -12,7 +12,7 @@ pub(crate) fn spawn_process(name: &str, args: &[&str]) -> anyhow::Result<Child> 
     let bin = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     anyhow::ensure!(
         bin.exists(),
-        "{name} binary not found at {}; run `cargo build --workspace` first",
+        "{name} binary not found at {}; run `cargo xtask build` first",
         bin.display()
     );
     Command::new(&bin)
